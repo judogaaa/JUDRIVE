@@ -37,6 +37,22 @@ your-host.example {
 3. Логин chief → `/api/fleet/dashboard` 200 с cookie.
 4. PDF `/api/sources/pdf/{doc_id}` — `Content-Disposition: inline`.
 
+## Сборка статики
+
+```powershell
+.\scripts\deploy_https.ps1
+# Каталог по умолчанию: deploy\dist
+```
+
+На сервере: `COOKIE_SECURE=true`, `SESSION_SECRET`, ключи Groq/chief только в `.env`.
+
 ## Локальный паритет
 
 `scripts/start_local.ps1` — backend 8090, frontend dev с прокси.
+
+## Чек-лист после выкладки
+
+```powershell
+Invoke-WebRequest https://YOUR_HOST/api/health
+$env:E2E_BASE_URL='https://YOUR_HOST'; $env:E2E_API_BASE='https://YOUR_HOST'; $env:E2E_SKIP_SERVERS='1'; npm run e2e
+```

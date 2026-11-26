@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { runDiagnosis, selectVehicleSession } from './helpers/common'
 
 type Scenario = {
   name: string
@@ -32,21 +33,13 @@ const SCENARIOS: Scenario[] = [
   },
 ]
 
-async function selectVehicleSession(page: import('@playwright/test').Page, vehicleId: string, sessionId: string) {
-  const combo = page.getByRole('combobox', { name: 'Поиск' })
-  await combo.fill(vehicleId)
-  await page.getByRole('listbox').getByRole('button', { name: new RegExp(vehicleId) }).first().click()
-  await page.getByLabel('Проверка').selectOption(sessionId)
-}
-
 test.describe('Diagnosis acceptance scenarios', () => {
   for (const scenario of SCENARIOS) {
     test(scenario.name, async ({ page }) => {
       await page.goto('/')
       await expect(page.getByRole('button', { name: 'Диагностика' })).toBeVisible()
       await selectVehicleSession(page, scenario.vehicleId, scenario.sessionId)
-      const run = page.getByRole('button', { name: /Получить результат диагностики|Получаем результат/ })
-      await run.click()
+      await runDiagnosis(page)
       const card = page.locator(`.${scenario.statusClass}`)
       await expect(card).toBeVisible({ timeout: 30_000 })
       if (scenario.actionName) {

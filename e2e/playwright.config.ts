@@ -5,9 +5,11 @@ export default defineConfig({
   timeout: 90_000,
   expect: { timeout: 20_000 },
   retries: 0,
+  workers: 1,
   use: {
     baseURL: process.env.E2E_BASE_URL ?? 'http://127.0.0.1:5173',
     trace: 'on-first-retry',
+    viewport: { width: 1280, height: 720 },
   },
   webServer: process.env.E2E_SKIP_SERVERS
     ? undefined

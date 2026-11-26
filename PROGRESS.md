@@ -229,6 +229,13 @@
 - Документ пути: `docs/UX_JOURNEY.md`.
 - Проверено: `npm run build`, pytest 10 (api+guardrails+i18n), браузерный smoke диагностики.
 
+### Финальная приёмка (26.11 вечер)
+
+- Playwright **14** тестов: **12 passed**, 2 skipped (chief без `E2E_CHIEF_PASSWORD`; повторный UI-ticket S-0008 после успешного прогона).
+- RAG `verify_rag_queries.py` **8/8**; Groq контроль `--only check_failed` OK.
+- `pytest` **31** passed; `npm run build` OK; `scripts/deploy_https.ps1`, `docs/DEMO_SCRIPT.md`, расширенная `REQUIREMENTS_MATRIX.md`.
+- Локальный стенд :8090 / :5173.
+
 ### Сквозной контекст и приёмка (26.11, после 895d2c6)
 
 - Точечно интегрированы `SourceDrawer`/`CopyButton` с `origin/fix/diagnosis-workspace` (без merge ветки).

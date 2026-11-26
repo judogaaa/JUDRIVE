@@ -107,7 +107,7 @@ $env:E2E_SKIP_SERVERS = "1"
 npm run e2e
 ```
 
-Сценарии: `normal` / `anomaly` / `check_failed` и переход «Найти в руководстве» — см. `e2e/diagnosis-status.spec.ts`, матрица — [docs/REQUIREMENTS_MATRIX.md](docs/REQUIREMENTS_MATRIX.md).
+Набор: ML-три статуса, RAG/PDF/чат, журнал заявок, мобильная вёрстка, язык/тема, контекст сессии — каталог `e2e/*.spec.ts`. Кабинет главного механика: задайте `E2E_CHIEF_PASSWORD` в `.env`. Матрица — [docs/REQUIREMENTS_MATRIX.md](docs/REQUIREMENTS_MATRIX.md); сценарий демо ≤3 мин — [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md).
 
 ### UI (этап 04)
 
