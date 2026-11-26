@@ -9,6 +9,7 @@ import { useI18n } from '../i18n/I18nContext'
 import type { TranslationKey } from '../i18n/translations'
 import { formatSessionDateTime } from '../lib/formatLocale'
 import { resolveErrorMessage } from '../lib/i18nError'
+import { docIdFromManualTitle } from '../lib/manuals'
 
 interface TicketsViewProps {
   filterVehicleId?: string
@@ -25,18 +26,6 @@ type TicketPayload = {
   vehicle_id?: string
   session_id?: string
   anomaly_type?: string
-}
-
-function docIdFromTitle(title: string): string {
-  const map: [string, string][] = [
-    ['236-3902150', 'y236-re'],
-    ['236.01.01', 'y236-rk'],
-    ['536.3902150', 'y536-re'],
-    ['536.01.02', 'y536-rk'],
-    ['5234', 'z5234-rk'],
-    ['409', 'z409-rk'],
-  ]
-  return map.find(([needle]) => title.includes(needle))?.[1] ?? ''
 }
 
 function parsePayload(snapshot: string | null): TicketPayload | null {
@@ -321,7 +310,7 @@ export function TicketsView({ filterVehicleId, onFilterConsumed, onOpenDiagnosis
                     {payload.references?.length ? (
                       <ul>
                         {payload.references.map((reference) => {
-                          const docId = docIdFromTitle(reference.manual ?? '')
+                          const docId = docIdFromManualTitle(reference.manual ?? '')
                           return (
                             <li key={`${reference.manual}-${reference.pdf_page}`}>
                               {docId ? (

@@ -1,9 +1,12 @@
 import { useState } from 'react'
 import { CheckCircle2, ShieldCheck } from 'lucide-react'
 import { confirmTicketDraft, type DraftPayload } from '../api/chat'
+import type { ManualSearchHit } from '../api/manuals'
 import { useI18n } from '../i18n/I18nContext'
 import type { TranslationKey } from '../i18n/translations'
 import { resolveErrorMessage } from '../lib/i18nError'
+import { docIdFromManualTitle } from '../lib/manuals'
+import { SourceDrawer } from './SourceDrawer'
 
 interface TicketDraftCardProps {
   draft: DraftPayload | null
@@ -27,6 +30,7 @@ function TicketDraftBody({
   const [error, setError] = useState<string | null>(null)
   const [ticketId, setTicketId] = useState<string | null>(null)
   const [acknowledged, setAcknowledged] = useState(false)
+  const [source, setSource] = useState<ManualSearchHit | null>(null)
 
   const payload = draft.payload
   const locked = phase === 'sending' || phase === 'created' || phase === 'duplicate' || phase === 'unknown' || phase === 'blocked'
@@ -78,7 +82,8 @@ function TicketDraftBody({
   }
 
   return (
-    <section className="ticket-draft panel" aria-labelledby="ticket-draft-title">
+    <>
+      <section className="ticket-draft panel" aria-labelledby="ticket-draft-title">
       <div className="ticket-draft__head">
         <span className="ticket-draft__icon" aria-hidden>
           <ShieldCheck size={20} />
@@ -127,11 +132,37 @@ function TicketDraftBody({
             <dt>{t('ticket.draft.sources')}</dt>
             <dd>
               <ul>
-                {(payload.references ?? []).map((reference) => (
-                  <li key={`${reference.manual}-${reference.pdf_page}`}>
-                    {reference.manual}, {t('ticket.pdfPage')} {reference.pdf_page}
-                  </li>
-                ))}
+                {(payload.references ?? []).map((reference, index) => {
+                  const docId = docIdFromManualTitle(reference.manual ?? '')
+                  const page = reference.pdf_page ?? 1
+                  return (
+                    <li key={`${reference.manual}-${page}-${index}`}>
+                      {docId ? (
+                        <button
+                          type="button"
+                          className="chat-source-link"
+                          onClick={() =>
+                            setSource({
+                              evidence_id: `${docId}:${page}`,
+                              doc_id: docId,
+                              manual_title: reference.manual ?? '',
+                              pdf_page: page,
+                              quote: '',
+                              score: 0,
+                              extraction: 'text',
+                            })
+                          }
+                        >
+                          {reference.manual}, {t('ticket.pdfPage')} {page}
+                        </button>
+                      ) : (
+                        <span>
+                          {reference.manual}, {t('ticket.pdfPage')} {page}
+                        </span>
+                      )}
+                    </li>
+                  )
+                })}
               </ul>
             </dd>
           </div>
@@ -169,6 +200,8 @@ function TicketDraftBody({
       >
         {phase === 'sending' ? t('ticket.draft.sending') : t('ticket.confirmBtn')}
       </button>
-    </section>
+      </section>
+      <SourceDrawer hit={source} onClose={() => setSource(null)} />
+    </>
   )
 }

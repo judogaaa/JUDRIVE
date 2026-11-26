@@ -46,10 +46,13 @@ export async function fetchVehicles(): Promise<VehicleSummary[]> {
   return data.vehicles
 }
 
-export async function fetchVehicleDiagnosisHistory(vehicleId: string): Promise<TrendPoint[]> {
+export async function fetchVehicleDiagnosisHistory(
+  vehicleId: string,
+  signal?: AbortSignal,
+): Promise<TrendPoint[]> {
   const response = await request(
     `/api/vehicles/${encodeURIComponent(vehicleId)}/diagnosis-history`,
-    {},
+    { signal },
     READ_TIMEOUT_MS,
   )
   if (!response.ok) {

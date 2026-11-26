@@ -51,10 +51,15 @@ export function DiagnosisView({
   const [result, setResult] = useState<DiagnoseResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [trendPoints, setTrendPoints] = useState<TrendPoint[]>([])
+  const [trendData, setTrendData] = useState<{ vehicleId: string; points: TrendPoint[] }>({
+    vehicleId: '',
+    points: [],
+  })
   const [trendError, setTrendError] = useState<string | null>(null)
   const [sessionChooserOpen, setSessionChooserOpen] = useState(false)
   const requestGen = useRef(0)
+  const trendGen = useRef(0)
+  const inFlightRef = useRef(false)
   const tRef = useRef(t)
   tRef.current = t
 
@@ -64,12 +69,14 @@ export function DiagnosisView({
   )
   const sessions = selectedVehicle?.sessions ?? []
   const contextKey = `${vehicleId}:${sessionId}`
+  const trendPoints = trendData.vehicleId === vehicleId ? trendData.points : []
   // Guard the render itself: an effect-based reset still leaves one paint with old state.
   const activeResult =
     result && result.vehicle_id === vehicleId && result.session_id === sessionId ? result : null
 
   const resetVerdict = useCallback(() => {
     requestGen.current += 1
+    inFlightRef.current = false
     setResult(null)
     setError(null)
     setLoading(false)
@@ -82,25 +89,24 @@ export function DiagnosisView({
   }, [contextKey, resetVerdict])
 
   useEffect(() => {
-    if (!vehicleId) {
-      setTrendPoints([])
-      setTrendError(null)
-      return
-    }
-    let cancelled = false
+    const generation = ++trendGen.current
     setTrendError(null)
-    fetchVehicleDiagnosisHistory(vehicleId)
+    // Hide the previous vehicle's chart immediately, even before the new request settles.
+    setTrendData({ vehicleId: '', points: [] })
+    if (!vehicleId) return
+    const controller = new AbortController()
+    fetchVehicleDiagnosisHistory(vehicleId, controller.signal)
       .then((points) => {
-        if (!cancelled) setTrendPoints(points)
+        if (generation !== trendGen.current || controller.signal.aborted) return
+        setTrendData({ vehicleId, points })
       })
       .catch((err: unknown) => {
-        if (!cancelled) {
-          setTrendPoints([])
-          setTrendError(err instanceof Error ? err.message : tRef.current('error.unknown'))
-        }
+        if (generation !== trendGen.current || controller.signal.aborted) return
+        setTrendData({ vehicleId, points: [] })
+        setTrendError(err instanceof Error ? err.message : tRef.current('error.unknown'))
       })
     return () => {
-      cancelled = true
+      controller.abort()
     }
   }, [vehicleId])
 
@@ -129,6 +135,8 @@ export function DiagnosisView({
 
   const runDiagnosis = useCallback(async () => {
     if (!vehicleId || !sessionId) return
+    if (inFlightRef.current) return
+    inFlightRef.current = true
     const gen = ++requestGen.current
     const pair = `${vehicleId}:${sessionId}`
     setLoading(true)
@@ -143,7 +151,10 @@ export function DiagnosisView({
       if (gen !== requestGen.current) return
       setError(err instanceof Error ? err.message : tRef.current('error.unknown'))
     } finally {
-      if (gen === requestGen.current) setLoading(false)
+      if (gen === requestGen.current) {
+        inFlightRef.current = false
+        setLoading(false)
+      }
     }
   }, [sessionId, vehicleId])
 
@@ -296,6 +307,7 @@ export function DiagnosisView({
             type="button"
             className="btn btn--primary btn--block diag-run__button"
             disabled={loading || !vehicleId || !sessionId}
+            aria-busy={loading}
             onClick={() => void runDiagnosis()}
           >
             <Play size={18} aria-hidden />
