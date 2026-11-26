@@ -3261,3 +3261,23 @@ select {
     max-width: 96%;
   }
 }
+
+
+/* Contextual PDFs: keep long document titles readable on narrow workspaces. */
+.related-manuals .panel__title,
+.related-manuals .history-item__date {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.related-manuals .history-item {
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+.related-manuals .history-item__id {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  text-align: left;
+}

@@ -9,6 +9,9 @@ from app.rag.indexer import ManualIndexer
 from app.rag.search import ManualSearch
 
 
+AGENT_SEARCH_LIMIT = 8
+
+
 class ManualRagService:
     def __init__(self, db_path: Path, pdf_dir: Path) -> None:
         self._indexer = ManualIndexer(db_path, pdf_dir)
@@ -104,7 +107,7 @@ class ManualRagService:
             ],
         }
 
-    def get_evidence(self, page_id: str) -> dict | None:
+    def get_evidence(self, page_id: str, *, full_text: bool = False) -> dict | None:
         with self._connect() as conn:
             row = ManualSearch(conn).get_page(page_id)
         if not row:
@@ -114,7 +117,7 @@ class ManualRagService:
             "doc_id": row["doc_id"],
             "manual_title": row["manual_title"],
             "pdf_page": row["pdf_page"],
-            "quote": row["raw_text"][:4000],
+            "quote": row["raw_text"] if full_text else row["raw_text"][:4000],
             "filename": row["filename"],
             "extraction": row["extraction"],
         }

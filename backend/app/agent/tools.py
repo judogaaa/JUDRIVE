@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from typing import Any
 
-from app.agent.evidence import references_allowed_for_engine, resolve_evidence_ids, to_ticket_references
+from app.agent.evidence import references_allowed_for_engine, resolve_evidence_ids, to_ticket_references, unsupported_claims
 from app.agent.guardrails import can_create_ticket, diagnosis_hash, ml_facts_for_agent, urgency_allowed
-from app.rag.service import ManualRagService
+from app.rag.service import AGENT_SEARCH_LIMIT, ManualRagService
+from app.services.analytics import diagnosis_review_priority
 from app.services.fleet import FleetService
 from app.services.mock_clients import MockMlClient
 from app.storage.repository import AppRepository
@@ -23,7 +25,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "get_vehicle_history",
-            "description": "История акустических проверок по текущей машине (read-only).",
+            "description": "История акустических проверок и отправленных заявок текущей машины (не история выполненных ремонтов).",
             "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
         },
     },
@@ -98,11 +100,24 @@ class ToolRuntime:
     async def _get_diagnosis(self) -> dict[str, Any]:
         diag = await self.mock_ml.diagnose(self.vehicle_id, self.session_id)
         diag.engine_model = self.fleet.session_engine(self.vehicle_id, self.session_id)
+        diag.review_priority = diagnosis_review_priority(self.fleet, diag)
         self.diagnosis = diag
         return ml_facts_for_agent(diag, self.engine_model)
 
     def _get_vehicle_history(self) -> dict[str, Any]:
+        tickets = []
+        for row in self.repo.list_tickets(self.vehicle_id):
+            if row.get("submit_status") != "created" or not row.get("ticket_id"):
+                continue
+            payload = json.loads(row["payload_snapshot"] or "{}")
+            tickets.append({"ticket_id": row["ticket_id"], "session_id": row["session_id"],
+                            "status": "created", "conclusion": payload.get("conclusion"),
+                            "operations": payload.get("operations"), "references": payload.get("references")})
+            if len(tickets) >= 5:
+                break
         return {
+            "submitted_tickets": tickets,
+            "ticket_note": "Заявка создана, выполнение ремонта не подтверждено.",
             "vehicle_id": self.vehicle_id,
             "engine_model": self.engine_model,
             "sessions": self.fleet.vehicle_history(self.vehicle_id),
@@ -112,7 +127,7 @@ class ToolRuntime:
         query = (query or "").strip()
         if not query:
             return {"status": "invalid_query", "message": "Пустой запрос"}
-        result = self.rag.search(self.engine_model, query, limit=5)
+        result = self.rag.search(self.engine_model, query, limit=AGENT_SEARCH_LIMIT)
         if result.get("results"):
             for hit in result["results"]:
                 self.sources.append(hit)
@@ -134,6 +149,10 @@ class ToolRuntime:
         if not urgency_allowed(args.get("urgency", "")):
             return {"status": "refused", "message": "Некорректный urgency"}
 
+        for field in ("operations", "spare_parts", "evidence_ids"):
+            value = args.get(field, [])
+            if not isinstance(value, list) or len(value) > 12 or any(not isinstance(x, str) or len(x) > 500 for x in value):
+                return {"status": "refused", "message": "Некорректный формат или слишком длинный список"}
         operations = [str(x).strip() for x in args.get("operations", []) if str(x).strip()]
         if not operations:
             return {"status": "refused", "message": "Нужен непустой список работ"}
@@ -151,15 +170,19 @@ class ToolRuntime:
         if not references_allowed_for_engine(resolved, self.engine_model):
             return {"status": "refused", "message": "Источник не относится к двигателю машины"}
 
+        spare_parts = [str(x).strip() for x in args.get("spare_parts", []) if str(x).strip()]
+        missing = unsupported_claims(self.rag, resolved, operations + spare_parts)
+        if missing:
+            return {"status": "refused", "message": "Работы или запчасти не подтверждены указанными страницами. Уточните формулировку по тексту источника.", "unsupported": missing}
         references = to_ticket_references(resolved)
         payload = {
             "vehicle_id": self.vehicle_id,
             "session_id": self.session_id,
             "anomaly_type": self.diagnosis.anomaly_type,
-            "conclusion": args["conclusion"].strip(),
+            "conclusion": f"Возможное отклонение {self.diagnosis.anomaly_type}: {self.diagnosis.anomaly_title or 'требуется проверка'}. Требуется подтверждение специалистом.",
             "urgency": args["urgency"],
             "operations": operations,
-            "spare_parts": [str(x) for x in args.get("spare_parts", [])],
+            "spare_parts": spare_parts,
             "references": references,
         }
         dhash = diagnosis_hash(self.diagnosis)

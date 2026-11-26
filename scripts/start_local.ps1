@@ -19,18 +19,24 @@ function Start-Bg([string]$Title, [string]$Exe, [string[]]$Args, [hashtable]$Env
     WindowStyle  = "Hidden"
   }
   if ($EnvExtra.Count -gt 0) {
-    $envCopy = @{}
-    Get-ChildItem Env: | ForEach-Object { $envCopy[$_.Name] = $_.Value }
-    foreach ($k in $EnvExtra.Keys) { $envCopy[$k] = $EnvExtra[$k] }
-    $psi["Environment"] = $envCopy
+    $previous = @{}
+    foreach ($k in $EnvExtra.Keys) {
+      $previous[$k] = [Environment]::GetEnvironmentVariable($k, "Process")
+      [Environment]::SetEnvironmentVariable($k, $EnvExtra[$k], "Process")
+    }
   }
   Write-Host "[$Title] $($Exe) $($Args -join ' ')"
-  Start-Process @psi | Out-Null
+  try { Start-Process @psi | Out-Null }
+  finally {
+    foreach ($k in $EnvExtra.Keys) {
+      [Environment]::SetEnvironmentVariable($k, $previous[$k], "Process")
+    }
+  }
 }
 
 if (Test-Path $MockVenv) {
-  Start-Bg "mock-ml" $MockVenv @("-m", "uvicorn", "mock_ml.app:app", "--host", "127.0.0.1", "--port", "8001")
-  Start-Bg "mock-toir" $MockVenv @("-m", "uvicorn", "mock_toir.app:app", "--host", "127.0.0.1", "--port", "8002")
+  Start-Bg "mock-ml" $MockVenv @("-m", "uvicorn", "mock_ml.app:app", "--host", "127.0.0.1", "--port", "8001") @{ PYTHONPATH = "vendor\neurodvs_mock" }
+  Start-Bg "mock-toir" $MockVenv @("-m", "uvicorn", "mock_toir.app:app", "--host", "127.0.0.1", "--port", "8002") @{ PYTHONPATH = "vendor\neurodvs_mock" }
 } else {
   Write-Warning "vendor/neurodvs_mock/.venv не найден — заглушки не запущены"
 }

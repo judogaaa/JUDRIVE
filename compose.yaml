@@ -1,0 +1,42 @@
+x-runtime: &runtime
+  build:
+    context: .
+    dockerfile: deploy/Dockerfile.backend
+  restart: unless-stopped
+
+services:
+  ml:
+    <<: *runtime
+    command: ["python", "-m", "uvicorn", "mock_ml.app:app", "--host", "0.0.0.0", "--port", "8001"]
+  toir:
+    <<: *runtime
+    command: ["python", "-m", "uvicorn", "mock_toir.app:app", "--host", "0.0.0.0", "--port", "8002"]
+  backend:
+    <<: *runtime
+    env_file: .env
+    environment:
+      MOCK_ML_URL: http://ml:8001
+      MOCK_TOIR_URL: http://toir:8002
+      FLEET_DATA_PATH: /app/vendor/neurodvs_mock/data/vehicles.json
+      PDF_DIR: /app/materials/manuals
+      DB_PATH: /app/local-data/judrive.sqlite
+      COOKIE_SECURE: "true"
+    depends_on: [ml, toir]
+    volumes:
+      - ./materials/manuals:/app/materials/manuals:ro
+      - ./local-data:/app/local-data
+  web:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.web
+    restart: unless-stopped
+    depends_on: [backend]
+    environment:
+      JUDRIVE_DOMAIN: ${JUDRIVE_DOMAIN:?Set JUDRIVE_DOMAIN in .env}
+    ports: ["80:80", "443:443"]
+    volumes:
+      - tls_data:/data
+      - tls_config:/config
+volumes:
+  tls_data:
+  tls_config:

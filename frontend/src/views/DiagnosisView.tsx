@@ -3,6 +3,7 @@ import { Play } from 'lucide-react'
 import { fetchDiagnosis, fetchVehicleDiagnosisHistory } from '../api/client'
 import type { TrendPoint } from '../api/fleet'
 import type { DiagnoseResponse, SessionSummary, VehicleSummary } from '../api/types'
+import { RelatedManuals } from '../components/RelatedManuals'
 import { AgentChat } from '../components/AgentChat'
 import { SessionChooser } from '../components/SessionChooser'
 import { VehicleHistoryPanel } from '../components/VehicleHistoryPanel'
@@ -336,7 +337,10 @@ export function DiagnosisView({
           </section>
 
           <section className="diag-history">
-            <VehicleHistoryPanel
+            {activeResult && usableStatus(activeResult) === 'anomaly' && engineModel ? (
+            <RelatedManuals key={contextKey} engineModel={engineModel} query={manualQueryFromDiagnosis(activeResult)} />
+          ) : null}
+          <VehicleHistoryPanel
               sessions={sortedSessions}
               activeSessionId={sessionId}
               onSelectSession={onSessionSelect}

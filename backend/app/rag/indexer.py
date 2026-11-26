@@ -7,7 +7,7 @@ import sqlite3
 from pathlib import Path
 
 from app.rag.catalog import MANUAL_SPECS, ManualSpec
-from app.rag.extract import extract_pdf_pages
+from app.rag.extract import extract_pdf_pages, extraction_profile
 from app.rag.normalize import normalize_for_fts
 
 logger = logging.getLogger(__name__)
@@ -60,7 +60,7 @@ def _file_sha256(path: Path) -> str:
 
 
 def _corpus_fingerprint(pdf_dir: Path) -> str:
-    parts: list[str] = []
+    parts: list[str] = [extraction_profile()]
     for spec in MANUAL_SPECS:
         path = pdf_dir / spec.filename
         if path.is_file():

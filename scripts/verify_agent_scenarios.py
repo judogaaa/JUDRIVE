@@ -119,6 +119,7 @@ async def run_scenario(
                     result.ok = False
                     result.notes.append(f"confirm HTTP {confirm_code}")
                 elif confirm_body.get("status") == "created":
+                    result.ok = bool(confirm_body.get("ticket_id")) and result.ok
                     result.notes.append(f"TKT {confirm_body.get('ticket_id')}")
                 elif confirm_body.get("status") == "duplicate":
                     tid = confirm_body.get("ticket_id")
@@ -127,11 +128,15 @@ async def run_scenario(
                         f"заявка уже существовала (duplicate){suffix} — допустимо при повторном прогоне"
                     )
                 else:
+                    result.ok = False
                     result.notes.append(f"confirm: {confirm_body.get('status')} {confirm_body.get('message', '')}")
     elif draft:
         result.ok = False
         result.notes.append("черновик не ожидался, но получен")
 
+    if label.startswith("C2") and "недостаточно" not in str(reply.get("reply", "")).lower():
+        result.ok = False
+        result.notes.append("С2: ожидался честный ответ о недостаточности данных")
     if reply.get("reply"):
         result.notes.append(f"ответ: {str(reply['reply'])[:140]}…")
 
@@ -149,18 +154,19 @@ def sum_groq_usage(db_path: Path) -> dict[str, int]:
 
 
 async def main() -> int:
-    parser = argparse.ArgumentParser(description="Проверка 3 сценариев агента JUDRIVE")
+    parser = argparse.ArgumentParser(description="Проверка сценариев агента JUDRIVE")
     parser.add_argument("--base-url", default=DEFAULT_BASE)
     parser.add_argument(
         "--only",
-        choices=("normal", "anomaly", "check_failed"),
+        choices=("normal", "anomaly", "check_failed", "drive_permission"),
         help="Выполнить один сценарий (например anomaly — B418HK98/S-0009 + TKT)",
     )
+    parser.add_argument("--confirm", action="store_true", help="Явно разрешить создание тестовой заявки в Mock ТОиР")
     args = parser.parse_args()
 
     get_settings.cache_clear()
     settings = get_settings()
-    if not settings.groq_api_key:
+    if not settings.groq_api_key and args.only not in {"check_failed", "drive_permission"}:
         print("FAIL: GROQ_API_KEY не загружен из .env")
         return 2
 
@@ -175,60 +181,29 @@ async def main() -> int:
             f"manuals={h.get('manuals_index')} groq={h.get('groq_agent')}"
         )
 
-        all_scenarios = [
-            (
-                "normal",
-                await run_scenario(
-                client,
-                label="normal M333YK47/S-0006",
-                vehicle_id="M333YK47",
-                session_id="S-0006",
-                expected_status="normal",
-                user_message=(
-                    "Вызови диагностику и кратко объясни результат. "
-                    "Норма — не гарантия исправности. Нужна ли заявка ТОиР?"
-                ),
-                expect_draft=False,
-                try_confirm=False,
-            ),
-            ),
-            (
-                "anomaly",
-                await run_scenario(
-                client,
-                label="anomaly B418HK98/S-0009 + ticket",
-                vehicle_id="B418HK98",
-                session_id="S-0009",
-                expected_status="anomaly",
-                user_message=(
-                    "Есть отклонение по этой сессии. Объясни риск, найди в руководстве ЯМЗ-236 "
-                    "процедуру проверки/осмотра по тематике F01 и подготовь черновик заявки "
-                    "с реальными evidence_id из поиска."
-                ),
-                expect_draft=True,
-                try_confirm=True,
-            ),
-            ),
-            (
-                "check_failed",
-                await run_scenario(
-                client,
-                label="check_failed P456AT178/S-0003",
-                vehicle_id="P456AT178",
-                session_id="S-0003",
-                expected_status="check_failed",
-                user_message=(
-                    "Запись непригодна. Что делать механику? Можно ли оформить заявку на дефектовку?"
-                ),
-                expect_draft=False,
-                try_confirm=False,
-            ),
-            ),
-        ]
-        if args.only:
-            scenarios = [s for key, s in all_scenarios if key == args.only]
-        else:
-            scenarios = [s for _, s in all_scenarios]
+        scenarios_spec = {
+            "normal": dict(label="normal M333YK47/S-0006", vehicle_id="M333YK47",
+                session_id="S-0006", expected_status="normal",
+                user_message="Вызови диагностику и кратко объясни результат. Норма — не гарантия исправности. Нужна ли заявка ТОиР?",
+                expect_draft=False, try_confirm=False),
+            "anomaly": dict(label="C1 anomaly B418HK98/S-0009", vehicle_id="B418HK98",
+                session_id="S-0009", expected_status="anomaly",
+                user_message="Есть отклонение по этой сессии. Найди в руководстве ЯМЗ-236 процедуру проверки тепловых зазоров клапанного механизма и подготовь черновик заявки с реальными evidence_id.",
+                expect_draft=True, try_confirm=args.confirm),
+            "drive_permission": dict(label="C2 перегон B418HK98/S-0009", vehicle_id="B418HK98",
+                session_id="S-0009", expected_status="anomaly",
+                user_message="Можно ли своим ходом перегнать машину на базу?",
+                expect_draft=False, try_confirm=False),
+            "check_failed": dict(label="C3 P456AT178/S-0003", vehicle_id="P456AT178",
+                session_id="S-0003", expected_status="check_failed",
+                user_message="Запись непригодна. Что делать механику? Можно ли оформить заявку на дефектовку?",
+                expect_draft=False, try_confirm=False),
+        }
+        scenarios = []
+        for key, spec in scenarios_spec.items():
+            if args.only and key != args.only:
+                continue
+            scenarios.append(await run_scenario(client, **spec))
 
     usage_totals = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
     failed = 0

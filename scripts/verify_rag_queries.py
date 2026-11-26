@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend"))
 
 from app.config import get_settings  # noqa: E402
-from app.rag.service import ManualRagService  # noqa: E402
+from app.rag.service import AGENT_SEARCH_LIMIT, ManualRagService  # noqa: E402
 
 CASES = [
     {
@@ -84,7 +84,7 @@ def main() -> int:
 
     failed = 0
     for case in CASES:
-        result = service.search(case["engine"], case["query"], limit=8)
+        result = service.search(case["engine"], case["query"], limit=AGENT_SEARCH_LIMIT)
         ok = result["status"] == case["expect_status"]
         pages = {item["pdf_page"] for item in result.get("results", [])}
         docs = {item["doc_id"] for item in result.get("results", [])}

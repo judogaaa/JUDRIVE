@@ -145,3 +145,11 @@ npm run e2e
 Планируемый стек: React + TypeScript + Vite, FastAPI, SQLite, Groq GPT-OSS 120B, Whisper, локальная база знаний и PDF.js. Прототип не обучает акустическую ML-модель, не подтверждает техническую исправность двигателя и не заменяет специалиста. Публикация полных PDF требует ясности прав на распространение. Оригинальные Mock API и синтетические данные уже находятся в vendor/neurodvs_mock; шесть полных PDF подключаются по инструкции из docs/SOURCES.md.
 
 Ориентир завершения: 28.11.2026 10:00 МСК; рабочий стенд требуется согласно актуальным правилам хакатона. Текущее состояние всегда в PROGRESS.md.
+
+### Финальная сдача
+
+- Контейнерная конфигурация HTTPS: [docs/DEPLOY_HTTPS.md](docs/DEPLOY_HTTPS.md) (`compose.yaml`, Caddy, Poppler).
+- Детерминированная проверка настоящих vendor mock routes, PDF и SQLite в отдельной БД:
+  `python scripts/verify_submission_regressions.py` (6 PDF в PDF_DIR, без Groq/сети).
+- Live-проверка: `python scripts/verify_agent_scenarios.py`; `--only check_failed` выполняет только C3, а `--confirm` явно разрешает тестовый POST заявки.
+- [Сценарий демо](docs/DEMO_SCRIPT.md), [матрица требований](docs/REQUIREMENTS_MATRIX.md).

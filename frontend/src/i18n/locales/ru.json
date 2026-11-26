@@ -153,7 +153,7 @@
   "chief.loading": "Загрузка аналитики…",
   "chief.queueTitle": "Очередь внимания",
   "chief.queueHint": "Сначала машины, которые нужно разобрать в первую очередь.",
-  "chief.quarantineCardHint": "Рекомендация до решения специалиста или подтверждённая заявка",
+  "chief.quarantineCardHint": "Только рекомендации специалиста, не по одному score",
   "chief.analyticsTitle": "Аналитика проверок",
   "chief.analytics.intro": "Всего проверок: {total}. По последней проверке каждой машины: норма {normal}, отклонение {anomaly}, сбой записи {failed}.",
   "chief.warningsTitle": "Ранние предупреждения",
@@ -276,5 +276,14 @@
   "ticket.urgency.medium": "Средний",
   "ticket.urgency.high": "Высокий",
   "ticket.confirmBlocked": "Заявку нельзя отправить: обновите диагностику и подготовьте черновик заново.",
-  "auth.locked": "Слишком много попыток. Повторите позже."
+  "auth.locked": "Слишком много попыток. Повторите позже.",
+  "chief.recommendation.title": "Рекомендация главного механика",
+  "chief.recommendation.hint": "Это рекомендация, а не разрешение на эксплуатацию или фактический карантин. Обоснуйте решение.",
+  "chief.recommendation.reason": "Обоснование (минимум 10 символов)",
+  "chief.recommendation.ack": "Я ознакомился с проверкой и подтверждаю изменение рекомендации",
+  "chief.recommendation.save": "Рекомендовать карантин",
+  "chief.recommendation.cancel": "Отменить рекомендацию",
+  "verdict.related.title": "Подходящие источники",
+  "verdict.related.hint": "Возможные материалы для проверки по текущему двигателю, не подтверждение неисправности.",
+  "verdict.reviewPriority": "Приоритет проверки (не прогноз отказа)"
 }

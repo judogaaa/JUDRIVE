@@ -1,0 +1,16 @@
+{$JUDRIVE_DOMAIN} {
+    encode zstd gzip
+    header {
+        X-Content-Type-Options nosniff
+        Referrer-Policy same-origin
+        Permissions-Policy "microphone=(self)"
+    }
+    handle /api/* {
+        reverse_proxy backend:8090
+    }
+    handle {
+        root * /srv
+        try_files {path} /index.html
+        file_server
+    }
+}

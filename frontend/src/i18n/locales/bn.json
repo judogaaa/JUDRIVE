@@ -153,7 +153,7 @@
   "chief.loading": "Analitika yuklanmoqda…",
   "chief.queueTitle": "Diqqat navbati",
   "chief.queueHint": "Avval birinchi navbatda ko‘rib chiqiladigan mashinalar.",
-  "chief.quarantineCardHint": "Mutaxassis qarorigacha tavsiya yoki tasdiqlangan ariza",
+  "chief.quarantineCardHint": "শুধু বিশেষজ্ঞের সুপারিশ, একটি score-এর ভিত্তিতে নয়",
   "chief.analyticsTitle": "Tekshiruvlar analitikasi",
   "chief.analytics.intro": "Jami tekshiruvlar: {total}. Har bir mashina bo‘yicha oxirgi: norma {normal}, og‘ish {anomaly}, yozuv xatosi {failed}.",
   "chief.warningsTitle": "Erta ogohlantirishlar",
@@ -276,5 +276,14 @@
   "ticket.urgency.medium": "মাঝারি",
   "ticket.urgency.high": "উচ্চ",
   "ticket.confirmBlocked": "টিকিট পাঠানো যাবে না: ডায়াগনস্টিকস রিফ্রেশ করে আবার প্রস্তুত করুন।",
-  "auth.locked": "অনেকবার চেষ্টা হয়েছে। পরে আবার চেষ্টা করুন।"
+  "auth.locked": "অনেকবার চেষ্টা হয়েছে। পরে আবার চেষ্টা করুন।",
+  "chief.recommendation.title": "প্রধান মেকানিকের সুপারিশ",
+  "chief.recommendation.hint": "এটি সুপারিশ, চালানোর অনুমতি বা বাস্তব কোয়ারেন্টাইন নয়। সিদ্ধান্তের কারণ দিন।",
+  "chief.recommendation.reason": "কারণ (অন্তত ১০ অক্ষর)",
+  "chief.recommendation.ack": "আমি পরীক্ষা দেখেছি এবং সুপারিশের পরিবর্তন নিশ্চিত করছি",
+  "chief.recommendation.save": "কোয়ারেন্টাইনের সুপারিশ",
+  "chief.recommendation.cancel": "সুপারিশ বাতিল করুন",
+  "verdict.related.title": "প্রাসঙ্গিক উৎস",
+  "verdict.related.hint": "বর্তমান ইঞ্জিন পরীক্ষার সম্ভাব্য উৎস, ত্রুটির নিশ্চিত প্রমাণ নয়।",
+  "verdict.reviewPriority": "পরীক্ষার অগ্রাধিকার (বিকলের পূর্বাভাস নয়)"
 }

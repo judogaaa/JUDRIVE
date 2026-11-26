@@ -65,4 +65,15 @@ CREATE TABLE IF NOT EXISTS groq_usage (
     latency_ms INTEGER NOT NULL,
     created_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS chief_quarantine_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    vehicle_id TEXT NOT NULL,
+    session_id TEXT NOT NULL,
+    active INTEGER NOT NULL,
+    reason TEXT NOT NULL,
+    chief_username TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_chief_quarantine_vehicle
+ON chief_quarantine_events(vehicle_id, session_id, id);
 """

@@ -21,10 +21,12 @@ export interface ManualSearchResponse {
 export async function searchManuals(
   engineModel: string,
   query: string,
-  limit = 5,
+  limit = 8,
+  signal?: AbortSignal,
 ): Promise<ManualSearchResponse> {
   const response = await fetch('/api/manuals/search', {
     method: 'POST',
+    signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(30000)]) : AbortSignal.timeout(30000),
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ engine_model: engineModel, query, limit }),
   })

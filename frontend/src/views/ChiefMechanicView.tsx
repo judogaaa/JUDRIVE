@@ -26,6 +26,7 @@ export function ChiefMechanicView({ onOpenDiagnosis, onOpenTickets }: ChiefMecha
     if (row.category === 'attention') return t('chief.cat.attention')
     return t('chief.cat.normal')
   }
+  const [revision, setRevision] = useState(0)
   const [data, setData] = useState<FleetDashboard | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -82,7 +83,7 @@ export function ChiefMechanicView({ onOpenDiagnosis, onOpenTickets }: ChiefMecha
     return () => {
       cancelled = true
     }
-  }, [appliedFilters, authed, t])
+  }, [appliedFilters, authed, t, revision])
 
   if (authed === null) {
     return <p className="panel__subtitle">{t('chief.loading')}</p>
@@ -369,6 +370,7 @@ export function ChiefMechanicView({ onOpenDiagnosis, onOpenTickets }: ChiefMecha
 
       <VehicleInsightPanel
         vehicleId={selectedVehicle}
+        onChanged={() => setRevision((n) => n + 1)}
         onClose={() => setSelectedVehicle(null)}
         onOpenDiagnosis={(id, sessionId) => {
           setSelectedVehicle(null)

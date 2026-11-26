@@ -1,13 +1,20 @@
 from __future__ import annotations
 
+import asyncio
 import json
+import logging
 
-import httpx
 
+from app.agent.evidence import resolve_evidence_ids, references_allowed_for_engine, unsupported_claims
+from app.rag.catalog import MANUAL_SPECS
+from app.rag.service import ManualRagService
 from app.agent.guardrails import can_create_ticket, diagnosis_hash
 from app.services.fleet import FleetService
 from app.services.mock_clients import MockMlClient, MockToirClient
 from app.storage.repository import AppRepository
+
+
+logger = logging.getLogger(__name__)
 
 
 class TicketService:
@@ -17,11 +24,13 @@ class TicketService:
         fleet: FleetService,
         mock_ml: MockMlClient,
         mock_toir: MockToirClient,
+        rag: ManualRagService | None = None,
     ) -> None:
         self._repo = repo
         self._fleet = fleet
         self._mock_ml = mock_ml
         self._mock_toir = mock_toir
+        self._rag = rag
 
     async def confirm(self, draft_id: str, confirm_nonce: str) -> dict:
         draft = self._repo.get_draft(draft_id)
@@ -73,8 +82,17 @@ class TicketService:
                 "message": "Заявка по этой паре уже отправляется или отправлена.",
             }
 
-        diag = await self._mock_ml.diagnose(vehicle_id, session_id)
-        diag.engine_model = self._fleet.session_engine(vehicle_id, session_id)
+        try:
+            diag = await self._mock_ml.diagnose(vehicle_id, session_id)
+            diag.engine_model = self._fleet.session_engine(vehicle_id, session_id)
+        except (Exception, asyncio.CancelledError) as exc:
+            # No TOiR call has been made: retry remains safe.
+            self._repo.finish_submission(local_id, submit_status="failed", error_detail="ml_preflight")
+            self._repo.set_draft_status(draft_id, "draft")
+            if isinstance(exc, asyncio.CancelledError):
+                raise
+            logger.warning("ML preflight failed: %s", type(exc).__name__)
+            return {"status": "error", "message": "Не удалось перепроверить диагностику. Заявка не отправлена. Повторите подтверждение."}
         ok, reason = can_create_ticket(diag)
         if not ok:
             self._repo.set_draft_status(draft_id, "refused")
@@ -94,22 +112,42 @@ class TicketService:
             self._repo.finish_submission(local_id, submit_status="refused", error_detail="anomaly_mismatch")
             return {"status": "refused", "message": "Код отклонения не совпадает с актуальной диагностикой"}
 
+        if self._rag is not None:
+            try:
+                if not self._rag.status().get("index_current"):
+                    raise ValueError("manual index not current")
+                ids = []
+                for ref in payload.get("references", []):
+                    spec = next((s for s in MANUAL_SPECS if s.manual_title == ref["manual"]), None)
+                    if not spec:
+                        raise ValueError("unknown manual")
+                    ids.append(f"{spec.doc_id}:p{int(ref['pdf_page']):04d}")
+                resolved, errors = resolve_evidence_ids(self._rag, ids)
+                claims = payload.get("operations", []) + payload.get("spare_parts", [])
+                valid = bool(claims and not errors and references_allowed_for_engine(resolved, diag.engine_model)
+                             and not unsupported_claims(self._rag, resolved, claims))
+                if not valid:
+                    raise ValueError("unsupported claims")
+            except Exception:
+                self._repo.set_draft_status(draft_id, "refused")
+                self._repo.finish_submission(local_id, submit_status="refused", error_detail="evidence_revalidation")
+                return {"status": "refused", "message": "Источники или работы не подтверждены. Подготовьте новый черновик."}
+
         try:
             result = await self._mock_toir.create_ticket(payload)
-        except httpx.HTTPStatusError as exc:
-            detail = exc.response.text
-            self._repo.set_draft_status(draft_id, "failed")
-            self._repo.finish_submission(local_id, submit_status="failed", error_detail=detail)
-            return {"status": "failed", "message": "Ошибка Mock ТОиР", "detail": detail}
-        except httpx.HTTPError:
+        except (Exception, asyncio.CancelledError) as exc:
+            # Once the POST starts, even malformed/5xx responses may mean it was accepted.
             self._repo.set_draft_status(draft_id, "unknown")
-            self._repo.finish_submission(local_id, submit_status="unknown", error_detail="network_error")
-            return {
-                "status": "unknown",
-                "message": "Исход отправки неизвестен. Повторная автоотправка запрещена.",
-            }
+            self._repo.finish_submission(local_id, submit_status="unknown", error_detail=type(exc).__name__)
+            if isinstance(exc, asyncio.CancelledError):
+                raise
+            return {"status": "unknown", "message": "Исход отправки неизвестен. Повторная автоотправка запрещена."}
 
-        ticket_id = result.get("ticket_id")
+        ticket_id = result.get("ticket_id") if isinstance(result, dict) else None
+        if not isinstance(ticket_id, str) or not ticket_id.startswith("TKT-"):
+            self._repo.set_draft_status(draft_id, "unknown")
+            self._repo.finish_submission(local_id, submit_status="unknown", error_detail="missing_ticket_id")
+            return {"status": "unknown", "message": "ТОиР не вернул номер заявки. Проверьте исход вручную."}
         self._repo.mark_draft_submitted(draft_id)
         self._repo.finish_submission(local_id, submit_status="created", ticket_id=ticket_id)
         return {"status": "created", "ticket_id": ticket_id, "payload": payload}

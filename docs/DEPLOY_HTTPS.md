@@ -1,58 +1,51 @@
-# HTTPS-развёртывание JUDRIVE (этап 07)
+# HTTPS-стенд JUDRIVE
 
-## Состав стенда
+Публичный запуск требует сервера с доступом к Docker registry, npm, PyPI и Groq,
+DNS имени с A/AAAA на сервер, свободных входящих TCP 80/443, разрешения на
+демонстрацию руководств. Контейнеры ML/ТОиР/backend доступны только во внутренней сети.
+Это конфигурация развёртывания, а не заявление о готовом публичном URL.
 
-1. **Mock ML** — `vendor/neurodvs_mock`, порт 8001.
-2. **Mock ТОиР** — порт 8002.
-3. **Backend** — `uvicorn app.main:app` из `backend/`, `PYTHONPATH=backend`, порт 8090 (или через reverse proxy).
-4. **Frontend** — `npm run build` → статика из `frontend/dist` за nginx/caddy **или** `vite preview` только для демо.
+## Подготовка
 
-## Переменные окружения (`.env` в корне, не в Git)
+1. На сервере checkout конкурсной ветки (после приёмки — main); Docker Engine и Compose v2.
+2. Поместить 6 оригинальных PDF в `materials/manuals/` с именами из `docs/SOURCES.md`.
+   Не коммитить PDF; не раскрывать их вне разрешённого организаторами режима.
+3. Скопировать `.env.example` в `.env`. Указать собственные `JUDRIVE_DOMAIN` (только доменное имя),
+   `GROQ_API_KEY`, `CHIEF_USERNAME`, `CHIEF_PASSWORD_HASH` (PBKDF2 SHA-256 через
+   `python scripts/hash_chief_password.py` после установки backend dependencies),
+   случайный `SESSION_SECRET` (например `python -c "import secrets; print(secrets.token_hex(32))"`).
+   Хеш со знаком доллара записать в одинарных кавычках для Compose. Не использовать общие/демо пароли.
+4. Создать `local-data/` и `materials/manuals/` с правами чтения/записи на сервере.
+   Использовать отдельную БД сдачи; резервная копия существующей БД — SQLite backup, не копия активного WAL.
 
-- `MOCK_ML_URL`, `MOCK_TOIR_URL`
-- `FLEET_DATA_PATH`, `PDF_DIR`, `MANUAL_DB_PATH`
-- `GROQ_API_KEY` (опционально для агента/голоса)
-- `CHIEF_PASSWORD_HASH` (bcrypt для кабинета главного механика)
-
-## Reverse proxy (пример Caddy)
-
-```
-your-host.example {
-  encode gzip
-  handle /api/* {
-    reverse_proxy 127.0.0.1:8090
-  }
-  handle {
-    root * /var/www/judrive/dist
-    try_files {path} /index.html
-    file_server
-  }
-}
+```sh
+docker compose config --quiet
+docker compose up -d --build
+docker compose logs -f backend
 ```
 
-## Проверка после деплоя
+В первый запуск backend строит индекс. Poppler сохраняет строки и столбцы таблиц;
+без Poppler локальный pypdf fallback может терять формат. Для полного качества рекомендуется
+установить `pdftotext` (Windows: Poppler в PATH; Linux: poppler-utils), пересобрать индекс.
+Caddy получает HTTPS-сертификат через ACME при доступном DNS/портах.
+Состояние заявки/чата/рекомендаций в SQLite сохраняется между рестартами. Vendor Mock ТОиР
+сам по себе хранит выданные номера в памяти, поэтому не останавливать его во время демонстрации.
+Не запускать несколько реплик backend с одной SQLite без отдельной схемы координации.
 
-1. `GET /api/health` — `ok`, mocks up.
-2. Диагностика трёх статусов (см. `docs/ACCEPTANCE.md`).
-3. Логин chief → `/api/fleet/dashboard` 200 с cookie.
-4. PDF `/api/sources/pdf/{doc_id}` — `Content-Disposition: inline`.
+## Приёмка снаружи
 
-## Сборка статики
+- Из приватного окна на телефоне открыть https://<домен> и /api/health.
+  Ожидать `ok`, `up`, `ready`, `configured`. configured означает наличие ключа, не проверенный live Groq.
+- Прогнать `python scripts/verify_agent_scenarios.py --base-url https://<домен>`
+  с настоящим ключом в локальном окружении. `--confirm` отдельно разрешает фактический POST в Mock ТОиР.
+- Открыть точную страницу PDF (inline, full screen), проверить микрофон/голос, все роли и обе темы.
+- Вход chief: новый пароль, без cookie 401, после входа 200, cookie Secure/HttpOnly.
+- На тестовом стенде выполнить E2E, не создавать бесконтрольно заявки в конкурсной БД.
+- Проверить ссылку после обновления и доступ из внешней сети; оставить сервис до срока из регламента.
+- Не записывать ключи/пароли в видео, публичный Excel, логи или Git. Ограничить расход Groq в аккаунте.
+- Перед сдачей сделать backup SQLite и зафиксировать последний принятый commit/ref.
 
-```powershell
-.\scripts\deploy_https.ps1
-# Каталог по умолчанию: deploy\dist
-```
+## Windows (локальная разработка)
 
-На сервере: `COOKIE_SECURE=true`, `SESSION_SECRET`, ключи Groq/chief только в `.env`.
-
-## Локальный паритет
-
-`scripts/start_local.ps1` — backend 8090, frontend dev с прокси.
-
-## Чек-лист после выкладки
-
-```powershell
-Invoke-WebRequest https://YOUR_HOST/api/health
-$env:E2E_BASE_URL='https://YOUR_HOST'; $env:E2E_API_BASE='https://YOUR_HOST'; $env:E2E_SKIP_SERVERS='1'; npm run e2e
-```
+`scripts/start_local.ps1` + `cd frontend; npm run dev`. Публичный стенд не заменяется localhost.
+`scripts/deploy_https.ps1` собирает только статический frontend, TLS сам не поднимает.

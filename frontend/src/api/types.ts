@@ -28,6 +28,7 @@ export interface DiagnoseResponse {
   signal_quality: SignalQuality
   description: string
   model_version: string
+  review_priority?: 'low' | 'medium' | 'high' | null
   engine_model?: string | null
 }
 

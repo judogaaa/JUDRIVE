@@ -72,3 +72,9 @@ class VehicleInsightResponse(BaseModel):
     history: list[dict]
     trend_points: list[TrendPoint]
     sessions_total: int
+
+class QuarantineRecommendationRequest(BaseModel):
+    session_id: str = Field(min_length=1, max_length=100)
+    active: bool
+    reason: str = Field(min_length=10, max_length=500)
+    acknowledge: bool

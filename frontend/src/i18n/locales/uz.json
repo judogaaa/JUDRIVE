@@ -153,7 +153,7 @@
   "chief.loading": "Analitika yuklanmoqda…",
   "chief.queueTitle": "Diqqat navbati",
   "chief.queueHint": "Avval birinchi navbatda ko‘rib chiqiladigan mashinalar.",
-  "chief.quarantineCardHint": "Mutaxassis qarorigacha tavsiya yoki tasdiqlangan ariza",
+  "chief.quarantineCardHint": "Faqat mutaxassis tavsiyasi, bitta score asosida emas",
   "chief.analyticsTitle": "Tekshiruvlar analitikasi",
   "chief.analytics.intro": "Jami tekshiruvlar: {total}. Har bir mashina bo‘yicha oxirgi: norma {normal}, og‘ish {anomaly}, yozuv xatosi {failed}.",
   "chief.warningsTitle": "Erta ogohlantirishlar",
@@ -276,5 +276,14 @@
   "ticket.urgency.medium": "O‘rta",
   "ticket.urgency.high": "Yuqori",
   "ticket.confirmBlocked": "Arizani yuborib bo‘lmaydi: diagnostikani yangilab, qayta tayyorlang.",
-  "auth.locked": "Juda ko‘p urinish. Keyinroq qayta urinib ko‘ring."
+  "auth.locked": "Juda ko‘p urinish. Keyinroq qayta urinib ko‘ring.",
+  "chief.recommendation.title": "Bosh mexanik tavsiyasi",
+  "chief.recommendation.hint": "Bu tavsiya, foydalanish uchun ruxsat yoki amaldagi karantin emas. Qarorni asoslang.",
+  "chief.recommendation.reason": "Asos (kamida 10 belgi)",
+  "chief.recommendation.ack": "Tekshiruvni ko‘rib chiqdim va tavsiya o‘zgarishini tasdiqlayman",
+  "chief.recommendation.save": "Karantinni tavsiya qilish",
+  "chief.recommendation.cancel": "Tavsiyani bekor qilish",
+  "verdict.related.title": "Mos manbalar",
+  "verdict.related.hint": "Joriy dvigatelni tekshirish uchun mumkin bo‘lgan manbalar; nosozlik tasdig‘i emas.",
+  "verdict.reviewPriority": "Tekshiruv ustuvorligi (nosozlik prognozi emas)"
 }

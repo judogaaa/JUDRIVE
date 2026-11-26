@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { CheckCircle2, ShieldCheck } from 'lucide-react'
 import { confirmTicketDraft, type DraftPayload } from '../api/chat'
 import type { ManualSearchHit } from '../api/manuals'
@@ -26,6 +26,7 @@ function TicketDraftBody({
   onConfirmed: (ticketId: string) => void
 }) {
   const { t } = useI18n()
+  const confirming = useRef(false)
   const [phase, setPhase] = useState<'idle' | 'sending' | 'created' | 'duplicate' | 'unknown' | 'blocked'>('idle')
   const [error, setError] = useState<string | null>(null)
   const [ticketId, setTicketId] = useState<string | null>(null)
@@ -43,7 +44,8 @@ function TicketDraftBody({
   }
 
   const onConfirm = async () => {
-    if (locked || !acknowledged || !draft.confirm_nonce) return
+    if (confirming.current || locked || !acknowledged || !draft.confirm_nonce) return
+    confirming.current = true
     setPhase('sending')
     setError(null)
     try {
@@ -78,6 +80,8 @@ function TicketDraftBody({
     } catch (err: unknown) {
       setPhase('idle')
       setError(resolveErrorMessage(t, err, 'error.confirm'))
+    } finally {
+      confirming.current = false
     }
   }
 
@@ -128,6 +132,12 @@ function TicketDraftBody({
               </ul>
             </dd>
           </div>
+          {!!payload.spare_parts?.length && (
+            <div>
+              <dt>{t('tickets.spareParts')}</dt>
+              <dd><ul>{payload.spare_parts.map((part) => <li key={part}>{part}</li>)}</ul></dd>
+            </div>
+          )}
           <div>
             <dt>{t('ticket.draft.sources')}</dt>
             <dd>

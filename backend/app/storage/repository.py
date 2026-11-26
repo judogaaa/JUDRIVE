@@ -312,3 +312,36 @@ class AppRepository:
                     "SELECT * FROM ticket_submissions ORDER BY created_at DESC LIMIT 50",
                 ).fetchall()
         return [dict(row) for row in rows]
+
+    def quarantine_recommendation(self, vehicle_id: str, session_id: str) -> dict | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM chief_quarantine_events WHERE vehicle_id=? AND session_id=? ORDER BY id DESC LIMIT 1",
+                (vehicle_id, session_id),
+            ).fetchone()
+        return dict(row) if row and row["active"] else None
+
+    def record_quarantine_recommendation(self, vehicle_id: str, session_id: str,
+                                         active: bool, reason: str, chief_username: str) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                "INSERT INTO chief_quarantine_events(vehicle_id, session_id, active, reason, chief_username, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                (vehicle_id, session_id, int(active), reason, chief_username, _now()),
+            )
+
+
+    def recover_interrupted_submissions(self) -> None:
+        """Single-worker startup recovery: never resend an interrupted external POST."""
+        with self._connect() as conn:
+            conn.execute("""
+                UPDATE ticket_drafts
+                SET status='unknown', updated_at=?
+                WHERE draft_id IN (SELECT draft_id FROM ticket_submissions WHERE submit_status='sending')
+                  AND status IN ('sending','submitted')
+            """, (_now(),))
+            conn.execute("UPDATE ticket_submissions SET submit_status='unknown', error_detail='interrupted_process' WHERE submit_status='sending'")
+            conn.execute("""
+                UPDATE ticket_drafts SET status='draft', updated_at=?
+                WHERE status='sending' AND draft_id NOT IN
+                    (SELECT draft_id FROM ticket_submissions WHERE submit_status IN ('sending','created','unknown'))
+            """, (_now(),))

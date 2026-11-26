@@ -153,7 +153,7 @@
   "chief.loading": "Analitika yuklanmoqda…",
   "chief.queueTitle": "Diqqat navbati",
   "chief.queueHint": "Avval birinchi navbatda ko‘rib chiqiladigan mashinalar.",
-  "chief.quarantineCardHint": "Mutaxassis qarorigacha tavsiya yoki tasdiqlangan ariza",
+  "chief.quarantineCardHint": "Тек маманның ұсынысы, бір score негізінде емес",
   "chief.analyticsTitle": "Tekshiruvlar analitikasi",
   "chief.analytics.intro": "Jami tekshiruvlar: {total}. Har bir mashina bo‘yicha oxirgi: norma {normal}, og‘ish {anomaly}, yozuv xatosi {failed}.",
   "chief.warningsTitle": "Erta ogohlantirishlar",
@@ -276,5 +276,14 @@
   "ticket.urgency.medium": "Орташа",
   "ticket.urgency.high": "Жоғары",
   "ticket.confirmBlocked": "Өтінімді жіберу мүмкін емес: диагностиканы жаңартып, қайта дайындаңыз.",
-  "auth.locked": "Тым көп әрекет. Кейінірек қайталаңыз."
+  "auth.locked": "Тым көп әрекет. Кейінірек қайталаңыз.",
+  "chief.recommendation.title": "Бас механиктің ұсынысы",
+  "chief.recommendation.hint": "Бұл ұсыныс, пайдалануға рұқсат немесе нақты карантин емес. Шешімді негіздеңіз.",
+  "chief.recommendation.reason": "Негіздеме (кемінде 10 таңба)",
+  "chief.recommendation.ack": "Тексеруді қарап, ұсыныстың өзгеруін растаймын",
+  "chief.recommendation.save": "Карантинді ұсыну",
+  "chief.recommendation.cancel": "Ұсынысты тоқтату",
+  "verdict.related.title": "Қатысты дереккөздер",
+  "verdict.related.hint": "Осы қозғалтқышты тексеруге ықтимал материалдар, ақаудың дәлелі емес.",
+  "verdict.reviewPriority": "Тексеру басымдығы (істен шығу болжамы емес)"
 }

@@ -103,3 +103,16 @@ export async function fetchVehicleInsight(vehicleId: string): Promise<VehicleIns
   if (!response.ok) throw i18nError('error.insight', response.status)
   return (await response.json()) as VehicleInsight
 }
+
+export async function setQuarantineRecommendation(
+  vehicleId: string, sessionId: string, active: boolean, reason: string,
+): Promise<VehicleInsight> {
+  const response = await fetch(`/api/fleet/vehicles/${encodeURIComponent(vehicleId)}/quarantine-recommendation`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ session_id: sessionId, active, reason, acknowledge: true }),
+  })
+  if (!response.ok) throw i18nError('error.insight', response.status)
+  return (await response.json()) as VehicleInsight
+}

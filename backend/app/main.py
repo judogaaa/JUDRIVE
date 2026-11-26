@@ -12,13 +12,15 @@ from app.rag.catalog import MANUAL_SPECS
 from app.config import get_settings
 from app.rag.catalog import SPECS_BY_ID
 from app.rag.service import ManualRagService
+from app.schemas.analytics import QuarantineRecommendationRequest
 from app.schemas.chat import ChatMessageRequest, ConversationCreate
+from app.agent.guardrails import sanitize_ml_observation
 from app.schemas.diagnose import DiagnoseRequest, DiagnoseResponse
 from app.schemas.fleet import VehicleDiagnosisHistory
 from app.schemas.health import HealthResponse
 from app.schemas.manuals import ManualSearchRequest, ManualSearchResponse, ManualSearchHit
 from app.schemas.tickets import TicketConfirmRequest
-from app.services.analytics import FleetAnalyticsService
+from app.services.analytics import FleetAnalyticsService, diagnosis_review_priority
 from app.services.fleet import FleetService
 from app.services.mock_clients import MockMlClient, MockToirClient
 from app.services.tickets import TicketService
@@ -33,7 +35,7 @@ mock_toir = MockToirClient(settings.mock_toir_url)
 rag_service = ManualRagService(settings.db_path, settings.pdf_dir)
 app_repo = AppRepository(settings.db_path)
 agent = AgentOrchestrator(settings, fleet, mock_ml, rag_service, app_repo)
-ticket_service = TicketService(app_repo, fleet, mock_ml, mock_toir)
+ticket_service = TicketService(app_repo, fleet, mock_ml, mock_toir, rag_service)
 fleet_analytics = FleetAnalyticsService(fleet, app_repo, settings.fleet_data_path)
 voice_service = VoiceService(settings.groq_api_key, settings.groq_stt_model, settings.groq_stt_timeout_s)
 
@@ -48,7 +50,7 @@ def _refresh_settings() -> None:
     rag_service = ManualRagService(settings.db_path, settings.pdf_dir)
     app_repo = AppRepository(settings.db_path)
     agent = AgentOrchestrator(settings, fleet, mock_ml, rag_service, app_repo)
-    ticket_service = TicketService(app_repo, fleet, mock_ml, mock_toir)
+    ticket_service = TicketService(app_repo, fleet, mock_ml, mock_toir, rag_service)
     fleet_analytics = FleetAnalyticsService(fleet, app_repo, settings.fleet_data_path)
     voice_service = VoiceService(settings.groq_api_key, settings.groq_stt_model, settings.groq_stt_timeout_s)
 
@@ -58,6 +60,7 @@ async def lifespan(_: FastAPI):
     import asyncio
 
     _refresh_settings()
+    app_repo.recover_interrupted_submissions()
     # Первая индексация может занять несколько минут при 6 PDF.
     await asyncio.to_thread(rag_service.ensure_index)
     yield
@@ -76,8 +79,14 @@ app.add_middleware(
 
 @app.get(f"{settings.api_prefix}/health", response_model=HealthResponse)
 async def health() -> HealthResponse:
-    ml_ok = await mock_ml.health()
-    toir_ok = await mock_toir.health()
+    try:
+        ml_ok = await mock_ml.health()
+    except httpx.HTTPError:
+        ml_ok = False
+    try:
+        toir_ok = await mock_toir.health()
+    except httpx.HTTPError:
+        toir_ok = False
     rag_status = rag_service.status()
     rag_ok = rag_status.get("index_current") and not rag_status.get("missing_files")
     groq_ready = bool(settings.groq_api_key)
@@ -121,6 +130,8 @@ async def diagnose(body: DiagnoseRequest) -> DiagnoseResponse:
         raise HTTPException(status_code=502, detail="Mock ML недоступен") from exc
 
     result.engine_model = fleet.session_engine(body.vehicle_id, body.session_id)
+    result.description = sanitize_ml_observation(result.description)
+    result.review_priority = diagnosis_review_priority(fleet, result)
     return result
 
 
@@ -283,3 +294,23 @@ async def fleet_vehicle_insight(vehicle_id: str, _: None = Depends(_chief_guard)
     if insight is None:
         raise HTTPException(status_code=404, detail="Транспорт не найден")
     return insight
+
+
+@app.post(f"{settings.api_prefix}/fleet/vehicles/{{vehicle_id}}/quarantine-recommendation")
+async def set_quarantine_recommendation(vehicle_id: str, body: QuarantineRecommendationRequest,
+                                        _: None = Depends(_chief_guard)):
+    insight = fleet_analytics.vehicle_insight(vehicle_id)
+    if insight is None:
+        raise HTTPException(status_code=404, detail="Транспорт не найден")
+    row = insight.vehicle
+    if not body.acknowledge or len(body.reason.strip()) < 10:
+        raise HTTPException(status_code=400, detail="Требуется явное подтверждение и обоснование")
+    if row.latest_session_id != body.session_id:
+        raise HTTPException(status_code=409, detail="Выбрана устаревшая проверка")
+    if body.active:
+        # A new recommendation is only tied to a current, valid abnormal check.
+        if row.latest_status != "anomaly" or row.needs_rerecord:
+            raise HTTPException(status_code=409, detail="Нет пригодной аномальной проверки")
+    app_repo.record_quarantine_recommendation(vehicle_id, body.session_id, body.active,
+                                               body.reason.strip(), get_settings().chief_username or "")
+    return fleet_analytics.vehicle_insight(vehicle_id)

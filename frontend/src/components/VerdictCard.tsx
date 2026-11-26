@@ -164,6 +164,11 @@ export function VerdictCard({ result, loading, error, vehicleId, actions, onRetr
           {result.signal_quality === 'warning' ? (
             <p className="verdict-card__quality">{t('verdict.signal.warningNote')}</p>
           ) : null}
+          {effective === 'anomaly' && result.review_priority ? (
+            <p className="verdict-card__quality">
+              <strong>{t('verdict.reviewPriority')}:</strong> {t(`ticket.urgency.${result.review_priority}`)}
+            </p>
+          ) : null}
           {footnoteKey ? <p className="verdict-card__footnote">{t(footnoteKey)}</p> : null}
         </>
       )}
