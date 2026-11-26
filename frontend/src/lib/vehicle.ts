@@ -4,7 +4,11 @@ export function displayVehicleModel(make: string, model: string | null): string 
   const brand = make.trim()
   const name = model?.trim() ?? ''
   if (!name) return brand
-  if (!brand || name.toLowerCase().startsWith(brand.toLowerCase())) return name
+  const normalizedBrand = brand.toLowerCase()
+  const normalizedName = name.toLowerCase()
+  if (!brand || normalizedName === normalizedBrand ||
+      /^[\s\p{P}\d]/u.test(normalizedName.slice(normalizedBrand.length)) &&
+      normalizedName.startsWith(normalizedBrand)) return name
   return `${brand} ${name}`
 }
 
@@ -13,7 +17,7 @@ export const vehicleModelLabel = displayVehicleModel
 
 /**
  * Latin/Cyrillic lookalikes are folded to one common character so a plate typed
- * with the wrong keyboard layout still finds its vehicle: МАЗ = MAZ, В418НК98 = B418HK98.
+ * with the wrong keyboard layout still finds its vehicle: В418НК98 = B418HK98.
  */
 const LOOKALIKES: Record<string, string> = {
   а: 'a',
@@ -39,7 +43,7 @@ const LOOKALIKES: Record<string, string> = {
   ұ: 'u',
   ү: 'u',
   һ: 'h',
-  ё: 'е',
+  ё: 'e',
   й: 'и',
 }
 
@@ -61,11 +65,13 @@ export function matchesVehicle(vehicle: VehicleSummary, query: string): boolean 
     vehicle.engine_model,
     vehicle.vehicle_type,
   ]
-  const haystack = foldSearch(fields.join(' '))
-  return query
-    .trim()
-    .split(/\s+/)
-    .every((word) => haystack.includes(foldSearch(word)))
+  const normalizedFields = fields.map(foldSearch)
+  const fullQuery = foldSearch(query)
+  if (!fullQuery || normalizedFields.some((field) => field.includes(fullQuery))) return true
+  return query.trim().split(/\s+/).every((word) => {
+    const term = foldSearch(word)
+    return normalizedFields.some((field) => field.includes(term))
+  })
 }
 
 export function latestSessionId(vehicle: VehicleSummary): string {

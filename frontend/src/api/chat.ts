@@ -1,3 +1,4 @@
+import type { DiagnosisAction } from '../lib/workflow'
 import { i18nError } from '../lib/i18nError'
 
 export interface Conversation {
@@ -56,10 +57,12 @@ async function chatFetch<T>(url: string, options: RequestInit): Promise<T> {
     response = await fetch(url, options)
   } catch {
     if (options.signal?.aborted && options.signal.reason?.name === 'AbortError') throw options.signal.reason
+    if (options.signal?.reason?.name === 'TimeoutError') throw i18nError('error.timeout')
     throw i18nError('error.agentUnavailable')
   }
   if (!response.ok) {
     throw i18nError(response.status === 429 ? 'error.agentBusy'
+      : response.status === 504 ? 'error.timeout'
       : response.status >= 500 ? 'error.agentUnavailable' : 'error.agent')
   }
   try { return await response.json() as T } catch { throw i18nError('error.agentUnavailable') }
@@ -86,14 +89,15 @@ export async function sendChatMessage(
   locale = 'ru',
   analysisOnly = false,
   signal?: AbortSignal,
+  action?: DiagnosisAction,
 ): Promise<ChatReply> {
   const response = await chatFetch<ChatReply>(`/api/conversations/${conversationId}/messages`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message, locale, analysis_only: analysisOnly }),
+    body: JSON.stringify({ message, locale, analysis_only: analysisOnly, action }),
     signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(180000)]) : AbortSignal.timeout(180000),
   })
-  if (!response || typeof response.reply !== 'string' || !Array.isArray(response.sources)) throw i18nError('error.agentUnavailable')
+  if (!response || typeof response.reply !== 'string' || !response.reply.trim() || !Array.isArray(response.sources)) throw i18nError('error.agentUnavailable')
   return response
 }
 

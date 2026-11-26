@@ -65,11 +65,12 @@ export async function fetchVehicleDiagnosisHistory(
   return data.trend_points ?? []
 }
 
-export async function fetchDiagnosis(vehicleId: string, sessionId: string): Promise<DiagnoseResponse> {
+export async function fetchDiagnosis(vehicleId: string, sessionId: string, signal?: AbortSignal): Promise<DiagnoseResponse> {
   const response = await request(
     '/api/diagnose',
     {
       method: 'POST',
+      signal,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ vehicle_id: vehicleId, session_id: sessionId }),
     },

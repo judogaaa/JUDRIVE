@@ -17,7 +17,7 @@ import { TicketDraftCard } from './TicketDraftCard'
 import { VoiceCapture } from './VoiceCapture'
 import { CopyButton } from './CopyButton'
 import { MessageText, readableAnswer } from './MessageText'
-import { manualTopic, usableStatus, type ChatIntent } from '../lib/workflow'
+import { manualTopic, usableStatus, type DiagnosisAction, type ChatIntent } from '../lib/workflow'
 
 interface AgentChatProps {
   vehicleId: string
@@ -29,11 +29,15 @@ interface AgentChatProps {
   onOpenManuals?: (query: string) => void
 }
 
-const SUGGESTION_KEYS: TranslationKey[] = ['chat.suggest1', 'chat.suggest2', 'chat.suggest3']
+const SUGGESTIONS: { label: TranslationKey; action: DiagnosisAction }[] = [
+  { label: 'chat.suggest1', action: 'explain' },
+  { label: 'chat.suggest2', action: 'next_checks' },
+  { label: 'chat.suggest3', action: 'prepare_ticket' },
+]
 
 function isDiagnoseVoiceCommand(text: string): boolean {
-  const q = text.toLowerCase()
-  return /диагност|diagnost|tekshir|талда|निदान|নির্ণয়/.test(q)
+  const command = text.trim().toLowerCase().replace(/[.!?]+$/, '')
+  return ['запусти диагностику', 'получить результат диагностики', 'run diagnosis'].includes(command)
 }
 
 export function AgentChat({
@@ -52,6 +56,8 @@ export function AgentChat({
   const sendGen = useRef(0)
   const sendingRef = useRef(false)
   const sendAbortRef = useRef<AbortController | null>(null)
+  const pendingIntent = useRef<{ text: string; action?: DiagnosisAction } | null>(null)
+  const sourceRequest = useRef(0)
   const chatIntentRef = useRef<number | null>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const tRef = useRef(t)
@@ -63,7 +69,7 @@ export function AgentChat({
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [retryText, setRetryText] = useState<string | null>(null)
+  const [retryMessage, setRetryMessage] = useState<{ text: string; action?: DiagnosisAction } | null>(null)
   const [draft, setDraft] = useState<DraftPayload | null>(null)
   const [ticketId, setTicketId] = useState<string | null>(null)
   const [evidenceHit, setEvidenceHit] = useState<ManualSearchHit | null>(null)
@@ -99,32 +105,6 @@ export function AgentChat({
   }, [messages, loading])
 
   useEffect(() => {
-    if (!activeResult) return
-    const id = `ml:${activeResult.vehicle_id}:${activeResult.session_id}:${activeResult.status}`
-    const statusKey =
-      status === 'normal'
-        ? 'chat.status.normal'
-        : status === 'anomaly'
-          ? 'chat.status.anomaly'
-          : 'chat.status.check_failed'
-    const lines = [
-      t(statusKey),
-      activeResult.engine_model ? `${t('verdict.engine')}: ${activeResult.engine_model}` : '',
-      status === 'check_failed' ? t('verdict.failed.action') : '',
-      status === 'anomaly' && activeResult.anomaly_title
-        ? `${t('verdict.type')}: ${activeResult.anomaly_type} — ${activeResult.anomaly_title}`
-        : '',
-      status !== 'check_failed' && activeResult.confidence != null
-        ? `${t('verdict.confidence')}: ${activeResult.confidence}`
-        : '',
-    ].filter(Boolean)
-    setMessages((prev) => {
-      const rest = prev.filter((message) => !message.id.startsWith('ml:'))
-      return [...rest, { id, role: 'assistant', content: lines.join('\n') }]
-    })
-  }, [activeResult, status, t])
-
-  useEffect(() => {
     contextRef.current = contextKey
     const epoch = ++sendGen.current
     sendAbortRef.current?.abort()
@@ -132,10 +112,9 @@ export function AgentChat({
     sendingRef.current = false
     setConversationId(null)
     setMessages([])
-    setInput('')
     setLoading(false)
     setError(null)
-    setRetryText(null)
+    setRetryMessage(null)
     setDraft(null)
     setTicketId(null)
     setEvidenceHit(null)
@@ -154,11 +133,16 @@ export function AgentChat({
         if (epoch !== sendGen.current || contextRef.current !== contextKey) return
         setError(resolveErrorMessage(tRef.current, err, 'error.chatOpen'))
       })
-    return () => controller.abort()
+    return () => {
+      controller.abort()
+      sendAbortRef.current?.abort()
+      sendGen.current += 1
+      sourceRequest.current += 1
+    }
   }, [contextKey, vehicleId, sessionId, conversationRetry])
 
   const send = useCallback(
-    async (text: string) => {
+    async (text: string, action?: DiagnosisAction) => {
       const trimmed = text.trim()
       if (!trimmed) return
       if (!conversationId) {
@@ -179,13 +163,13 @@ export function AgentChat({
       sendingRef.current = true
       setLoading(true)
       setError(null)
-      setRetryText(null)
+      setRetryMessage(null)
       const userMsg: ChatMessage = { id: crypto.randomUUID(), role: 'user', content: trimmed }
       setMessages((prev) => [...prev, userMsg])
-      setInput('')
+      setInput((current) => current.trim() === trimmed ? '' : current)
 
       try {
-        const reply = await sendChatMessage(convId, trimmed, locale, false, controller.signal)
+        const reply = await sendChatMessage(convId, trimmed, locale, false, controller.signal, action)
         if (epoch !== sendGen.current || contextRef.current !== key) return
         const assistantMsg: ChatMessage = {
           id: crypto.randomUUID(),
@@ -202,7 +186,7 @@ export function AgentChat({
         if (epoch !== sendGen.current || contextRef.current !== key) return
         setMessages((prev) => prev.filter((message) => message.id !== userMsg.id))
         setError(resolveErrorMessage(tRef.current, err, 'error.agent'))
-        setRetryText(trimmed)
+        setRetryMessage({ text: trimmed, action })
         setInput((prev) => (prev.trim() ? prev : trimmed))
       } finally {
         if (epoch === sendGen.current && contextRef.current === key) {
@@ -216,17 +200,27 @@ export function AgentChat({
 
   useEffect(() => {
     if (!chatIntent || chatIntent.vehicleId !== vehicleId || chatIntent.sessionId !== sessionId) return
-    if (!conversationId) return
     if (chatIntentRef.current === chatIntent.id) return
     chatIntentRef.current = chatIntent.id
-    if (chatIntent.autoSend && !loading) void send(chatIntent.message)
-    else prefill(chatIntent.message)
+    if (chatIntent.autoSend) {
+      pendingIntent.current = { text: chatIntent.message, action: chatIntent.action }
+    } else {
+      prefill(chatIntent.message)
+    }
     onChatIntentConsumed?.()
-  }, [chatIntent, conversationId, loading, onChatIntentConsumed, send, sessionId, vehicleId])
+  }, [chatIntent, onChatIntentConsumed, sessionId, vehicleId])
+
+  useEffect(() => {
+    if (!conversationId || loading || !pendingIntent.current || sendingRef.current) return
+    const { text, action } = pendingIntent.current
+    pendingIntent.current = null
+    void send(text, action)
+  }, [chatIntent, conversationId, loading, send])
 
   const openEvidence = async (hit: SourceHit) => {
-    const key = contextKey
+    const request = ++sourceRequest.current
     setSourceError(null)
+    setSourceLoadingId(null)
     if (hit.doc_id) {
       setEvidenceHit({
         evidence_id: hit.evidence_id,
@@ -242,13 +236,13 @@ export function AgentChat({
     setSourceLoadingId(hit.evidence_id)
     try {
       const row = await fetchEvidence(hit.evidence_id)
-      if (contextRef.current !== key) return
+      if (request !== sourceRequest.current) return
       setEvidenceHit({ ...row, score: 'score' in row ? Number(row.score) || 0 : 0 })
-    } catch (err: unknown) {
-      if (contextRef.current !== key) return
+    } catch {
+      if (request !== sourceRequest.current) return
       setSourceError(tRef.current('error.source'))
     } finally {
-      if (contextRef.current === key) setSourceLoadingId(null)
+      if (request === sourceRequest.current) setSourceLoadingId(null)
     }
   }
 
@@ -257,7 +251,7 @@ export function AgentChat({
     if (isDiagnoseVoiceCommand(text)) onDiagnoseCommand?.()
   }
 
-  const lastAssistantId = messages.filter((message) => message.role === 'assistant' && !message.id.startsWith('ml:')).at(-1)?.id
+  const lastAssistantId = messages.filter((message) => message.role === 'assistant').at(-1)?.id
 
   return (
     <section className="chat-panel">
@@ -272,15 +266,15 @@ export function AgentChat({
       </div>
 
       <div className="chip-row chat-suggestions">
-        {SUGGESTION_KEYS.filter((key) => key !== 'chat.suggest3' || status === 'anomaly').map((key) => (
+        {SUGGESTIONS.filter(({ action }) => action !== 'prepare_ticket' || status === 'anomaly').map(({ label, action }) => (
           <button
-            key={key}
+            key={action}
             type="button"
             className="chip-button"
             disabled={loading || !conversationId}
-            onClick={() => void send(t(key))}
+            onClick={() => void send(t(label), action)}
           >
-            {t(key)}
+            {t(label)}
           </button>
         ))}
       </div>
@@ -311,7 +305,7 @@ export function AgentChat({
                 </ul>
               </details>
             ) : null}
-            {message.role === 'assistant' && !message.id.startsWith('ml:') && message.id === lastAssistantId ? (
+            {message.role === 'assistant' && message.id === lastAssistantId ? (
               <div className="message-actions">
                 <CopyButton
                   text={[
@@ -367,8 +361,8 @@ export function AgentChat({
                 {t('history.retry')}
               </button>
             ) : null}
-            {retryText ? (
-              <button type="button" className="btn btn--secondary" onClick={() => void send(retryText)}>
+            {retryMessage ? (
+              <button type="button" className="btn btn--secondary" onClick={() => void send(retryMessage.text, retryMessage.action)}>
                 <RotateCcw size={15} aria-hidden />
                 {t('chat.retrySend')}
               </button>
@@ -379,7 +373,7 @@ export function AgentChat({
               aria-label={t('common.close')}
               onClick={() => {
                 setError(null)
-                setRetryText(null)
+                setRetryMessage(null)
               }}
             >
               <X size={15} aria-hidden />
@@ -405,11 +399,12 @@ export function AgentChat({
             ref={inputRef}
             value={input}
             onChange={(event) => setInput(event.target.value)}
+            aria-label={t('chat.placeholder')}
             placeholder={t('chat.placeholder')}
             rows={2}
             disabled={!conversationId}
             onKeyDown={(event) => {
-              if (event.key === 'Enter' && !event.shiftKey) {
+              if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
                 event.preventDefault()
                 if (!loading && input.trim()) void send(input)
               }

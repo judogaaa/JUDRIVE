@@ -15,9 +15,6 @@ import { resolveErrorMessage } from '../lib/i18nError'
 import { latestSessionId } from '../lib/vehicle'
 import type { ChatIntent, ManualSearchIntent } from '../lib/workflow'
 import {
-  buildExplainDiagnosisMessage,
-  buildPrepareTicketMessage,
-  buildWhatToCheckMessage,
   manualQueryFromDiagnosis,
   usableStatus,
 } from '../lib/workflow'
@@ -50,8 +47,7 @@ export function DiagnosisView({
   onChatIntentConsumed,
 }: DiagnosisViewProps) {
   const { t, locale } = useI18n()
-  const sessionRef = useRef<HTMLSelectElement | null>(null)
-  const [copyHint, setCopyHint] = useState(false)
+  const [copyMessage, setCopyMessage] = useState<string | null>(null)
   const [result, setResult] = useState<DiagnoseResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -63,7 +59,7 @@ export function DiagnosisView({
   const [sessionChooserOpen, setSessionChooserOpen] = useState(false)
   const requestGen = useRef(0)
   const trendGen = useRef(0)
-  const inFlightRef = useRef(false)
+  const inFlightRef = useRef<AbortController | null>(null)
   const tRef = useRef(t)
   tRef.current = t
 
@@ -80,8 +76,10 @@ export function DiagnosisView({
 
   const resetVerdict = useCallback(() => {
     requestGen.current += 1
-    inFlightRef.current = false
+    inFlightRef.current?.abort()
+    inFlightRef.current = null
     setResult(null)
+    setCopyMessage(null)
     setError(null)
     setLoading(false)
   }, [])
@@ -114,21 +112,24 @@ export function DiagnosisView({
     }
   }, [vehicleId])
 
+  useEffect(() => {
+    if (!copyMessage) return
+    const timer = window.setTimeout(() => setCopyMessage(null), 2200)
+    return () => window.clearTimeout(timer)
+  }, [copyMessage])
+
   // Keep the pair valid if the fleet data arrives after the initial render.
   useEffect(() => {
     if (!selectedVehicle) return
     if (selectedVehicle.sessions.some((session) => session.session_id === sessionId)) return
     const latest = latestSessionId(selectedVehicle)
-    if (latest) onSessionChange(latest)
+    if (latest !== sessionId) onSessionChange(latest)
   }, [onSessionChange, selectedVehicle, sessionId])
 
   const onVehicleSelect = (nextId: string) => {
     onVehicleChange(nextId)
     const vehicle = vehicles.find((row) => row.vehicle_id === nextId)
-    if (vehicle) {
-      const latest = latestSessionId(vehicle)
-      if (latest) onSessionChange(latest)
-    }
+    onSessionChange(vehicle ? latestSessionId(vehicle) : '')
     resetVerdict()
   }
 
@@ -138,29 +139,33 @@ export function DiagnosisView({
   }
 
   const runDiagnosis = useCallback(async () => {
-    if (!vehicleId || !sessionId) return
+    if (!selectedVehicle?.sessions.some((session) => session.session_id === sessionId)) return
     if (inFlightRef.current) return
-    inFlightRef.current = true
+    const controller = new AbortController()
+    inFlightRef.current = controller
     const gen = ++requestGen.current
     const pair = `${vehicleId}:${sessionId}`
     setLoading(true)
     setError(null)
     setResult(null)
     try {
-      const response = await fetchDiagnosis(vehicleId, sessionId)
+      const response = await fetchDiagnosis(vehicleId, sessionId, controller.signal)
       if (gen !== requestGen.current) return
-      if (`${response.vehicle_id}:${response.session_id}` !== pair) return
+      if (`${response.vehicle_id}:${response.session_id}` !== pair) {
+        setError(tRef.current('error.unknown'))
+        return
+      }
       setResult(response)
     } catch (err: unknown) {
       if (gen !== requestGen.current) return
       setError(resolveErrorMessage(tRef.current, err, 'error.unknown'))
     } finally {
       if (gen === requestGen.current) {
-        inFlightRef.current = false
+        inFlightRef.current = null
         setLoading(false)
       }
     }
-  }, [sessionId, vehicleId])
+  }, [selectedVehicle, sessionId, vehicleId])
 
   const sortedSessions: SessionSummary[] = [...sessions].sort((a, b) =>
     b.checked_at.localeCompare(a.checked_at),
@@ -199,10 +204,9 @@ export function DiagnosisView({
       .join('\n')
     try {
       await navigator.clipboard.writeText(body)
-      setCopyHint(true)
-      window.setTimeout(() => setCopyHint(false), 2200)
+      setCopyMessage(t('common.copied'))
     } catch {
-      /* clipboard blocked */
+      setCopyMessage(t('error.unknown'))
     }
   }, [activeResult, t])
 
@@ -215,7 +219,8 @@ export function DiagnosisView({
           id: Date.now(),
           vehicleId,
           sessionId,
-          message: buildExplainDiagnosisMessage(activeResult),
+          message: t('verdict.action.explain'),
+          action: 'explain',
           autoSend: true,
         }),
       onWhatToCheck: () =>
@@ -223,7 +228,8 @@ export function DiagnosisView({
           id: Date.now(),
           vehicleId,
           sessionId,
-          message: buildWhatToCheckMessage(activeResult),
+          message: t(effective === 'check_failed' ? 'action.askFailed' : 'action.askPlan'),
+          action: 'next_checks',
           autoSend: true,
         }),
       onSearchManual:
@@ -245,31 +251,23 @@ export function DiagnosisView({
                 id: Date.now(),
                 vehicleId,
                 sessionId,
-                message: buildPrepareTicketMessage(activeResult),
+                message: t('chat.suggest3'),
+                action: 'prepare_ticket',
                 autoSend: true,
               })
           : undefined,
       onCopyPlan: () => void copyVerdictPlan(),
       onOtherSession: () => setSessionChooserOpen(true),
-      onRetry: () => void runDiagnosis(),
     }
-  }, [activeResult, copyVerdictPlan, engineModel, onChatIntent, onOpenManuals, runDiagnosis, sessionId, vehicleId])
+  }, [activeResult, copyVerdictPlan, engineModel, onChatIntent, onOpenManuals, sessionId, t, vehicleId])
 
   return (
     <div className="diag-page">
       <header className="diag-page__header">
         <div>
-          <p className="eyebrow">{t('app.caption')}</p>
           <h1>{t('diag.title')}</h1>
           <p className="diag-page__lead">{t('diag.subtitle')}</p>
         </div>
-        {activeSession ? (
-          <div className="diag-page__context" title={t('history.title')}>
-            <span>{t('history.selected')}</span>
-            <strong>{activeSession.session_id}</strong>
-            <span>{formatSessionDateTime(locale, activeSession.checked_at)}</span>
-          </div>
-        ) : null}
       </header>
 
       {fleetError ? (
@@ -289,40 +287,30 @@ export function DiagnosisView({
         <label className="field diag-session-field">
           <span>{t('diag.check')}</span>
           <select
-            ref={sessionRef}
             aria-label={t('diag.check')}
             value={sessionId}
             onChange={(event) => onSessionSelect(event.target.value)}
-            disabled={!selectedVehicle}
+            disabled={!sortedSessions.length}
           >
             {sortedSessions.map((session) => (
               <option key={session.session_id} value={session.session_id}>
-                {session.session_id}
+                {session.session_id} · {formatSessionDateTime(locale, session.checked_at)}
               </option>
             ))}
           </select>
-          <span className="field__hint">
-            {activeSession
-              ? `${activeSession.session_id} · ${formatSessionDateTime(locale, activeSession.checked_at)}`
-              : t('history.subtitle')}
-          </span>
         </label>
 
         <div className="diag-run">
-          <span className="field__label" aria-hidden>
-            &nbsp;
-          </span>
           <button
             type="button"
             className="btn btn--primary btn--block diag-run__button"
-            disabled={loading || !vehicleId || !sessionId}
+            disabled={loading || !activeSession}
             aria-busy={loading}
             onClick={() => void runDiagnosis()}
           >
             <Play size={18} aria-hidden />
             {loading ? t('diag.running') : t('diag.run')}
           </button>
-          <span className="field__hint">{loading ? '' : t('diag.runHint')}</span>
         </div>
       </section>
 
@@ -337,18 +325,18 @@ export function DiagnosisView({
               actions={verdictActions}
               onRetry={() => void runDiagnosis()}
             />
-            {copyHint ? (
+            {copyMessage ? (
               <p className="diag-copy-hint" role="status">
-                {t('common.copied')}
+                {copyMessage}
               </p>
             ) : null}
           </section>
 
-          <section className="diag-history">
-            {activeResult && usableStatus(activeResult) === 'anomaly' && engineModel ? (
+          {activeResult && usableStatus(activeResult) === 'anomaly' && engineModel ? (
             <RelatedManuals key={contextKey} engineModel={engineModel} query={manualQueryFromDiagnosis(activeResult)} />
           ) : null}
-          <VehicleHistoryPanel
+          <section className="diag-history" id="diagnosis-history" tabIndex={-1}>
+            <VehicleHistoryPanel
               sessions={sortedSessions}
               activeSessionId={sessionId}
               onSelectSession={onSessionSelect}
@@ -356,34 +344,10 @@ export function DiagnosisView({
               trendError={trendError}
             />
           </section>
-
-          {!activeResult && !loading && !error ? (
-            <section className="diag-steps" aria-label={t('diag.workflow')}>
-              <p className="diag-steps__title">{t('diag.workflow')}</p>
-              <ol>
-                <li>
-                  <span>1</span>
-                  {t('diag.step.select')}
-                </li>
-                <li>
-                  <span>2</span>
-                  {t('diag.step.run')}
-                </li>
-                <li>
-                  <span>3</span>
-                  {t('diag.step.review')}
-                </li>
-                <li>
-                  <span>4</span>
-                  {t('diag.step.act')}
-                </li>
-              </ol>
-            </section>
-          ) : null}
         </div>
 
-        <section className="diag-chat">
-          {vehicleId && sessionId ? (
+        <section className="diag-chat" id="diagnosis-chat" tabIndex={-1}>
+          {activeSession ? (
             <AgentChat
               key={contextKey}
               vehicleId={vehicleId}

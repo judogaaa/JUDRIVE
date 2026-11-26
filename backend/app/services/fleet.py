@@ -68,14 +68,14 @@ class FleetService:
         ordered = sorted(sessions, key=lambda s: s["checked_at"])
         trend: list[dict] = []
         for item in ordered[-12:]:
-            failed = item.get("status") == "check_failed"
+            failed = item.get("status") == "check_failed" or item.get("signal_quality") == "bad"
             trend.append(
                 {
                     "session_id": item["session_id"],
                     "checked_at": item["checked_at"],
-                    "status": item["status"],
-                    "anomaly_score": item.get("anomaly_score"),
-                    "anomaly_type": item.get("anomaly_type"),
+                    "status": "check_failed" if failed else item["status"],
+                    "anomaly_score": None if failed else item.get("anomaly_score"),
+                    "anomaly_type": None if failed else item.get("anomaly_type"),
                     "skipped": failed,
                 }
             )

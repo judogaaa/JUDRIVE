@@ -185,3 +185,48 @@ def test_clearance_intents_are_refused_without_llm(locale, question, monkeypatch
 def test_manual_intents_across_locales(question):
     from app.agent.orchestrator import _is_manual_question
     assert _is_manual_question(question)
+
+
+def test_context_action_retry_keeps_one_complete_turn(monkeypatch, tmp_path):
+    from app.agent.groq_client import GroqRateLimitError
+    from app.main import agent
+    from app.storage.repository import AppRepository
+
+    repo = AppRepository(tmp_path / "chat.sqlite")
+    monkeypatch.setattr(agent, "_repo", repo)
+    checked = []
+
+    async def diagnose(vehicle_id, session_id):
+        checked.append((vehicle_id, session_id))
+        return _diag()
+
+    class Provider:
+        attempts = 0
+
+        async def run_with_tools(self, messages, tools, execute, *, max_steps):
+            self.attempts += 1
+            assert sum(row.get("content") == "Что проверить?" for row in messages) == 1
+            facts = await execute("get_diagnosis", {})
+            assert facts["session_id"] == "S-0006"
+            draft = await execute("prepare_defect_ticket", {})
+            assert draft["status"] == "refused"
+            if self.attempts == 1:
+                raise GroqRateLimitError("quota")
+            return "Проверка завершена.", [], {}
+
+    provider = Provider()
+    monkeypatch.setattr(agent._mock_ml, "diagnose", diagnose)
+    monkeypatch.setattr(agent, "_groq", lambda: provider)
+
+    client = TestClient(app)
+    created = client.post("/api/conversations", json={"vehicle_id": "M333YK47", "session_id": "S-0006"})
+    url = f"/api/conversations/{created.json()['conversation_id']}/messages"
+    body = {"message": "Что проверить?", "action": "explain"}
+
+    assert client.post(url, json=body).status_code == 429
+    assert client.get(url).json()["messages"] == []
+    response = client.post(url, json=body)
+    assert response.status_code == 200
+    assert response.json()["draft"] is None
+    assert [row["role"] for row in client.get(url).json()["messages"]] == ["user", "assistant"]
+    assert checked == [("M333YK47", "S-0006")] * 2

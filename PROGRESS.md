@@ -466,3 +466,11 @@
 - All exit paths require explicit acknowledgement on step 7; skipped legacy states cannot bypass training. Completed onboarding remains persisted and repeatable.
 - Agent prompt and output normalization distinguish hypotheses from facts, validate citation IDs against actual tool evidence, remove generated URLs, and reject unsupported numerical claims. Inline sources and ticket review open the exact PDF page; provider/network errors are localized and retryable.
 - Tests use isolated services and an LLM stub; this does not establish that every live LLM answer is correct.
+
+## 27.11 — доработка рабочих сценариев из Codex Cloud
+
+- У обучения единая схема шага и предсказуемая навигация с клавиатуры. В помощи сохранены 12 карточек и FAQ. Ссылки на чат и историю выводят к соответствующим областям диагностики.
+- Выбор сессии показывает дату, отменяет устаревший запрос и проверяет пару ТС/сессия. Непригодные записи исключены из метрик и графика. На сервере отклоняются несоответствующие и некорректные ответы Mock ML.
+- Контекстные кнопки передают явное действие и пару ТС/сессия. История чата сохраняет завершённый обмен одной транзакцией. Повтор после 429 сохраняет вопрос, голосовой ввод освобождает микрофон и отменяет устаревшее распознавание.
+- Каталог группирует шесть оригиналов, включая общий документ ЗМЗ. PDF-просмотрщик запоминает страницы, отменяет старую отрисовку и поддерживает масштабирование с прокруткой. В автопарке видна дата последней проверки, в журнале одна кнопка карточки, а категории главного механика открывают соответствующий список без старых фильтров.
+- Проверено: production build, 23 целевых теста, ручной проход обучения и непригодной записи на облачном стенде с оригинальными Mock ML и Mock ТОиР. Полные PDF и ключ Groq отсутствуют в этой копии. Сквозную проверку PDF, C1 с Groq и отправки ТОиР нужно провести с оригинальными файлами и настроенным стендом.

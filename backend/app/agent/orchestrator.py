@@ -15,13 +15,20 @@ from app.agent.guardrails import sanitize_user_message, ml_facts_for_agent
 from app.agent.tools import TOOL_DEFINITIONS, ToolRuntime
 from app.config import Settings
 from app.rag.service import ManualRagService
+from app.schemas.chat import DiagnosisAction
 from app.services.analytics import diagnosis_review_priority
 from app.services.fleet import FleetService
-from app.services.mock_clients import MockMlClient
+from app.services.mock_clients import MockMlClient, MockMlResponseError
 from app.storage.repository import AppRepository
 
 
 logger = logging.getLogger(__name__)
+
+_ACTION_INSTRUCTIONS: dict[DiagnosisAction, str] = {
+    "explain": "Кратко объясни результат текущей проверки по структурированным данным.",
+    "next_checks": "Найди применимые страницы руководства. Укажи, что проверить в первую очередь, со ссылками.",
+    "prepare_ticket": "Найди применимые источники через search_manuals, затем подготовь черновик через prepare_defect_ticket.",
+}
 
 
 class AgentOrchestrator:
@@ -71,6 +78,7 @@ class AgentOrchestrator:
         user_message: str,
         locale: str = "ru",
         analysis_only: bool = False,
+        action: DiagnosisAction | None = None,
     ) -> dict:
         conv = self._repo.get_conversation(conversation_id)
         if not conv:
@@ -80,21 +88,25 @@ class AgentOrchestrator:
         if not content:
             raise HTTPException(status_code=400, detail="Пустое сообщение")
 
-        self._repo.add_message(conversation_id, "user", content)
-
         loc = normalize_locale(locale)
         diag = None
         # A request for clearance receives a conservative refusal even in ticket-review mode.
         if _is_drive_permission_question(content):
             reply = insufficient_evidence_reply(loc)
-            self._repo.add_message(conversation_id, "assistant", reply, tool_trace=[], sources=[])
+            self._repo.add_chat_turn(conversation_id, content, reply)
             return {"reply": reply, "tool_trace": [], "sources": [], "draft": None, "usage": {}}
         if not analysis_only:
-            diag = await self._mock_ml.diagnose(conv["vehicle_id"], conv["session_id"])
+            try:
+                diag = await self._mock_ml.diagnose(conv["vehicle_id"], conv["session_id"])
+            except httpx.TimeoutException as exc:
+                raise HTTPException(status_code=504, detail="Проверка не ответила вовремя.") from exc
+            except (httpx.HTTPError, MockMlResponseError) as exc:
+                raise HTTPException(status_code=502, detail="Не удалось получить результат проверки.") from exc
             diag.review_priority = diagnosis_review_priority(self._fleet, diag)
-            if (diag.status == "check_failed" or diag.signal_quality == "bad") and not _is_manual_question(content):
+            failed = diag.status == "check_failed" or diag.signal_quality == "bad"
+            if failed and (action is not None or not _is_manual_question(content)):
                 reply = failed_recording_reply(loc)
-                self._repo.add_message(conversation_id, "assistant", reply, tool_trace=[], sources=[])
+                self._repo.add_chat_turn(conversation_id, content, reply)
                 return {"reply": reply, "tool_trace": [], "sources": [], "draft": None, "usage": {}}
 
         runtime = ToolRuntime(
@@ -106,7 +118,7 @@ class AgentOrchestrator:
             session_id=conv["session_id"],
             engine_model=conv["engine_model"],
             conversation_id=conversation_id,
-            analysis_only=analysis_only,
+            analysis_only=analysis_only or action in {"explain", "next_checks"},
             diagnosis=diag,
         )
 
@@ -115,6 +127,10 @@ class AgentOrchestrator:
         for row in history_rows[-8:]:
             if row["role"] in {"user", "assistant"}:
                 llm_messages.append({"role": row["role"], "content": row["content"]})
+
+        if action and not analysis_only:
+            llm_messages.append({"role": "system", "content": _ACTION_INSTRUCTIONS[action]})
+        llm_messages.append({"role": "user", "content": content})
 
         if diag is not None:
             facts = ml_facts_for_agent(diag, conv["engine_model"])
@@ -156,7 +172,7 @@ class AgentOrchestrator:
             logger.warning("Agent timeout")
             raise HTTPException(status_code=504, detail="Не удалось дождаться ответа помощника. Повторите позже.") from exc
         except Exception as exc:  # noqa: BLE001
-            logger.warning("Agent call failed (%s): %s", type(exc).__name__, exc)
+            logger.warning("Agent call failed (%s)", type(exc).__name__)
             raise HTTPException(status_code=502, detail="Не удалось получить ответ агента. Повторите позже.") from exc
 
         self._repo.log_usage(
@@ -171,7 +187,7 @@ class AgentOrchestrator:
         # A numerical technical claim without any supporting page is unsafe too.
         if not reply or not quantities_supported(self._rag, sources, reply):
             reply = insufficient_evidence_reply(loc)
-        if not analysis_only and _is_manual_question(content):
+        if not analysis_only and (action in {"next_checks", "prepare_ticket"} or _is_manual_question(content)):
             if not sources and not runtime.draft:
                 reply = insufficient_evidence_reply(loc)
             elif sources and not runtime.draft and not any(
@@ -180,9 +196,9 @@ class AgentOrchestrator:
                 # An unreferenced synthesis is not presented as a verified manual answer.
                 reply = insufficient_evidence_reply(loc)
         draft_id = runtime.draft["draft_id"] if runtime.draft else None
-        self._repo.add_message(
+        self._repo.add_chat_turn(
             conversation_id,
-            "assistant",
+            content,
             reply,
             tool_trace=tool_trace,
             sources=sources,

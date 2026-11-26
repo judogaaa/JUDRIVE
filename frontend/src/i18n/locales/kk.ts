@@ -402,5 +402,7 @@ export const kk: Record<TranslationKey, string> = {
   'error.agentBusy': 'Көмекші уақытша бос емес. Сұрағыңыз сақталды, кейін қайталаңыз.',
   'error.agentUnavailable': 'Көмекші уақытша қолжетімсіз. Сұрағыңыз сақталды, кейін қайталаңыз.',
   'chat.sourcesTitle': 'Жауап дереккөздері',
-  'help.card.settings.body': 'JUDRIVE жеті тілді, ашық, қара және жүйелік тақырыптарды қолдайды және телефонға бейімделеді.',
+  'help.card.settings.body': 'Интерфейс тілін және тақырыбын таңдаңыз. Баптаулар осы браузерде сақталады.',
+  'manuals.operationGuide': 'Пайдалану нұсқаулығы',
+  'manuals.repairGuide': 'Жөндеу нұсқаулығы',
 }

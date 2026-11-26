@@ -22,7 +22,7 @@ from app.schemas.manuals import ManualSearchRequest, ManualSearchResponse, Manua
 from app.schemas.tickets import TicketConfirmRequest
 from app.services.analytics import FleetAnalyticsService, diagnosis_review_priority
 from app.services.fleet import FleetService
-from app.services.mock_clients import MockMlClient, MockToirClient
+from app.services.mock_clients import MockMlClient, MockMlResponseError, MockToirClient
 from app.services.tickets import TicketService
 from app.services.voice import VoiceService
 from app.agent.locale import WHISPER_LANG, normalize_locale
@@ -124,10 +124,10 @@ async def diagnose(body: DiagnoseRequest) -> DiagnoseResponse:
         )
     try:
         result = await mock_ml.diagnose(body.vehicle_id, body.session_id)
-    except httpx.HTTPStatusError as exc:
-        raise HTTPException(status_code=exc.response.status_code, detail=exc.response.text) from exc
-    except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail="Mock ML недоступен") from exc
+    except httpx.TimeoutException as exc:
+        raise HTTPException(status_code=504, detail="Проверка не ответила вовремя. Повторите запрос.") from exc
+    except (httpx.HTTPError, MockMlResponseError) as exc:
+        raise HTTPException(status_code=502, detail="Не удалось получить результат проверки. Повторите запрос.") from exc
 
     result.engine_model = fleet.session_engine(body.vehicle_id, body.session_id)
     result.description = sanitize_ml_observation(result.description)
@@ -234,6 +234,7 @@ async def conversation_send(conversation_id: str, body: ChatMessageRequest):
         body.message,
         locale=body.locale,
         analysis_only=body.analysis_only,
+        action=body.action,
     )
 
 

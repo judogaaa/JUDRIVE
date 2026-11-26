@@ -402,5 +402,7 @@ export const tg: Record<TranslationKey, string> = {
   'error.agentBusy': 'Ёвар муваққатан банд аст. Савол захира шуд, баъдтар кӯшиш кунед.',
   'error.agentUnavailable': 'Ёвар муваққатан дастнорас аст. Савол захира шуд, баъдтар кӯшиш кунед.',
   'chat.sourcesTitle': 'Манбаъҳои ҷавоб',
-  'help.card.settings.body': 'JUDRIVE ҳафт забон, мавзӯъҳои равшан, торик ва системаро дастгирӣ мекунад ва ба телефон мутобиқ мешавад.',
+  'help.card.settings.body': 'Забони интерфейс ва мавзӯъро интихоб кунед. Танзимот дар ҳамин браузер нигоҳ дошта мешавад.',
+  'manuals.operationGuide': 'Дастури истифода',
+  'manuals.repairGuide': 'Дастури таъмир',
 }

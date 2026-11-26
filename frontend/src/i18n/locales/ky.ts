@@ -402,5 +402,7 @@ export const ky: Record<TranslationKey, string> = {
   'error.agentBusy': 'Жардамчы убактылуу бош эмес. Суроо сакталды, кийин кайталаңыз.',
   'error.agentUnavailable': 'Жардамчы убактылуу жеткиликсиз. Суроо сакталды, кийин кайталаңыз.',
   'chat.sourcesTitle': 'Жооп булактары',
-  'help.card.settings.body': 'JUDRIVE жетмиш тилди колдойт, жарык, кара жана система темаларын жана телефонго ылайыкташат.',
+  'help.card.settings.body': 'Интерфейстин тилин жана темасын тандаңыз. Жөндөөлөр ушул браузерде сакталат.',
+  'manuals.operationGuide': 'Пайдалануу боюнча колдонмо',
+  'manuals.repairGuide': 'Оңдоо боюнча колдонмо',
 }

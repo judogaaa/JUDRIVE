@@ -98,11 +98,10 @@ class ToolRuntime:
         return {"error": f"Неизвестный инструмент: {name}"}
 
     async def _get_diagnosis(self) -> dict[str, Any]:
-        diag = await self.mock_ml.diagnose(self.vehicle_id, self.session_id)
-        diag.engine_model = self.fleet.session_engine(self.vehicle_id, self.session_id)
-        diag.review_priority = diagnosis_review_priority(self.fleet, diag)
-        self.diagnosis = diag
-        return ml_facts_for_agent(diag, self.engine_model)
+        if self.diagnosis is None:
+            self.diagnosis = await self.mock_ml.diagnose(self.vehicle_id, self.session_id)
+            self.diagnosis.review_priority = diagnosis_review_priority(self.fleet, self.diagnosis)
+        return ml_facts_for_agent(self.diagnosis, self.engine_model)
 
     def _get_vehicle_history(self) -> dict[str, Any]:
         tickets = []
@@ -124,10 +123,9 @@ class ToolRuntime:
         }
 
     def _search_manuals(self, query: str) -> dict[str, Any]:
-        query = (query or "").strip()
-        if not query:
+        if not isinstance(query, str) or not query.strip() or len(query) > 500:
             return {"status": "invalid_query", "message": "Пустой запрос"}
-        result = self.rag.search(self.engine_model, query, limit=AGENT_SEARCH_LIMIT)
+        result = self.rag.search(self.engine_model, query.strip(), limit=AGENT_SEARCH_LIMIT)
         if result.get("results"):
             for hit in result["results"]:
                 self.sources.append(hit)
@@ -137,7 +135,7 @@ class ToolRuntime:
         if self.analysis_only:
             return {
                 "status": "refused",
-                "message": "Режим разбора заявки: создание черновика запрещено",
+                "message": "В текущем режиме можно только просматривать данные",
             }
         if self.diagnosis is None:
             await self._get_diagnosis()

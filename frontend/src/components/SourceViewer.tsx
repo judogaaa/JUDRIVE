@@ -5,6 +5,7 @@ import type { PDFDocumentProxy, RenderTask } from 'pdfjs-dist'
 import type { ManualSearchHit } from '../api/manuals'
 import { pdfDocUrl, pdfSourceUrl } from '../api/manuals'
 import { useI18n } from '../i18n/I18nContext'
+import { rememberManualPage, type RecentPage } from '../lib/manuals'
 import { CopyButton } from './CopyButton'
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString()
@@ -12,13 +13,14 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.m
 interface SourceViewerProps {
   hit: ManualSearchHit | null
   onClose: () => void
+  onRecentChange?: (pages: RecentPage[]) => void
 }
 
-export function SourceViewer({ hit, onClose }: SourceViewerProps) {
-  return hit ? <SourceViewerBody key={`${hit.doc_id}:${hit.pdf_page}`} hit={hit} onClose={onClose} /> : null
+export function SourceViewer({ hit, ...props }: SourceViewerProps) {
+  return hit ? <SourceViewerBody key={`${hit.doc_id}:${hit.pdf_page}`} hit={hit} {...props} /> : null
 }
 
-function SourceViewerBody({ hit, onClose }: { hit: ManualSearchHit; onClose: () => void }) {
+function SourceViewerBody({ hit, onClose, onRecentChange }: Omit<SourceViewerProps, 'hit'> & { hit: ManualSearchHit }) {
   const { t } = useI18n()
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
@@ -34,7 +36,8 @@ function SourceViewerBody({ hit, onClose }: { hit: ManualSearchHit; onClose: () 
   const [loadingPdf, setLoadingPdf] = useState(true)
   const [rendering, setRendering] = useState(true)
   const [failed, setFailed] = useState(false)
-  const [retry, setRetry] = useState(0)
+  const [loadRetry, setLoadRetry] = useState(0)
+  const [renderRetry, setRenderRetry] = useState(0)
 
   useEffect(() => {
     const oldFocus = document.activeElement as HTMLElement | null
@@ -63,7 +66,9 @@ function SourceViewerBody({ hit, onClose }: { hit: ManualSearchHit; onClose: () 
   useEffect(() => {
     const wrap = wrapRef.current
     if (!wrap) return
-    const measure = () => setAvailableWidth(Math.max(100, wrap.clientWidth - 24))
+    const measure = () => {
+      if (wrap.clientWidth > 0) setAvailableWidth(Math.max(1, wrap.clientWidth - 16))
+    }
     measure()
     const observer = new ResizeObserver(measure)
     observer.observe(wrap)
@@ -82,7 +87,6 @@ function SourceViewerBody({ hit, onClose }: { hit: ManualSearchHit; onClose: () 
       if (cancelled) return
       if (hit.pdf_page < 1 || hit.pdf_page > pdf.numPages) throw new Error('Source page outside document')
       setPdfDoc(pdf)
-      setPageNumber(hit.pdf_page)
     }).catch(() => {
       if (!cancelled) { setFailed(true); setRendering(false) }
     }).finally(() => {
@@ -92,21 +96,22 @@ function SourceViewerBody({ hit, onClose }: { hit: ManualSearchHit; onClose: () 
       cancelled = true
       void loadingTask.destroy().catch(() => undefined)
     }
-  }, [hit.doc_id, hit.pdf_page, retry])
-
-  useEffect(() => { setPageInput(String(pageNumber)) }, [pageNumber])
+  }, [hit.doc_id, hit.pdf_page, loadRetry])
 
   useEffect(() => {
     if (!pdfDoc) return
     let cancelled = false
     let renderTask: RenderTask | null = null
+    let cleanupPage: (() => void) | undefined
     setFailed(false)
     setRendering(true)
     void (async () => {
       try {
         const page = await pdfDoc.getPage(pageNumber)
+        if (cancelled) return
+        cleanupPage = () => { page.cleanup() }
         const canvas = canvasRef.current
-        if (!canvas || cancelled) return
+        if (!canvas) return
         const unit = page.getViewport({ scale: 1 })
         const viewport = page.getViewport({ scale: availableWidth / unit.width * zoom })
         const dpr = Math.min(window.devicePixelRatio || 1, 2, Math.sqrt(16_000_000 / (viewport.width * viewport.height)))
@@ -121,16 +126,27 @@ function SourceViewerBody({ hit, onClose }: { hit: ManualSearchHit; onClose: () 
       } catch {
         if (!cancelled) setFailed(true)
       } finally {
+        cleanupPage?.()
         if (!cancelled) setRendering(false)
       }
     })()
-    return () => { cancelled = true; renderTask?.cancel() }
-  }, [pdfDoc, pageNumber, zoom, availableWidth])
+    return () => {
+      cancelled = true
+      renderTask?.cancel()
+    }
+  }, [pdfDoc, pageNumber, zoom, availableWidth, renderRetry])
+
+  useEffect(() => {
+    if (!pdfDoc || pageNumber < 1 || pageNumber > pdfDoc.numPages) return
+    const recent = rememberManualPage(hit.doc_id, pageNumber)
+    onRecentChange?.(recent)
+  }, [hit.doc_id, onRecentChange, pageNumber, pdfDoc])
 
   const numPages = pdfDoc?.numPages ?? 0
   const navigate = (target: number) => {
     if (!numPages || !Number.isInteger(target) || target < 1 || target > numPages) {
-      setPageInput(String(pageNumber)); return
+      setPageInput(String(pageNumber))
+      return
     }
     setPageNumber(target)
     setPageInput(String(target))
@@ -170,7 +186,7 @@ function SourceViewerBody({ hit, onClose }: { hit: ManualSearchHit; onClose: () 
         </div>
         <div ref={wrapRef} className="source-drawer__canvas-wrap" aria-busy={loadingPdf || rendering}>
           {(loadingPdf || rendering) && !failed ? <p className="pdf-status" role="status">{t('insight.loading')}</p> : null}
-          {failed ? <div className="pdf-status" role="alert"><p>{t('error.pdfRender')}</p><button className="btn btn--secondary" type="button" onClick={() => setRetry((n) => n + 1)}><RotateCcw size={16} />{t('history.retry')}</button></div> : null}
+          {failed ? <div className="pdf-status" role="alert"><p>{t('error.pdfRender')}</p><button className="btn btn--secondary" type="button" onClick={() => pdfDoc ? setRenderRetry((n) => n + 1) : setLoadRetry((n) => n + 1)}><RotateCcw size={16} />{t('history.retry')}</button></div> : null}
           <canvas ref={canvasRef} aria-label={`${hit.manual_title}, ${t('source.pdfPage', { page: pageNumber })}`} style={{ visibility: failed || loadingPdf || rendering ? 'hidden' : 'visible' }} />
         </div>
         <a className="ghost-button source-external" href={pdfSourceUrl(hit.doc_id, pageNumber)} target="_blank" rel="noreferrer"><ExternalLink size={16} aria-hidden />{t('source.openPdf')}</a>

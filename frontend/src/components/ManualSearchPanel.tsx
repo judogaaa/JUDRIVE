@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { BookOpen, Search } from 'lucide-react'
 import { searchManuals, type ManualSearchHit, type ManualSearchResponse } from '../api/manuals'
+import type { RecentPage } from '../lib/manuals'
 import type { ManualSearchIntent } from '../lib/workflow'
 import { useI18n } from '../i18n/I18nContext'
 import { resolveErrorMessage } from '../lib/i18nError'
@@ -12,7 +13,8 @@ interface ManualSearchPanelProps {
   engineModel: string | null
   searchIntent?: ManualSearchIntent | null
   onSearchIntentConsumed?: () => void
-  onAskInChat?: (text: string) => void
+  onAskInChat?: (text: string, engine: string) => void
+  onRecentChange?: (pages: RecentPage[]) => void
 }
 
 const QUICK_QUERIES = [
@@ -23,15 +25,15 @@ const QUICK_QUERIES = [
 
 const GENERAL_INSPECTION_QUERY = 'осмотр двигателя техническое обслуживание'
 
-export function ManualSearchPanel({ engineModel, searchIntent, onSearchIntentConsumed, onAskInChat }: ManualSearchPanelProps) {
+export function ManualSearchPanel({ engineModel, searchIntent, onSearchIntentConsumed, onAskInChat, onRecentChange }: ManualSearchPanelProps) {
   const { locale, t } = useI18n()
-  const [query, setQuery] = useState(QUICK_QUERIES[0])
+  const [query, setQuery] = useState(searchIntent?.query ?? '')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [payload, setPayload] = useState<ManualSearchResponse | null>(null)
   const [active, setActive] = useState<ManualSearchHit | null>(null)
   const lastIntentRef = useRef<number | null>(null)
-  const requestRef = useRef(0)
+  const requestRef = useRef<AbortController | null>(null)
   const mountedRef = useRef(true)
   const lastEngineRef = useRef(engineModel)
 
@@ -39,6 +41,8 @@ export function ManualSearchPanel({ engineModel, searchIntent, onSearchIntentCon
     mountedRef.current = true
     return () => {
       mountedRef.current = false
+      lastIntentRef.current = null
+      requestRef.current?.abort()
     }
   }, [])
 
@@ -46,7 +50,7 @@ export function ManualSearchPanel({ engineModel, searchIntent, onSearchIntentCon
     if (lastEngineRef.current === engineModel) return
     lastEngineRef.current = engineModel
     // Results belong to one engine. Never show ЯМЗ pages after switching to ЗМЗ.
-    requestRef.current += 1
+    requestRef.current?.abort()
     setPayload(null)
     setError(null)
     setActive(null)
@@ -63,23 +67,25 @@ export function ManualSearchPanel({ engineModel, searchIntent, onSearchIntentCon
   const runSearch = useCallback(
     async (q: string, autoOpenSingle?: boolean) => {
       if (!engineModel || !q.trim()) return
-      const request = ++requestRef.current
+      requestRef.current?.abort()
+      const request = new AbortController()
+      requestRef.current = request
       setLoading(true)
       setError(null)
       setPayload(null)
       setActive(null)
       try {
-        const result = await searchManuals(engineModel, q.trim(), 6)
-        if (!mountedRef.current || request !== requestRef.current) return
+        const result = await searchManuals(engineModel, q.trim(), 6, request.signal)
+        if (!mountedRef.current || request.signal.aborted) return
         setPayload(result)
-        if (autoOpenSingle && result.results?.length === 1) {
+        if (autoOpenSingle && result.status === 'ok' && result.results.length === 1) {
           setActive(result.results[0])
         }
       } catch (err: unknown) {
-        if (!mountedRef.current || request !== requestRef.current) return
+        if (!mountedRef.current || request.signal.aborted) return
         setError(resolveErrorMessage(t, err, 'error.manualSearch'))
       } finally {
-        if (mountedRef.current && request === requestRef.current) setLoading(false)
+        if (mountedRef.current && !request.signal.aborted) setLoading(false)
       }
     },
     [engineModel, t],
@@ -89,10 +95,11 @@ export function ManualSearchPanel({ engineModel, searchIntent, onSearchIntentCon
     if (!searchIntent || searchIntent.id === lastIntentRef.current) return
     lastIntentRef.current = searchIntent.id
     setQuery(searchIntent.query)
-    void runSearch(searchIntent.query, searchIntent.autoOpenSingle).finally(() => onSearchIntentConsumed?.())
+    void runSearch(searchIntent.query, searchIntent.autoOpenSingle)
+    onSearchIntentConsumed?.()
   }, [onSearchIntentConsumed, runSearch, searchIntent])
 
-  const refusal = payload?.status === 'not_found' || payload?.status === 'unsupported_engine'
+  const refusal = payload && payload.status !== 'ok'
   const canOfferGeneral = refusal && payload?.status === 'not_found' && query.trim() !== GENERAL_INSPECTION_QUERY
 
   return (
@@ -125,7 +132,7 @@ export function ManualSearchPanel({ engineModel, searchIntent, onSearchIntentCon
             />
           </div>
         </label>
-        <button type="submit" className="btn btn--primary" disabled={disabled || !query.trim()}>
+        <button type="submit" className="btn btn--primary" aria-busy={loading} disabled={disabled || !query.trim()}>
           {loading ? t('manual.searching') : t('manual.search')}
         </button>
       </form>
@@ -192,13 +199,14 @@ export function ManualSearchPanel({ engineModel, searchIntent, onSearchIntentCon
                   {t('manual.openSource')}
                 </button>
                 <CopyButton text={`${hit.manual_title}, ${t('ticket.pdfPage')} ${hit.pdf_page}\n${hit.quote}`} />
-                {onAskInChat ? (
+                {onAskInChat && engineModel ? (
                   <button
                     type="button"
                     className="btn btn--secondary"
                     onClick={() =>
                       onAskInChat(
                         `${t('action.askSource')}\n${hit.manual_title}, ${t('ticket.pdfPage')} ${hit.pdf_page}\n${hit.quote}`,
+                        engineModel,
                       )
                     }
                   >
@@ -211,7 +219,7 @@ export function ManualSearchPanel({ engineModel, searchIntent, onSearchIntentCon
         </ul>
       ) : null}
 
-      <SourceDrawer hit={active} onClose={() => setActive(null)} />
+      <SourceDrawer hit={active} onClose={() => setActive(null)} onRecentChange={onRecentChange} />
     </section>
   )
 }

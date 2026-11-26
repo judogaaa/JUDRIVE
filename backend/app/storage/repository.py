@@ -63,41 +63,38 @@ class AppRepository:
                 (conversation_id,),
             ).fetchone()
 
-    def add_message(
+    def add_chat_turn(
         self,
         conversation_id: str,
-        role: str,
-        content: str,
+        question: str,
+        answer: str,
         *,
         tool_trace: list | None = None,
         sources: list | None = None,
         draft_id: str | None = None,
-    ) -> str:
-        message_id = str(uuid.uuid4())
+    ) -> None:
+        timestamp = _now()
         with self._connection() as conn:
-            conn.execute(
+            conn.executemany(
                 """
                 INSERT INTO chat_messages (id, conversation_id, role, content, tool_trace, sources, draft_id, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (
-                    message_id,
-                    conversation_id,
-                    role,
-                    content,
-                    json.dumps(tool_trace or [], ensure_ascii=False),
-                    json.dumps(sources or [], ensure_ascii=False),
-                    draft_id,
-                    _now(),
-                ),
+                [
+                    (str(uuid.uuid4()), conversation_id, "user", question, "[]", "[]", None, timestamp),
+                    (
+                        str(uuid.uuid4()), conversation_id, "assistant", answer,
+                        json.dumps(tool_trace or [], ensure_ascii=False),
+                        json.dumps(sources or [], ensure_ascii=False),
+                        draft_id, timestamp,
+                    ),
+                ],
             )
-            conn.commit()
-        return message_id
 
     def list_messages(self, conversation_id: str) -> list[sqlite3.Row]:
         with self._connection() as conn:
             return conn.execute(
-                "SELECT * FROM chat_messages WHERE conversation_id = ? ORDER BY created_at",
+                "SELECT * FROM chat_messages WHERE conversation_id = ? ORDER BY created_at, rowid",
                 (conversation_id,),
             ).fetchall()
 

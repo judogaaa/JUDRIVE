@@ -13,6 +13,7 @@ interface VehiclePickerProps {
 export function VehiclePicker({ vehicles, selectedId, onSelect }: VehiclePickerProps) {
   const { t } = useI18n()
   const rootRef = useRef<HTMLDivElement | null>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
   const inputRef = useRef<HTMLInputElement | null>(null)
   const listId = useId()
   const [open, setOpen] = useState(false)
@@ -49,13 +50,20 @@ export function VehiclePicker({ vehicles, selectedId, onSelect }: VehiclePickerP
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, query])
 
+  useEffect(() => {
+    if (!open || !filtered[active]) return
+    document.getElementById(`${listId}-${active}`)?.scrollIntoView({ block: 'nearest' })
+  }, [active, filtered, listId, open])
+
   const choose = (vehicle: VehicleSummary) => {
     onSelect(vehicle.vehicle_id)
     setQuery('')
     setOpen(false)
+    triggerRef.current?.focus()
   }
 
   const onSearchKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.nativeEvent.isComposing || !filtered.length && event.key !== 'Escape') return
     if (event.key === 'ArrowDown') {
       event.preventDefault()
       setActive((index) => Math.min(index + 1, filtered.length - 1))
@@ -85,6 +93,7 @@ export function VehiclePicker({ vehicles, selectedId, onSelect }: VehiclePickerP
     if (event.key === 'Escape') {
       event.preventDefault()
       setOpen(false)
+      triggerRef.current?.focus()
     }
   }
 
@@ -92,7 +101,9 @@ export function VehiclePicker({ vehicles, selectedId, onSelect }: VehiclePickerP
     <div className="vehicle-picker" ref={rootRef}>
       <span className="field__label">{t('diag.vehicle')}</span>
       <button
+        ref={triggerRef}
         type="button"
+        disabled={!vehicles.length}
         className={open ? 'vehicle-picker__trigger vehicle-picker__trigger--open' : 'vehicle-picker__trigger'}
         aria-haspopup="listbox"
         aria-expanded={open}
@@ -115,7 +126,7 @@ export function VehiclePicker({ vehicles, selectedId, onSelect }: VehiclePickerP
               <span>{displayVehicleModel(selected.make, selected.model)}</span>
             </>
           ) : (
-            <span>{vehicles.length ? t('diag.filterPlaceholder') : t('chief.loading')}</span>
+            <span>{t('diag.filterPlaceholder')}</span>
           )}
         </span>
         <ChevronDown size={18} className="vehicle-picker__chevron" aria-hidden />

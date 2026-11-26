@@ -151,6 +151,7 @@ export function WorkspaceShell({ view, onViewChange, themeMode, onThemeChange, m
           <button
             type="button"
             className="icon-btn shell-help-mobile"
+            aria-current={view === 'help' ? 'page' : undefined}
             aria-label={t('nav.help')}
             title={t('nav.help')}
             onClick={() => onViewChange('help')}
@@ -166,6 +167,7 @@ export function WorkspaceShell({ view, onViewChange, themeMode, onThemeChange, m
             key={id}
             type="button"
             className={view === id ? 'nav-item nav-item--active' : 'nav-item'}
+            aria-current={view === id ? 'page' : undefined}
             onClick={() => onViewChange(id)}
           >
             <Icon size={18} aria-hidden />
@@ -181,6 +183,7 @@ export function WorkspaceShell({ view, onViewChange, themeMode, onThemeChange, m
               key={id}
               type="button"
               className={view === id ? 'nav-item nav-item--active' : 'nav-item'}
+              aria-current={view === id ? 'page' : undefined}
               onClick={() => onViewChange(id)}
             >
               <Icon size={18} aria-hidden />
@@ -191,6 +194,7 @@ export function WorkspaceShell({ view, onViewChange, themeMode, onThemeChange, m
             <button
               type="button"
               className={view === 'help' ? 'nav-item nav-item--active' : 'nav-item'}
+              aria-current={view === 'help' ? 'page' : undefined}
               onClick={() => onViewChange('help')}
             >
               <CircleHelp size={18} aria-hidden />

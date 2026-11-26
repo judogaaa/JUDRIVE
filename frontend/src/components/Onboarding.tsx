@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { ArrowLeft, ArrowRight, Check, LockKeyhole, X } from 'lucide-react'
+import { Activity, ArrowLeft, ArrowRight, BookOpen, Bus, Check, ClipboardList, FileText, ListChecks, MessageSquare, Mic, Settings, ShieldCheck, X } from 'lucide-react'
 import { useI18n } from '../i18n/I18nContext'
 import { ONBOARDING_STEPS } from '../help/content'
 import type { LocaleCode } from '../i18n/translations'
@@ -26,6 +26,7 @@ export function Onboarding({
   const { t, locale, setLocale, locales, localeLabels } = useI18n()
   const dialogRef = useRef<HTMLDivElement>(null)
   const headingRef = useRef<HTMLHeadingElement>(null)
+  const panelRef = useRef<HTMLElement>(null)
   const last = step === ONBOARDING_STEPS.length - 1
   const canFinish = last && acknowledged
   const finishRef = useRef<(() => void) | null>(null)
@@ -69,12 +70,10 @@ export function Onboarding({
   }, [open])
 
   useEffect(() => {
-    // The next button can become disabled on the final slide; keep focus inside.
-    if (open && (!dialogRef.current?.contains(document.activeElement) ||
-      (document.activeElement instanceof HTMLButtonElement && document.activeElement.disabled))) {
-      headingRef.current?.focus()
-    }
-  }, [open, step, canFinish])
+    if (!open) return
+    panelRef.current?.scrollTo(0, 0)
+    headingRef.current?.focus({ preventScroll: true })
+  }, [open, step])
 
   if (!open) return null
 
@@ -84,7 +83,7 @@ export function Onboarding({
   return (
     <div className="onboarding" ref={dialogRef} role="dialog" aria-modal="true" aria-label={t('onboarding.title')} tabIndex={-1}>
       <div className="onboarding__backdrop" />
-      <section className="onboarding__panel">
+      <section className="onboarding__panel" ref={panelRef}>
         <header className="onboarding__head">
           <div>
             <p className="eyebrow">{t('onboarding.title')}</p>
@@ -101,7 +100,7 @@ export function Onboarding({
         </header>
 
         <div className="onboarding__progress" aria-label={t('onboarding.progress', { current: step + 1, total: ONBOARDING_STEPS.length })}>
-          <div className="onboarding__progress-bar" role="progressbar" aria-valuemin={1} aria-valuemax={ONBOARDING_STEPS.length} aria-valuenow={step + 1}>
+          <div className="onboarding__progress-bar" role="progressbar" aria-label={t('onboarding.title')} aria-valuemin={1} aria-valuemax={ONBOARDING_STEPS.length} aria-valuenow={step + 1}>
             <span style={{ width: `${((step + 1) / ONBOARDING_STEPS.length) * 100}%` }} />
           </div>
           <span>{t('onboarding.progress', { current: step + 1, total: ONBOARDING_STEPS.length })}</span>
@@ -109,10 +108,7 @@ export function Onboarding({
 
         <div className="onboarding__body">
           <div className="onboarding__visual" aria-hidden>
-            <span className="onboarding__visual-icon">
-              <Icon size={30} />
-            </span>
-            <StepPreview stepId={current.id} />
+            <StepPreview stepId={current.id} icon={Icon} />
           </div>
           <p className="onboarding__lead">{t(current.bodyKey)}</p>
           <ul className="onboarding__points">
@@ -133,7 +129,6 @@ export function Onboarding({
         ) : null}
 
         <footer className="onboarding__actions">
-          {!canFinish && <span className="onboarding__hint"><LockKeyhole size={14} aria-hidden />{t('onboarding.required')}</span>}
           <div className="onboarding__nav">
             {step > 0 ? (
               <button type="button" className="btn btn--secondary" onClick={onBack}>
@@ -159,23 +154,25 @@ export function Onboarding({
   )
 }
 
-function StepPreview({ stepId }: { stepId: string }) {
-  const { t } = useI18n()
-  if (stepId === 'diagnosis') return (
-    <div className="onboarding-preview onboarding-preview--statuses">
-      <span className="badge badge--normal">{t('verdict.normal.title')}</span>
-      <span className="badge badge--attention">{t('verdict.anomaly.title')}</span>
-      <span className="badge badge--attention">{t('verdict.failed.title')}</span>
-    </div>
+const previewIcons = {
+  welcome: [Bus, ClipboardList],
+  diagnosis: [Bus, ListChecks],
+  chat: [Mic, BookOpen],
+  manuals: [FileText, ListChecks],
+  tickets: [FileText, Check],
+  fleet: [Activity, ShieldCheck],
+  ready: [Settings, Check],
+} as const
+
+function StepPreview({ stepId, icon: Icon }: { stepId: string; icon: typeof MessageSquare }) {
+  const [Start, End] = previewIcons[stepId as keyof typeof previewIcons] ?? previewIcons.welcome
+  return (
+    <>
+      <span className="onboarding__visual-icon"><Start size={22} /></span>
+      <ArrowRight size={16} />
+      <span className="onboarding__visual-icon onboarding__visual-icon--main"><Icon size={29} /></span>
+      <ArrowRight size={16} />
+      <span className="onboarding__visual-icon"><End size={22} /></span>
+    </>
   )
-  const topics = {
-    welcome: ['nav.diagnosis', 'nav.manuals', 'nav.tickets'],
-    chat: ['chat.suggest1', 'verdict.action.searchManual'],
-    manuals: ['ticket.pdfPage', 'source.fit'],
-    tickets: ['tickets.statusCreated', 'ticket.confirmedId'],
-    fleet: ['nav.fleet', 'nav.chief'],
-    ready: ['common.language', 'theme.light', 'theme.dark', 'theme.system'],
-  } as const
-  const labels = topics[stepId as keyof typeof topics] ?? topics.welcome
-  return <div className="onboarding-preview">{labels.map((key) => <span className="onboarding-preview__tag" key={key}>{t(key)}</span>)}</div>
 }

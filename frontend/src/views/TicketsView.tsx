@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronRight, Copy, Filter, X } from 'lucide-react'
+import { ChevronRight, Filter, X } from 'lucide-react'
 import { createConversation, sendChatMessage, type SourceHit } from '../api/chat'
 import { fetchEvidence, type ManualSearchHit } from '../api/manuals'
 import { fetchTickets, type TicketSubmission } from '../api/tickets'
@@ -44,7 +44,7 @@ export function TicketsView({ filterVehicleId, onFilterConsumed, onOpenDiagnosis
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [retry, setRetry] = useState(0)
-  const [query, setQuery] = useState(filterVehicleId ?? '')
+  const [query, setQuery] = useState('')
   const [vehicleFilter, setVehicleFilter] = useState(filterVehicleId ?? '')
   const [openId, setOpenId] = useState<string | null>(null)
   const [review, setReview] = useState<string | null>(null)
@@ -53,6 +53,14 @@ export function TicketsView({ filterVehicleId, onFilterConsumed, onOpenDiagnosis
   const [reviewing, setReviewing] = useState(false)
   const [source, setSource] = useState<ManualSearchHit | null>(null)
   const reviewGen = useRef(0)
+  const sourceGen = useRef(0)
+  const reviewRequest = useRef<AbortController | null>(null)
+
+  useEffect(() => () => {
+    reviewRequest.current?.abort()
+    reviewGen.current += 1
+    sourceGen.current += 1
+  }, [])
 
   const statusLabel = (status: string) => {
     if (status === 'created') return t('tickets.statusCreated')
@@ -76,7 +84,6 @@ export function TicketsView({ filterVehicleId, onFilterConsumed, onOpenDiagnosis
   useEffect(() => {
     if (!filterVehicleId) return
     setVehicleFilter(filterVehicleId)
-    setQuery(filterVehicleId)
     onFilterConsumed?.()
   }, [filterVehicleId, onFilterConsumed])
 
@@ -133,7 +140,10 @@ export function TicketsView({ filterVehicleId, onFilterConsumed, onOpenDiagnosis
   }
 
   const selectTicket = (id: string | null) => {
+    reviewRequest.current?.abort()
+    reviewRequest.current = null
     reviewGen.current += 1
+    sourceGen.current += 1
     setReview(null)
     setReviewSources([])
     setReviewError(null)
@@ -143,30 +153,36 @@ export function TicketsView({ filterVehicleId, onFilterConsumed, onOpenDiagnosis
   }
 
   const openReviewSource = async (hit: SourceHit) => {
-    const generation = reviewGen.current
+    const generation = ++sourceGen.current
     setReviewError(null)
     try {
       const record = await fetchEvidence(hit.evidence_id)
-      if (generation === reviewGen.current) setSource(record)
+      if (generation === sourceGen.current) setSource(record)
     } catch {
-      if (generation === reviewGen.current) setReviewError(t('error.source'))
+      if (generation === sourceGen.current) setReviewError(t('error.source'))
     }
   }
 
   const explain = async (row: TicketSubmission) => {
+    if (reviewRequest.current) return
+    const controller = new AbortController()
+    reviewRequest.current = controller
     const generation = ++reviewGen.current
     setReviewing(true)
     setReview(null)
     setReviewSources([])
     setReviewError(null)
     try {
-      const conversation = await createConversation(row.vehicle_id, row.session_id)
-      const reply = await sendChatMessage(conversation.conversation_id, buildTicketReviewMessage(row), locale, true)
+      const conversation = await createConversation(row.vehicle_id, row.session_id, controller.signal)
+      const reply = await sendChatMessage(conversation.conversation_id, buildTicketReviewMessage(row), locale, true, controller.signal)
       if (generation === reviewGen.current) { setReview(reply.reply); setReviewSources(reply.sources ?? []) }
     } catch (err: unknown) {
       if (generation === reviewGen.current) setReviewError(resolveErrorMessage(t, err, 'error.agent'))
     } finally {
-      if (generation === reviewGen.current) setReviewing(false)
+      if (generation === reviewGen.current) {
+        reviewRequest.current = null
+        setReviewing(false)
+      }
     }
   }
 
@@ -177,7 +193,6 @@ export function TicketsView({ filterVehicleId, onFilterConsumed, onOpenDiagnosis
     <>
       <header className="page-header page-header--compact">
         <div>
-          <p className="eyebrow">{t('nav.tickets')}</p>
           <h1>{t('tickets.title')}</h1>
           <p>{t('tickets.subtitle')}</p>
         </div>
@@ -231,8 +246,11 @@ export function TicketsView({ filterVehicleId, onFilterConsumed, onOpenDiagnosis
                 return (
                   <article key={row.local_id} className="ticket-row">
                     <button type="button" className="ticket-row__head" onClick={() => selectTicket(row.local_id)}>
-                      <span className="ticket-row__id">{row.ticket_id ?? '—'}</span>
+                      <span className="ticket-row__id">{row.ticket_id ?? row.vehicle_id}</span>
                       <span className="ticket-row__meta">{formatSessionDateTime(locale, row.created_at)}</span>
+                      <span className="ticket-row__open">
+                        {t('tickets.more')} <ChevronRight size={16} aria-hidden />
+                      </span>
                     </button>
                     <div className="ticket-row__summary">
                       <span>{row.vehicle_id}</span>
@@ -241,10 +259,6 @@ export function TicketsView({ filterVehicleId, onFilterConsumed, onOpenDiagnosis
                       {rowPayload?.anomaly_type ? <span className="badge">{rowPayload.anomaly_type}</span> : null}
                     </div>
                     {rowPayload?.conclusion ? <p className="ticket-row__conclusion">{rowPayload.conclusion}</p> : null}
-                    <button type="button" className="ticket-row__open" onClick={() => selectTicket(row.local_id)}>
-                      {t('tickets.more')}
-                      <ChevronRight size={16} aria-hidden />
-                    </button>
                   </article>
                 )
               })}
@@ -377,14 +391,6 @@ export function TicketsView({ filterVehicleId, onFilterConsumed, onOpenDiagnosis
             )}
 
             <div className="workflow-actions">
-              <button
-                type="button"
-                className="btn btn--secondary"
-                onClick={() => void navigator.clipboard.writeText(open.ticket_id ?? open.local_id)}
-              >
-                <Copy size={17} aria-hidden />
-                {open.ticket_id ?? open.local_id}
-              </button>
               {payload ? (
                 <CopyButton
                   text={[
@@ -397,7 +403,7 @@ export function TicketsView({ filterVehicleId, onFilterConsumed, onOpenDiagnosis
                     .filter(Boolean)
                     .join('\n')}
                 />
-              ) : null}
+              ) : <CopyButton text={open.ticket_id ?? open.local_id} />}
               <button type="button" className="btn btn--secondary" disabled={reviewing} onClick={() => void explain(open)}>
                 {reviewing ? t('chat.processing') : t('tickets.review')}
               </button>

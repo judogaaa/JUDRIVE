@@ -12,24 +12,27 @@ interface VoiceCaptureProps {
 
 export function VoiceCapture({ onText, disabled, compact }: VoiceCaptureProps) {
   const { locale, t } = useI18n()
+  const [starting, setStarting] = useState(false)
   const [recording, setRecording] = useState(false)
   const [transcribing, setTranscribing] = useState(false)
   const [draft, setDraft] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const [micOk, setMicOk] = useState(true)
+  const micOk = typeof navigator.mediaDevices?.getUserMedia === 'function' && typeof MediaRecorder !== 'undefined'
   const recorderRef = useRef<MediaRecorder | null>(null)
-  const chunksRef = useRef<BlobPart[]>([])
+  const streamRef = useRef<MediaStream | null>(null)
+  const startingRef = useRef(false)
+  const transcriptionRef = useRef<AbortController | null>(null)
   const mountedRef = useRef(true)
 
   useEffect(() => {
     mountedRef.current = true
-    if (!navigator.mediaDevices?.getUserMedia) {
-      setMicOk(false)
-    }
     return () => {
       mountedRef.current = false
       const recorder = recorderRef.current
       recorderRef.current = null
+      transcriptionRef.current?.abort()
+      streamRef.current?.getTracks().forEach((track) => track.stop())
+      streamRef.current = null
       if (recorder && recorder.state !== 'inactive') {
         try {
           recorder.stop()
@@ -41,45 +44,61 @@ export function VoiceCapture({ onText, disabled, compact }: VoiceCaptureProps) {
   }, [])
 
   const runTranscribe = async (blob: Blob) => {
+    const request = new AbortController()
+    transcriptionRef.current = request
     setTranscribing(true)
     try {
-      const text = await transcribeAudio(blob, locale)
-      if (mountedRef.current) setDraft(text)
-    } catch (err: unknown) {
-      if (mountedRef.current) setError(resolveErrorMessage(t, err, 'error.stt'))
+      const text = await transcribeAudio(blob, locale, request.signal)
+      if (!request.signal.aborted) setDraft(text)
+    } catch (error: unknown) {
+      if (!request.signal.aborted) setError(resolveErrorMessage(t, error, 'error.unknown'))
     } finally {
-      if (mountedRef.current) setTranscribing(false)
+      if (!request.signal.aborted) setTranscribing(false)
     }
   }
 
   const stopRecording = useCallback(() => {
-    recorderRef.current?.stop()
-    recorderRef.current = null
-    setRecording(false)
+    const recorder = recorderRef.current
+    if (recorder?.state === 'recording') recorder.stop()
   }, [])
 
   const startRecording = async () => {
+    if (startingRef.current || recorderRef.current) return
+    startingRef.current = true
+    setStarting(true)
     setError(null)
     setDraft('')
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      if (!mountedRef.current) {
+        stream.getTracks().forEach((track) => track.stop())
+        return
+      }
+      streamRef.current = stream
       const recorder = new MediaRecorder(stream, { mimeType: preferMimeType() })
-      chunksRef.current = []
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunksRef.current.push(e.data)
+      const chunks: BlobPart[] = []
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) chunks.push(event.data)
       }
       recorder.onstop = () => {
         stream.getTracks().forEach((track) => track.stop())
+        if (streamRef.current === stream) streamRef.current = null
+        if (recorderRef.current === recorder) recorderRef.current = null
         if (!mountedRef.current) return
-        const blob = new Blob(chunksRef.current, { type: recorder.mimeType || 'audio/webm' })
-        void runTranscribe(blob)
+        setRecording(false)
+        if (chunks.length) void runTranscribe(new Blob(chunks, { type: recorder.mimeType || 'audio/webm' }))
+        else setError(t('error.unknown'))
       }
       recorder.start()
       recorderRef.current = recorder
       setRecording(true)
     } catch {
-      setMicOk(false)
-      setError(t('voice.unavailable'))
+      streamRef.current?.getTracks().forEach((track) => track.stop())
+      streamRef.current = null
+      if (mountedRef.current) setError(t('voice.unavailable'))
+    } finally {
+      startingRef.current = false
+      if (mountedRef.current) setStarting(false)
     }
   }
 
@@ -100,7 +119,7 @@ export function VoiceCapture({ onText, disabled, compact }: VoiceCaptureProps) {
           <button
             type="button"
             className="btn btn--secondary"
-            disabled={disabled || !micOk || transcribing}
+            disabled={disabled || !micOk || starting || transcribing}
             onClick={() => void startRecording()}
           >
             <Mic size={16} aria-hidden />
@@ -114,7 +133,7 @@ export function VoiceCapture({ onText, disabled, compact }: VoiceCaptureProps) {
       {draft ? (
         <div className="voice-editor">
           <p className="panel__subtitle">{t('voice.editHint')}</p>
-          <textarea value={draft} onChange={(e) => setDraft(e.target.value)} rows={2} />
+          <textarea aria-label={t('voice.editHint')} value={draft} onChange={(e) => setDraft(e.target.value)} rows={2} />
           <button type="button" className="btn btn--primary" disabled={!draft.trim()} onClick={apply}>
             {t('chat.send')}
           </button>

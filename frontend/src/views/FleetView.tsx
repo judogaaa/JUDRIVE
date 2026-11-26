@@ -3,7 +3,7 @@ import { ArrowRight, ChevronDown, ChevronUp, Search, X } from 'lucide-react'
 import type { VehicleSummary } from '../api/types'
 import { useI18n } from '../i18n/I18nContext'
 import { formatSessionDateTime } from '../lib/formatLocale'
-import { displayVehicleModel, matchesVehicle } from '../lib/vehicle'
+import { displayVehicleModel, latestSessionId, matchesVehicle } from '../lib/vehicle'
 
 interface FleetViewProps {
   vehicles: VehicleSummary[]
@@ -166,7 +166,7 @@ export function FleetView({ vehicles, fleetError, onRetryFleet, onOpenDiagnosis,
               <span>{t('fleet.col.status')}</span>
               <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
                 <option value="">{t('chief.filter.all')} ({vehicles.length})</option>
-                {(['normal', 'anomaly', 'failed'] as const).map((status) => (
+                {(['normal', 'anomaly', 'failed', 'unknown'] as const).map((status) => (
                   <option key={status} value={status}>
                     {statusLabel(status)} ({options.statuses.get(status) ?? 0})
                   </option>
@@ -213,17 +213,12 @@ export function FleetView({ vehicles, fleetError, onRetryFleet, onOpenDiagnosis,
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((vehicle) => (
-                  <tr
+                {filtered.map((vehicle) => {
+                  const latestId = vehicle.latest_session_id ?? latestSessionId(vehicle)
+                  const latest = vehicle.sessions.find(({ session_id }) => session_id === latestId)
+                  return <tr
                     key={vehicle.vehicle_id}
-                    tabIndex={0}
                     onClick={() => setSelected(vehicle.vehicle_id)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault()
-                        setSelected(vehicle.vehicle_id)
-                      }
-                    }}
                   >
                     <td>
                       <strong>{vehicle.vehicle_id}</strong>
@@ -235,12 +230,14 @@ export function FleetView({ vehicles, fleetError, onRetryFleet, onOpenDiagnosis,
                       <span className={`badge badge--${fleetStatus(vehicle) === 'normal' ? 'normal' : fleetStatus(vehicle) === 'failed' || fleetStatus(vehicle) === 'anomaly' ? 'attention' : 'rerecord'}`}>
                         {statusLabel(fleetStatus(vehicle))}
                       </span>
+                      {latest && <small className="fleet-last-check">{formatSessionDateTime(locale, latest.checked_at)}</small>}
                     </td>
                     <td>{vehicle.sessions.length}</td>
                     <td>
                       <button
                         type="button"
                         className="btn btn--secondary"
+                        aria-label={`${t('tickets.more')} · ${vehicle.vehicle_id}`}
                         onClick={(event) => {
                           event.stopPropagation()
                           setSelected(vehicle.vehicle_id)
@@ -250,7 +247,7 @@ export function FleetView({ vehicles, fleetError, onRetryFleet, onOpenDiagnosis,
                       </button>
                     </td>
                   </tr>
-                ))}
+                })}
               </tbody>
             </table>
           </div>

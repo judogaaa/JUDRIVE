@@ -1,3 +1,29 @@
+export type RecentPage = { docId: string; page: number }
+
+const RECENT_KEY = 'judrive-manual-recent'
+
+export function readRecentPages(): RecentPage[] {
+  try {
+    const saved: unknown = JSON.parse(localStorage.getItem(RECENT_KEY) ?? '[]')
+    if (!Array.isArray(saved)) return []
+    return saved.flatMap((item) => {
+      if (typeof item === 'string') return [{ docId: item, page: 1 }]
+      if (typeof item?.docId === 'string' && Number.isInteger(item.page) && item.page > 0) {
+        return [{ docId: item.docId, page: item.page }]
+      }
+      return []
+    })
+  } catch {
+    return []
+  }
+}
+
+export function rememberManualPage(docId: string, page: number): RecentPage[] {
+  const next = [{ docId, page }, ...readRecentPages().filter((item) => item.docId !== docId)].slice(0, 6)
+  try { localStorage.setItem(RECENT_KEY, JSON.stringify(next)) } catch { /* storage unavailable */ }
+  return next
+}
+
 const MANUAL_DOC_IDS: [string, string][] = [
   ['236-3902150', 'y236-re'],
   ['236.01.01', 'y236-rk'],

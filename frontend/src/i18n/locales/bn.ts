@@ -402,5 +402,7 @@ export const bn: Record<TranslationKey, string> = {
   'error.agentBusy': 'সহকারী এখন ব্যস্ত। প্রশ্ন সংরক্ষিত আছে, পরে চেষ্টা করুন।',
   'error.agentUnavailable': 'সহকারী এখন উপলব্ধ নেই। প্রশ্ন সংরক্ষিত আছে, পরে চেষ্টা করুন।',
   'chat.sourcesTitle': 'উত্তরের উৎস',
-  'help.card.settings.body': 'JUDRIVE সাতটি ভাষা, হালকা, গা dark ় এবং সিস্টেম থিম সমর্থন করে এবং ফোনে মানিয়ে যায়।',
+  'help.card.settings.body': 'ইন্টারফেসের ভাষা ও থিম বেছে নিন। সেটিংস এই ব্রাউজারে সংরক্ষিত থাকে।',
+  'manuals.operationGuide': 'পরিচালনা নির্দেশিকা',
+  'manuals.repairGuide': 'মেরামত নির্দেশিকা',
 }

@@ -1,13 +1,12 @@
 import { useMemo, useState } from 'react'
 import { Check, ChevronDown, CircleHelp, Search } from 'lucide-react'
-import type { AppView } from '../components/shell/WorkspaceShell'
 import { FAQ_ITEMS, HELP_CARDS, type HelpTarget } from '../help/content'
 import type { ThemeMode } from '../hooks/useTheme'
 import { useI18n } from '../i18n/I18nContext'
 import type { LocaleCode } from '../i18n/translations'
 
 interface HelpViewProps {
-  onNavigate: (view: AppView) => void
+  onNavigate: (view: Exclude<HelpTarget, 'settings'>, topic: string) => void
   onRestartOnboarding: () => void
   themeMode: ThemeMode
   onThemeChange: (mode: ThemeMode) => void
@@ -36,11 +35,6 @@ export function HelpView({ onNavigate, onRestartOnboarding, themeMode, onThemeCh
     )
   }, [query, t])
 
-  const go = (target: HelpTarget) => {
-    if (target === 'settings') return
-    onNavigate(target)
-  }
-
   return (
     <div className="help-page">
       <header className="page-header page-header--compact help-header">
@@ -57,6 +51,7 @@ export function HelpView({ onNavigate, onRestartOnboarding, themeMode, onThemeCh
       <div className="help-search">
         <Search size={18} aria-hidden />
         <input
+          type="search"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder={t('help.searchPlaceholder')}
@@ -80,14 +75,16 @@ export function HelpView({ onNavigate, onRestartOnboarding, themeMode, onThemeCh
                 <ChevronDown size={18} className="help-card__chevron" aria-hidden />
               </summary>
               <div className="help-card__body">
-                <ol className="help-card__steps">
-                  {card.stepKeys.map((key) => (
-                    <li key={key}>
-                      <Check size={15} aria-hidden />
-                      <span>{t(key)}</span>
-                    </li>
-                  ))}
-                </ol>
+                {card.stepKeys.length > 0 && (
+                  <ol className="help-card__steps">
+                    {card.stepKeys.map((key) => (
+                      <li key={key}>
+                        <Check size={15} aria-hidden />
+                        <span>{t(key)}</span>
+                      </li>
+                    ))}
+                  </ol>
+                )}
                 {card.target === 'settings' ? (
                   <Preferences
                     locale={locale}
@@ -98,7 +95,7 @@ export function HelpView({ onNavigate, onRestartOnboarding, themeMode, onThemeCh
                     onThemeChange={onThemeChange}
                   />
                 ) : (
-                  <button type="button" className="btn btn--secondary" onClick={() => go(card.target)}>
+                  <button type="button" className="btn btn--secondary" onClick={() => { if (card.target !== 'settings') onNavigate(card.target, card.id) }}>
                     {t('help.open')}
                   </button>
                 )}
@@ -147,10 +144,9 @@ function Preferences({
   const { t } = useI18n()
   return (
     <div className="help-preferences">
-      <p className="panel__subtitle">{t('help.preferencesHint')}</p>
       <div className="help-preferences__row">
         <span>{t('common.language')}</span>
-        <select value={locale} onChange={(event) => setLocale(event.target.value as LocaleCode)}>
+        <select aria-label={t('common.language')} value={locale} onChange={(event) => setLocale(event.target.value as LocaleCode)}>
           {locales.map((code) => (
             <option key={code} value={code}>
               {localeLabels[code]}
@@ -164,6 +160,7 @@ function Preferences({
             key={mode}
             type="button"
             className={themeMode === mode ? 'chip-button chip-button--on' : 'chip-button'}
+            aria-pressed={themeMode === mode}
             onClick={() => onThemeChange(mode)}
           >
             {t(mode === 'light' ? 'theme.light' : mode === 'dark' ? 'theme.dark' : 'theme.system')}

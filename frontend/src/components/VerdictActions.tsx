@@ -11,7 +11,6 @@ export interface VerdictActionsProps {
   onPrepareTicket?: () => void
   onCopyPlan: () => void
   onOtherSession?: () => void
-  onRetry?: () => void
 }
 
 type Action = {
@@ -93,6 +92,15 @@ export function VerdictActions({
       label: t('verdict.action.copyPlan'),
       icon: ClipboardCopy,
       onClick: onCopyPlan,
+    })
+  }
+
+  if (effective !== 'check_failed' && onOtherSession) {
+    actions.push({
+      id: 'other-session',
+      label: t('verdict.action.chooseOther'),
+      icon: ListTree,
+      onClick: onOtherSession,
     })
   }
 

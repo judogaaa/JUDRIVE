@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { AlertOctagon, AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Filter, Search } from 'lucide-react'
 import {
   fetchFleetDashboard,
@@ -17,6 +17,7 @@ interface ChiefMechanicViewProps {
 
 export function ChiefMechanicView({ onOpenDiagnosis, onOpenTickets }: ChiefMechanicViewProps) {
   const { t } = useI18n()
+  const logoutInFlight = useRef(false)
   const [authed, setAuthed] = useState<boolean | null>(null)
   const [tab, setTab] = useState<'overview' | 'queue' | 'analytics' | 'warnings' | 'fleet'>('overview')
 
@@ -87,6 +88,28 @@ export function ChiefMechanicView({ onOpenDiagnosis, onOpenTickets }: ChiefMecha
     }
   }, [appliedFilters, authed, t, revision])
 
+  const openCategory = (category: string) => {
+    const next = { category }
+    setFilters(next)
+    setAppliedFilters(next)
+    setTab('fleet')
+  }
+
+  const logout = async () => {
+    if (logoutInFlight.current) return
+    logoutInFlight.current = true
+    try {
+      const response = await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
+      if (!response.ok) throw new Error()
+      setData(null)
+      setAuthed(false)
+    } catch {
+      setError(t('error.network'))
+    } finally {
+      logoutInFlight.current = false
+    }
+  }
+
   if (authed === null) {
     return <p className="panel__subtitle">{t('chief.loading')}</p>
   }
@@ -132,6 +155,7 @@ export function ChiefMechanicView({ onOpenDiagnosis, onOpenTickets }: ChiefMecha
                 key={id}
                 type="button"
                 className={tab === id ? 'chip-button chip-button--on' : 'chip-button'}
+                aria-pressed={tab === id}
                 onClick={() => setTab(id)}
               >
                 {label}
@@ -140,9 +164,7 @@ export function ChiefMechanicView({ onOpenDiagnosis, onOpenTickets }: ChiefMecha
             <button
               type="button"
               className="chip-button"
-              onClick={() => {
-                void fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).then(() => setAuthed(false))
-              }}
+              onClick={() => void logout()}
             >
               {t('auth.logout')}
             </button>
@@ -155,10 +177,7 @@ export function ChiefMechanicView({ onOpenDiagnosis, onOpenTickets }: ChiefMecha
               label={t('chief.cat.normal')}
               value={data.summary.normal}
               hint={t('chief.hint.normal', { count: data.session_stats.latest_by_status.normal ?? 0 })}
-              onOpen={() => {
-                setFilters((prev) => ({ ...prev, category: 'normal' }))
-                setTab('fleet')
-              }}
+              onOpen={() => openCategory('normal')}
             />
             <SummaryCard
               tone="warn"
@@ -169,10 +188,7 @@ export function ChiefMechanicView({ onOpenDiagnosis, onOpenTickets }: ChiefMecha
                 anomaly: data.session_stats.latest_by_status.anomaly ?? 0,
                 failed: data.session_stats.latest_by_status.check_failed ?? 0,
               })}
-              onOpen={() => {
-                setFilters((prev) => ({ ...prev, category: 'attention' }))
-                setTab('fleet')
-              }}
+              onOpen={() => openCategory('attention')}
             />
             <SummaryCard
               tone="danger"
@@ -180,10 +196,7 @@ export function ChiefMechanicView({ onOpenDiagnosis, onOpenTickets }: ChiefMecha
               label={t('chief.cat.quarantineRec')}
               value={data.summary.quarantine}
               hint={t('chief.quarantineCardHint')}
-              onOpen={() => {
-                setFilters((prev) => ({ ...prev, category: 'quarantine' }))
-                setTab('fleet')
-              }}
+              onOpen={() => openCategory('quarantine')}
             />
           </section>
 

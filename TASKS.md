@@ -29,6 +29,8 @@
 
 - [x] **Финальный аудит ветки a3bce09 (OpenCode, 26.11)**: исправлены SQLite-соединения и locked/temp cleanup, локализация 288 ключей × 7 без uz-fallback и mojibake, даты uz/kk/tg/ky, локализованные ошибки/retry, статус-фильтр автопарка, подтверждённая рекомендация chief, ленивый PDF.js и healthchecks Compose. `pytest` 53, Playwright 40 (37 passed, 3 skipped), RAG 8/8, submission regression OK; live Groq anomaly остановлен на 429. Docker config OK, build ждёт запущенный daemon.
 
+- [x] **Доработка 27.11**. Обучение, помощь, контекст диагностики и чата, PDF, журнал и фильтры. Production build, 23 целевых теста и ручная проверка непригодной записи. Проверка оригинальных PDF и live C1 остаётся частью финальной приёмки.
+
 ## Перед передачей другой модели
 
 1. Сохранить изменения и коротко обновить PROGRESS.md.

@@ -402,5 +402,7 @@ export const uz: Record<TranslationKey, string> = {
   'error.agentBusy': 'Yordamchi band. Savolingiz saqlandi, keyinroq urinib ko‘ring.',
   'error.agentUnavailable': 'Yordamchi hozir ishlamayapti. Savolingiz saqlandi, keyinroq urinib ko‘ring.',
   'chat.sourcesTitle': 'Javob manbalari',
-  'help.card.settings.body': 'JUDRIVE yetti tilni, yorug‘, qorong‘u va tizim mavzularini qo‘llab-quvvatlaydi va telefon uchun moslanadi.',
+  'help.card.settings.body': 'Interfeys tili va mavzusini tanlang. Sozlamalar shu brauzerda saqlanadi.',
+  'manuals.operationGuide': 'Foydalanish qo‘llanmasi',
+  'manuals.repairGuide': 'Ta’mirlash qo‘llanmasi',
 }

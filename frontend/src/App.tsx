@@ -20,6 +20,7 @@ export default function App() {
   const { t } = useI18n()
   const { mode: themeMode, setMode: setThemeMode } = useTheme()
   const onboarding = useOnboarding()
+  const helpDestination = useRef<string | null>(null)
   const [view, setView] = useState<AppView>('diagnosis')
   const [vehicles, setVehicles] = useState<VehicleSummary[]>([])
   const [fleetError, setFleetError] = useState<string | null>(null)
@@ -40,6 +41,12 @@ export default function App() {
   useEffect(() => {
     // Keep the new section anchored at its title; diagnosis context lives in state.
     window.scrollTo({ top: 0, behavior: 'auto' })
+  }, [view])
+
+  useEffect(() => {
+    const target = helpDestination.current
+    helpDestination.current = null
+    if (target) document.getElementById(target)?.focus()
   }, [view])
 
   const openManuals = (intent: Omit<ManualSearchIntent, 'id'> | string) => {
@@ -135,7 +142,13 @@ export default function App() {
         </div>
         {view === 'help' ? (
           <HelpView
-            onNavigate={setView}
+            onNavigate={(target, topic) => {
+              const destinations: Record<string, string> = {
+                chat: 'diagnosis-chat', voice: 'diagnosis-chat', history: 'diagnosis-history',
+              }
+              helpDestination.current = destinations[topic] ?? null
+              setView(target)
+            }}
             onRestartOnboarding={onboarding.start}
             themeMode={themeMode}
             onThemeChange={setThemeMode}
@@ -146,7 +159,9 @@ export default function App() {
             engineModel={currentEngine}
             searchIntent={manualIntent}
             onSearchIntentConsumed={() => setManualIntent(null)}
-            onAskInChat={(text) => askInChat(text, false)}
+            onAskInChat={(text, engine) => {
+              if (engine === currentEngine) askInChat(text, false)
+            }}
             onBack={() => setView('diagnosis')}
           />
         ) : null}

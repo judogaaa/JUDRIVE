@@ -248,6 +248,8 @@ export type TranslationKey =
   | 'error.network'
   | 'error.manualsCatalog'
   | 'manuals.subtitle'
+  | 'manuals.operationGuide'
+  | 'manuals.repairGuide'
   | 'manuals.searchCatalog'
   | 'manuals.searchCatalogPlaceholder'
   | 'manuals.noFavorites'

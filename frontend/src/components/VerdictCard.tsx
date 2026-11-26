@@ -103,8 +103,10 @@ export function VerdictCard({ result, loading, error, vehicleId, actions, onRetr
 
   const steps = stepKeys(effective)
 
+  const unusableRecording = effective === 'check_failed' && result.signal_quality === 'bad'
+
   return (
-    <section className={`verdict-card verdict-card--${effective}`} aria-live="polite">
+    <section className={`verdict-card verdict-card--${effective}${unusableRecording ? ' verdict-card--bad-signal' : ''}`} aria-live="polite">
       <header className="verdict-card__header">
         <div className="verdict-card__status-icon" aria-hidden>
           <StatusIcon size={22} />
@@ -132,6 +134,7 @@ export function VerdictCard({ result, loading, error, vehicleId, actions, onRetr
               <dd>{result.description}</dd>
             </dl>
           ) : null}
+          {unusableRecording && <p className="verdict-card__quality">{t('verdict.signal')}: {signalLabel('bad')}</p>}
           <p className="verdict-card__notice">{t('verdict.failed.action')}</p>
         </>
       ) : (
@@ -157,7 +160,6 @@ export function VerdictCard({ result, loading, error, vehicleId, actions, onRetr
           onPrepareTicket={actions.onPrepareTicket}
           onCopyPlan={actions.onCopyPlan}
           onOtherSession={actions.onOtherSession}
-          onRetry={actions.onRetry}
         />
       ) : null}
 
