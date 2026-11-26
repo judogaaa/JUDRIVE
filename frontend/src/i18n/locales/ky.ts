@@ -6,6 +6,8 @@ export const ky: Record<TranslationKey, string> = {
   'nav.chief': 'Bosh mexanik',
   'nav.fleet': 'Автоунаалар паркы',
   'nav.tickets': 'Арыздар',
+  'nav.manuals': 'Колдонмолор',
+  'diag.history': 'Текшерүүлөрдүн тарыхы',
   'theme.cycle': 'Тема',
   'theme.system': 'Системалык тема',
   'theme.light': 'Ачык тема',
@@ -180,4 +182,6 @@ export const ky: Record<TranslationKey, string> = {
   'error.stt': 'Nutqni aniqlash xatosi ({status})',
   'error.insight': 'Tarixni yuklash xatosi',
   'error.pdfRender': 'PDFni chizib bo‘lmadi',
+  'ticket.status.duplicate': 'Бул жуп боюнча арыз бар',
+  'ticket.status.unknown': 'Жөнөтүүнүн жыйынтыгы белгисиз. Кайталоого болбойт.',
 }

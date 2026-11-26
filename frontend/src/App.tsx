@@ -7,6 +7,7 @@ import { useI18n } from './i18n/I18nContext'
 import { ChiefMechanicView } from './views/ChiefMechanicView'
 import { DiagnosisView } from './views/DiagnosisView'
 import { FleetView } from './views/FleetView'
+import { ManualsView } from './views/ManualsView'
 import { TicketsView } from './views/TicketsView'
 
 function latestSessionId(vehicle: VehicleSummary): string {
@@ -16,7 +17,7 @@ function latestSessionId(vehicle: VehicleSummary): string {
 
 export default function App() {
   const { t } = useI18n()
-  const { mode: themeMode, cycle: onThemeCycle } = useTheme()
+  const { mode: themeMode, setMode: setThemeMode } = useTheme()
   const [view, setView] = useState<AppView>('diagnosis')
   const [vehicles, setVehicles] = useState<VehicleSummary[]>([])
   const [fleetError, setFleetError] = useState<string | null>(null)
@@ -52,8 +53,8 @@ export default function App() {
   }
 
   return (
-    <WorkspaceShell view={view} onViewChange={setView} themeMode={themeMode} onThemeCycle={onThemeCycle}>
-      {view === 'diagnosis' ? (
+    <WorkspaceShell view={view} onViewChange={setView} themeMode={themeMode} onThemeChange={setThemeMode}>
+      <div hidden={view !== 'diagnosis'}>
         <DiagnosisView
           vehicles={vehicles}
           fleetError={fleetError}
@@ -62,6 +63,9 @@ export default function App() {
           onVehicleChange={setVehicleId}
           onSessionChange={setSessionId}
         />
+      </div>
+      {view === 'manuals' ? (
+        <ManualsView engineModel={vehicles.find((v) => v.vehicle_id === vehicleId)?.engine_model ?? null} />
       ) : null}
       {view === 'chief' ? <ChiefMechanicView onOpenDiagnosis={openDiagnosisForVehicle} /> : null}
       {view === 'fleet' ? (

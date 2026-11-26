@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { MessageSquare, Send } from 'lucide-react'
 import {
   createConversation,
@@ -19,13 +19,24 @@ interface AgentChatProps {
   vehicleId: string
   sessionId: string
   diagnoseResult?: DiagnoseResponse | null
+  onDiagnoseCommand?: () => void
 }
 
 const SUGGESTION_KEYS: TranslationKey[] = ['chat.suggest1', 'chat.suggest2', 'chat.suggest3']
 
-export function AgentChat({ vehicleId, sessionId, diagnoseResult }: AgentChatProps) {
+function isDiagnoseVoiceCommand(text: string): boolean {
+  const q = text.toLowerCase()
+  return /диагност|diagnost|tekshir|талда|निदान|নির্ণয়/.test(q)
+}
+
+export function AgentChat({ vehicleId, sessionId, diagnoseResult, onDiagnoseCommand }: AgentChatProps) {
   const { locale, t } = useI18n()
-  const contextKey = useMemo(() => `${vehicleId}:${sessionId}`, [vehicleId, sessionId])
+  const contextKey = `${vehicleId}:${sessionId}`
+  const contextRef = useRef(contextKey)
+  const sendGen = useRef(0)
+  const tRef = useRef(t)
+  tRef.current = t
+
   const [conversationId, setConversationId] = useState<string | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
@@ -44,42 +55,44 @@ export function AgentChat({ vehicleId, sessionId, diagnoseResult }: AgentChatPro
   }, [diagnoseResult, t])
 
   useEffect(() => {
-    let cancelled = false
+    contextRef.current = contextKey
+    const epoch = ++sendGen.current
     setConversationId(null)
     setMessages([])
     setDraft(null)
     setTicketId(null)
     setError(null)
     setEvidenceHit(null)
+    setLoading(false)
 
     if (!vehicleId || !sessionId) return
 
     createConversation(vehicleId, sessionId)
       .then((conv) => {
-        if (!cancelled) setConversationId(conv.conversation_id)
+        if (epoch !== sendGen.current || contextRef.current !== contextKey) return
+        setConversationId(conv.conversation_id)
       })
       .catch((err: unknown) => {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : t('error.chatOpen'))
-        }
+        if (epoch !== sendGen.current || contextRef.current !== contextKey) return
+        setError(err instanceof Error ? err.message : tRef.current('error.chatOpen'))
       })
-
-    return () => {
-      cancelled = true
-    }
-  }, [contextKey, vehicleId, sessionId, t])
+  }, [contextKey, vehicleId, sessionId])
 
   const send = async (text: string) => {
-    if (!conversationId || !text.trim()) return
+    const trimmed = text.trim()
+    if (!conversationId || !trimmed) return
+    const epoch = ++sendGen.current
+    const key = contextKey
+    const convId = conversationId
     setLoading(true)
     setError(null)
-    setDraft(null)
-    const userMsg: ChatMessage = { id: crypto.randomUUID(), role: 'user', content: text.trim() }
+    const userMsg: ChatMessage = { id: crypto.randomUUID(), role: 'user', content: trimmed }
     setMessages((prev) => [...prev, userMsg])
     setInput('')
 
     try {
-      const reply = await sendChatMessage(conversationId, text.trim(), locale)
+      const reply = await sendChatMessage(convId, trimmed, locale)
+      if (epoch !== sendGen.current || contextRef.current !== key) return
       const assistantMsg: ChatMessage = {
         id: crypto.randomUUID(),
         role: 'assistant',
@@ -91,13 +104,16 @@ export function AgentChat({ vehicleId, sessionId, diagnoseResult }: AgentChatPro
         setDraft(reply.draft)
       }
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : t('error.agent'))
+      if (epoch !== sendGen.current || contextRef.current !== key) return
+      setError(err instanceof Error ? err.message : tRef.current('error.agent'))
     } finally {
-      setLoading(false)
+      if (epoch === sendGen.current && contextRef.current === key) setLoading(false)
     }
   }
 
   const openEvidence = async (hit: SourceHit) => {
+    const key = contextKey
+    const epoch = sendGen.current
     if (hit.doc_id) {
       setEvidenceHit({
         evidence_id: hit.evidence_id,
@@ -113,12 +129,19 @@ export function AgentChat({ vehicleId, sessionId, diagnoseResult }: AgentChatPro
     setEvidenceLoading(true)
     try {
       const row = await fetchEvidence(hit.evidence_id)
+      if (epoch !== sendGen.current || contextRef.current !== key) return
       setEvidenceHit({ ...row, score: 'score' in row ? Number(row.score) || 0 : 0 })
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : t('error.source'))
+      if (epoch !== sendGen.current || contextRef.current !== key) return
+      setError(err instanceof Error ? err.message : tRef.current('error.source'))
     } finally {
-      setEvidenceLoading(false)
+      if (epoch === sendGen.current && contextRef.current === key) setEvidenceLoading(false)
     }
+  }
+
+  const onVoiceText = (text: string) => {
+    setInput(text)
+    if (isDiagnoseVoiceCommand(text)) onDiagnoseCommand?.()
   }
 
   return (
@@ -146,11 +169,7 @@ export function AgentChat({ vehicleId, sessionId, diagnoseResult }: AgentChatPro
       </div>
 
       <div className="chat-log" aria-live="polite">
-        {messages.length === 0 ? (
-          <p className="panel__subtitle" style={{ margin: 0 }}>
-            {t('chat.empty')}
-          </p>
-        ) : null}
+        {messages.length === 0 ? <p className="panel__subtitle chat-empty">{t('chat.empty')}</p> : null}
         {messages.map((msg) => (
           <article key={msg.id} className={`chat-bubble chat-bubble--${msg.role}`}>
             <p className="chat-bubble__role">{msg.role === 'user' ? t('chat.roleUser') : t('chat.roleAgent')}</p>
@@ -178,7 +197,6 @@ export function AgentChat({ vehicleId, sessionId, diagnoseResult }: AgentChatPro
 
       {error ? <p className="panel__error">{error}</p> : null}
 
-      <VoiceCapture disabled={loading || !conversationId} onText={(text) => setInput(text)} />
       <form
         className="chat-compose"
         onSubmit={(e) => {
@@ -190,13 +208,16 @@ export function AgentChat({ vehicleId, sessionId, diagnoseResult }: AgentChatPro
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder={t('chat.placeholder')}
-          rows={3}
+          rows={2}
           disabled={loading || !conversationId}
         />
-        <button type="submit" className="btn btn--primary" disabled={loading || !conversationId || !input.trim()}>
-          <Send size={18} aria-hidden />
-          {t('chat.send')}
-        </button>
+        <div className="chat-compose__actions">
+          <VoiceCapture disabled={loading || !conversationId} onText={onVoiceText} compact />
+          <button type="submit" className="btn btn--primary" disabled={loading || !conversationId || !input.trim()}>
+            <Send size={16} aria-hidden />
+            {t('chat.send')}
+          </button>
+        </div>
       </form>
 
       <TicketDraftCard draft={draft} onConfirmed={(id) => setTicketId(id)} />

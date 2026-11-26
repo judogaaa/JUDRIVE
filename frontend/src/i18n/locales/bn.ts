@@ -6,6 +6,8 @@ export const bn: Record<TranslationKey, string> = {
   'nav.chief': 'Bosh mexanik',
   'nav.fleet': 'গাড়ির বহর',
   'nav.tickets': 'আবেদনসমূহ',
+  'nav.manuals': 'নির্দেশিকা',
+  'diag.history': 'পরীক্ষার ইতিহাস',
   'theme.cycle': 'থিম',
   'theme.system': 'সিস্টেম থিম',
   'theme.light': 'হালকা থিম',
@@ -180,4 +182,6 @@ export const bn: Record<TranslationKey, string> = {
   'error.stt': 'Nutqni aniqlash xatosi ({status})',
   'error.insight': 'Tarixni yuklash xatosi',
   'error.pdfRender': 'PDFni chizib bo‘lmadi',
+  'ticket.status.duplicate': 'এই জোড়ার আবেদন আগে থেকেই আছে',
+  'ticket.status.unknown': 'পাঠানোর ফল অজানা। পুনরাবৃত্তি নিষিদ্ধ।',
 }

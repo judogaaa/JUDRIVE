@@ -39,13 +39,13 @@ export function FleetView({ vehicles, fleetError, onOpenDiagnosis }: FleetViewPr
         <section className="panel">
           <label className="field">
             <span>{t('fleet.searchLabel')}</span>
-            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-              <Search size={18} style={{ color: 'var(--text-muted)', flexShrink: 0 }} aria-hidden />
+            <div className="search-field">
+              <Search size={16} aria-hidden />
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder={t('fleet.searchPlaceholder')}
-                style={{ flex: 1 }}
+                aria-label={t('fleet.searchLabel')}
               />
             </div>
           </label>

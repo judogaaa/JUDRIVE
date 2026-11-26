@@ -6,6 +6,8 @@ export const ru: Record<TranslationKey, string> = {
   'nav.chief': 'Главный механик',
   'nav.fleet': 'Автопарк',
   'nav.tickets': 'Заявки',
+  'nav.manuals': 'Руководства',
+  'diag.history': 'История проверок',
   'theme.cycle': 'Тема',
   'theme.system': 'Системная тема',
   'theme.light': 'Светлая тема',
@@ -180,4 +182,6 @@ export const ru: Record<TranslationKey, string> = {
   'error.stt': 'Ошибка распознавания речи ({status})',
   'error.insight': 'Ошибка загрузки истории',
   'error.pdfRender': 'Не удалось отрисовать PDF',
+  'ticket.status.duplicate': 'Заявка по этой паре уже есть',
+  'ticket.status.unknown': 'Исход отправки неизвестен. Повтор запрещён.',
 }

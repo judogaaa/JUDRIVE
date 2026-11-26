@@ -6,6 +6,8 @@ export const tg: Record<TranslationKey, string> = {
   'nav.chief': 'Bosh mexanik',
   'nav.fleet': 'Парки автомобилӣ',
   'nav.tickets': 'Дархостҳо',
+  'nav.manuals': 'Дастурҳо',
+  'diag.history': 'Таърихи санҷишҳо',
   'theme.cycle': 'Мавзуъ',
   'theme.system': 'Мавзӯъ нест',
   'theme.light': 'Мавзӯи равшан',
@@ -180,4 +182,6 @@ export const tg: Record<TranslationKey, string> = {
   'error.stt': 'Nutqni aniqlash xatosi ({status})',
   'error.insight': 'Tarixni yuklash xatosi',
   'error.pdfRender': 'PDFni chizib bo‘lmadi',
+  'ticket.status.duplicate': 'Дархост барои ин ҷуфт аллакай ҳаст',
+  'ticket.status.unknown': 'Натиҷаи ирсол номаълум аст. Такрор манъ аст.',
 }

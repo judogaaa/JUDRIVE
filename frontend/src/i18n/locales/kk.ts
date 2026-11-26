@@ -6,6 +6,8 @@ export const kk: Record<TranslationKey, string> = {
   'nav.chief': 'Bosh mexanik',
   'nav.fleet': 'Автопарк',
   'nav.tickets': 'Өтінімдер',
+  'nav.manuals': 'Нұсқаулықтар',
+  'diag.history': 'Тексерулер тарихы',
   'theme.cycle': 'Тақырыбы',
   'theme.system': 'Жүйелік тақырып',
   'theme.light': 'Ашық тақырып',
@@ -180,4 +182,6 @@ export const kk: Record<TranslationKey, string> = {
   'error.stt': 'Nutqni aniqlash xatosi ({status})',
   'error.insight': 'Tarixni yuklash xatosi',
   'error.pdfRender': 'PDFni chizib bo‘lmadi',
+  'ticket.status.duplicate': 'Осы жұп бойынша өтінім бар',
+  'ticket.status.unknown': 'Жіберу нәтижесі белгісіз. Қайталауға болмайды.',
 }

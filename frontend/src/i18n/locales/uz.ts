@@ -6,6 +6,8 @@ export const uz: Record<TranslationKey, string> = {
   'nav.chief': 'Bosh mexanik',
   'nav.fleet': 'Avtopark',
   'nav.tickets': 'Arizalar',
+  'nav.manuals': 'Qo‘llanmalar',
+  'diag.history': 'Tekshiruvlar tarixi',
   'theme.cycle': 'Mavzu',
   'theme.system': 'Tizim mavzusi',
   'theme.light': 'Yorug‘ mavzu',
@@ -180,4 +182,6 @@ export const uz: Record<TranslationKey, string> = {
   'error.stt': 'Nutqni aniqlash xatosi ({status})',
   'error.insight': 'Tarixni yuklash xatosi',
   'error.pdfRender': 'PDFni chizib bo‘lmadi',
+  'ticket.status.duplicate': 'Bu juftlik bo‘yicha ariza allaqachon bor',
+  'ticket.status.unknown': 'Yuborish natijasi noma’lum. Takrorlash taqiqlangan.',
 }

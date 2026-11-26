@@ -44,5 +44,9 @@ export function useTheme() {
     setMode((prev) => (prev === 'light' ? 'dark' : prev === 'dark' ? 'system' : 'light'))
   }, [])
 
-  return { mode, applied, setMode, cycle }
+  const setTheme = useCallback((next: ThemeMode) => {
+    setMode(next)
+  }, [])
+
+  return { mode, applied, setMode: setTheme, cycle }
 }

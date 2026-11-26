@@ -1,12 +1,10 @@
-import { useCallback, useMemo, useState } from 'react'
-import { Play } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { History, Play, X } from 'lucide-react'
 import { fetchDiagnosis } from '../api/client'
 import type { DiagnoseResponse, SessionSummary, VehicleSummary } from '../api/types'
 import { AgentChat } from '../components/AgentChat'
-import { ManualSearchPanel } from '../components/ManualSearchPanel'
 import { VehicleHistoryPanel } from '../components/VehicleHistoryPanel'
 import { VerdictCard } from '../components/VerdictCard'
-import { VoiceCapture } from '../components/VoiceCapture'
 import { useI18n } from '../i18n/I18nContext'
 import { formatSessionDateTime } from '../lib/formatLocale'
 
@@ -32,6 +30,7 @@ export function DiagnosisView({
   const [result, setResult] = useState<DiagnoseResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [historyOpen, setHistoryOpen] = useState(false)
 
   const selectedVehicle = useMemo(
     () => vehicles.find((v) => v.vehicle_id === vehicleId) ?? null,
@@ -39,11 +38,6 @@ export function DiagnosisView({
   )
 
   const sessions = selectedVehicle?.sessions ?? []
-
-  const activeSession = useMemo(
-    () => sessions.find((s) => s.session_id === sessionId) ?? null,
-    [sessionId, sessions],
-  )
 
   const vehicleOptions = useMemo(() => {
     const q = vehicleQuery.trim().toLowerCase()
@@ -78,7 +72,7 @@ export function DiagnosisView({
     resetVerdict()
   }
 
-  const runDiagnosis = async () => {
+  const runDiagnosis = useCallback(async () => {
     if (!vehicleId || !sessionId) return
     const gen = ++requestGen.current
     const pair = `${vehicleId}:${sessionId}`
@@ -96,171 +90,128 @@ export function DiagnosisView({
     } finally {
       if (gen === requestGen.current) setLoading(false)
     }
-  }
+  }, [requestGen, sessionId, t, vehicleId])
 
-  const workflowStep = result ? 3 : loading ? 2 : vehicleId && sessionId ? 1 : 0
+  useEffect(() => {
+    if (!historyOpen) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setHistoryOpen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [historyOpen])
+
+  const sortedSessions: SessionSummary[] = [...sessions].sort((a, b) => b.checked_at.localeCompare(a.checked_at))
 
   return (
-    <>
-      <header className="page-header">
+    <div className="diag-page">
+      <header className="page-header page-header--compact">
         <h1>{t('diag.title')}</h1>
-        <p>{t('diag.subtitle')}</p>
       </header>
 
-      {selectedVehicle && sessionId ? (
-        <div aria-label={t('diag.vehiclePassport')} className="vehicle-context-bar">
-          <div className="vehicle-context-bar__main">
-            <span className="vehicle-context-bar__plate">{vehicleId}</span>
-            <span className="vehicle-context-bar__line">
-              {t('diag.garage')} {selectedVehicle.garage_no} · {selectedVehicle.make}
-              {selectedVehicle.model ? ` ${selectedVehicle.model}` : ''} · {selectedVehicle.vehicle_type}
-            </span>
-            <span className="vehicle-context-bar__engine">
-              {t('diag.engine')}: {selectedVehicle.engine_model}
-            </span>
-          </div>
-          <div className="vehicle-context-bar__session">
-            <span className="vehicle-context-bar__session-id">{sessionId}</span>
-            {activeSession ? (
-              <span className="vehicle-context-bar__session-date">
-                {formatSessionDateTime(locale, activeSession.checked_at)}
-              </span>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
-
-      <ol className="diag-workflow" aria-label={t('diag.workflow')}>
-        <li className={workflowStep >= 1 ? 'diag-workflow__step diag-workflow__step--done' : 'diag-workflow__step'}>
-          {t('diag.step.select')}
-        </li>
-        <li
-          className={
-            workflowStep >= 2
-              ? workflowStep > 2
-                ? 'diag-workflow__step diag-workflow__step--done'
-                : 'diag-workflow__step diag-workflow__step--current'
-              : 'diag-workflow__step'
-          }
-        >
-          {t('diag.step.run')}
-        </li>
-        <li
-          className={
-            workflowStep >= 3
-              ? 'diag-workflow__step diag-workflow__step--done'
-              : workflowStep === 2
-                ? 'diag-workflow__step diag-workflow__step--current'
-                : 'diag-workflow__step'
-          }
-        >
-          {t('diag.step.review')}
-        </li>
-        <li className={result ? 'diag-workflow__step diag-workflow__step--current' : 'diag-workflow__step'}>
-          {t('diag.step.act')}
-        </li>
-      </ol>
-
-      <div className="workspace">
-        <aside className="workspace-side workspace-rail">
-          <section className="panel diag-context">
-            {fleetError ? (
-              <p className="panel__error" role="alert">
-                {fleetError}
-              </p>
-            ) : (
-              <>
-                <div className="context-grid">
-                  <label className="field">
-                    <span>{t('diag.search')}</span>
-                    <input
-                      value={vehicleQuery}
-                      onChange={(e) => setVehicleQuery(e.target.value)}
-                      placeholder={t('diag.filterPlaceholder')}
-                      aria-label={t('diag.search')}
-                    />
-                  </label>
-                  <label className="field">
-                    <span>{t('diag.vehicle')}</span>
-                    <select value={vehicleId} onChange={(e) => onVehicleSelect(e.target.value)}>
-                      {vehicleOptions.map((v) => (
-                        <option key={v.vehicle_id} value={v.vehicle_id}>
-                          {v.vehicle_id} · {v.garage_no} · {v.engine_model}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="field">
-                    <span>{t('diag.check')}</span>
-                    <select value={sessionId} onChange={(e) => onSessionSelect(e.target.value)}>
-                      {sessions.map((s) => (
-                        <option key={s.session_id} value={s.session_id}>
-                          {s.session_id} · {formatSessionDateTime(locale, s.checked_at)}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-
-                <button
-                  type="button"
-                  className="btn btn--primary btn--block"
-                  disabled={loading || !vehicleId || !sessionId}
-                  onClick={() => void runDiagnosis()}
-                >
-                  <Play size={18} aria-hidden />
-                  {loading ? t('diag.running') : t('diag.run')}
-                </button>
-                <VoiceCapture
-                  disabled={loading || !vehicleId || !sessionId}
-                  onText={(text) => {
-                    if (isDiagnoseVoiceCommand(text)) void runDiagnosis()
-                  }}
-                />
-              </>
-            )}
-          </section>
-
-          <VerdictCard result={result} loading={loading} error={error} vehicleId={vehicleId} />
-          {vehicleId ? (
-            <DiagnosisSideColumn
-              sessions={[...sessions].sort((a, b) => b.checked_at.localeCompare(a.checked_at))}
-              sessionId={sessionId}
-              engineModel={selectedVehicle?.engine_model ?? null}
-              onSessionSelect={onSessionSelect}
+      {fleetError ? (
+        <p className="panel__error" role="alert">
+          {fleetError}
+        </p>
+      ) : (
+        <section className="diag-toolbar" aria-label={t('diag.title')}>
+          <label className="field">
+            <span>{t('diag.search')}</span>
+            <input
+              value={vehicleQuery}
+              onChange={(e) => setVehicleQuery(e.target.value)}
+              placeholder={t('diag.filterPlaceholder')}
+              aria-label={t('diag.search')}
             />
-          ) : null}
-        </aside>
+          </label>
+          <label className="field">
+            <span>{t('diag.vehicle')}</span>
+            <select value={vehicleId} onChange={(e) => onVehicleSelect(e.target.value)}>
+              {vehicleOptions.map((v) => (
+                <option key={v.vehicle_id} value={v.vehicle_id}>
+                  {v.vehicle_id} · {v.engine_model}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="field">
+            <span>{t('diag.engine')}</span>
+            <p className="diag-toolbar__value">{selectedVehicle?.engine_model ?? '—'}</p>
+          </div>
+          <label className="field">
+            <span>{t('diag.check')}</span>
+            <select value={sessionId} onChange={(e) => onSessionSelect(e.target.value)}>
+              {sessions.map((s) => (
+                <option key={s.session_id} value={s.session_id}>
+                  {s.session_id} · {formatSessionDateTime(locale, s.checked_at)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="diag-toolbar__actions">
+            <button
+              type="button"
+              className="btn btn--primary"
+              disabled={loading || !vehicleId || !sessionId}
+              onClick={() => void runDiagnosis()}
+            >
+              <Play size={16} aria-hidden />
+              {loading ? t('diag.running') : t('diag.run')}
+            </button>
+            <button
+              type="button"
+              className="btn btn--secondary"
+              disabled={!vehicleId}
+              onClick={() => setHistoryOpen(true)}
+            >
+              <History size={16} aria-hidden />
+              {t('diag.history')}
+            </button>
+          </div>
+        </section>
+      )}
+
+      <div className="diag-work">
+        <div className="diag-work__verdict">
+          <VerdictCard result={result} loading={loading} error={error} vehicleId={vehicleId} />
+        </div>
         {vehicleId && sessionId ? (
-          <div className="workspace-chat">
-            <AgentChat vehicleId={vehicleId} sessionId={sessionId} diagnoseResult={result} />
+          <div className="diag-work__chat">
+            <AgentChat
+              vehicleId={vehicleId}
+              sessionId={sessionId}
+              diagnoseResult={result}
+              onDiagnoseCommand={() => void runDiagnosis()}
+            />
           </div>
         ) : null}
       </div>
-    </>
-  )
-}
 
-function isDiagnoseVoiceCommand(text: string): boolean {
-  const q = text.toLowerCase()
-  return /диагност|diagnost|tekshir|талда|निदान|নির্ণয়/.test(q)
-}
-
-function DiagnosisSideColumn({
-  sessionId,
-  sessions,
-  engineModel,
-  onSessionSelect,
-}: {
-  sessionId: string
-  sessions: SessionSummary[]
-  engineModel: string | null
-  onSessionSelect: (id: string) => void
-}) {
-  return (
-    <div className="diag-stack">
-      <VehicleHistoryPanel sessions={sessions} activeSessionId={sessionId} onSelectSession={onSessionSelect} />
-      <ManualSearchPanel engineModel={engineModel} />
-                </div>
+      {historyOpen ? (
+        <div className="drawer-scrim" role="presentation" onClick={() => setHistoryOpen(false)}>
+          <aside
+            className="history-drawer"
+            role="dialog"
+            aria-label={t('history.title')}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="history-drawer__head">
+              <h2>{t('history.title')}</h2>
+              <button type="button" className="icon-btn" onClick={() => setHistoryOpen(false)} aria-label={t('common.close')}>
+                <X size={18} aria-hidden />
+              </button>
+            </div>
+            <VehicleHistoryPanel
+              sessions={sortedSessions}
+              activeSessionId={sessionId}
+              onSelectSession={(id) => {
+                onSessionSelect(id)
+                setHistoryOpen(false)
+              }}
+            />
+          </aside>
+        </div>
+      ) : null}
+    </div>
   )
 }

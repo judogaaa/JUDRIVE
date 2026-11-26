@@ -9,32 +9,56 @@ interface TicketDraftCardProps {
 }
 
 export function TicketDraftCard({ draft, onConfirmed }: TicketDraftCardProps) {
-  const { t } = useI18n()
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [status, setStatus] = useState<string | null>(null)
+  if (!draft?.draft_id || !draft.confirm_nonce) return null
+  return <TicketDraftBody key={draft.draft_id} draft={draft} onConfirmed={onConfirmed} />
+}
 
-  if (!draft?.draft_id || !draft.confirm_nonce) {
-    return null
-  }
+function TicketDraftBody({
+  draft,
+  onConfirmed,
+}: {
+  draft: DraftPayload
+  onConfirmed: (ticketId: string) => void
+}) {
+  const { t } = useI18n()
+  const [phase, setPhase] = useState<'idle' | 'sending' | 'created' | 'duplicate' | 'unknown'>('idle')
+  const [error, setError] = useState<string | null>(null)
+  const [ticketId, setTicketId] = useState<string | null>(null)
 
   const payload = draft.payload
+  const locked = phase === 'sending' || phase === 'created' || phase === 'duplicate' || phase === 'unknown'
 
   const onConfirm = async () => {
-    setLoading(true)
+    if (locked || !draft.confirm_nonce) return
+    setPhase('sending')
     setError(null)
     try {
       const result = await confirmTicketDraft(draft.draft_id, draft.confirm_nonce)
-      setStatus(result.status)
       if (result.status === 'created' && result.ticket_id) {
+        setPhase('created')
+        setTicketId(result.ticket_id)
         onConfirmed(result.ticket_id)
-      } else if (result.message) {
-        setError(result.message)
+        return
       }
+      if (result.status === 'duplicate') {
+        setPhase('duplicate')
+        if (result.ticket_id) {
+          setTicketId(result.ticket_id)
+          onConfirmed(result.ticket_id)
+        }
+        setError(result.message || t('ticket.status.duplicate'))
+        return
+      }
+      if (result.status === 'unknown') {
+        setPhase('unknown')
+        setError(result.message || t('ticket.status.unknown'))
+        return
+      }
+      setPhase('idle')
+      setError(result.message || t('error.confirm'))
     } catch (err: unknown) {
+      setPhase('idle')
       setError(resolveErrorMessage(t, err, 'error.confirm'))
-    } finally {
-      setLoading(false)
     }
   }
 
@@ -85,15 +109,15 @@ export function TicketDraftCard({ draft, onConfirmed }: TicketDraftCardProps) {
       ) : null}
 
       {error ? <p className="panel__error">{error}</p> : null}
-      {status === 'created' ? <p className="ticket-draft__ok">{t('ticket.draft.created')}</p> : null}
+      {phase === 'created' ? <p className="ticket-draft__ok">{t('ticket.draft.created')}</p> : null}
+      {ticketId && phase !== 'created' ? (
+        <p className="ticket-draft__ok">
+          {t('ticket.confirmedId')}: {ticketId}
+        </p>
+      ) : null}
 
-      <button
-        type="button"
-        className="btn btn--primary btn--block"
-        disabled={loading || status === 'created'}
-        onClick={() => void onConfirm()}
-      >
-        {loading ? t('ticket.draft.sending') : t('ticket.confirmBtn')}
+      <button type="button" className="btn btn--primary btn--block" disabled={locked} onClick={() => void onConfirm()}>
+        {phase === 'sending' ? t('ticket.draft.sending') : t('ticket.confirmBtn')}
       </button>
     </section>
   )

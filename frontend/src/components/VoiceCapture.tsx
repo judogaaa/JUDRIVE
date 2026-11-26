@@ -7,9 +7,10 @@ import { resolveErrorMessage } from '../lib/i18nError'
 interface VoiceCaptureProps {
   onText: (text: string) => void
   disabled?: boolean
+  compact?: boolean
 }
 
-export function VoiceCapture({ onText, disabled }: VoiceCaptureProps) {
+export function VoiceCapture({ onText, disabled, compact }: VoiceCaptureProps) {
   const { locale, t } = useI18n()
   const [recording, setRecording] = useState(false)
   const [transcribing, setTranscribing] = useState(false)
@@ -73,7 +74,7 @@ export function VoiceCapture({ onText, disabled }: VoiceCaptureProps) {
   }
 
   return (
-    <div className="voice-box">
+    <div className={compact ? 'voice-box voice-box--compact' : 'voice-box'}>
       <div className="voice-actions">
         {recording ? (
           <button type="button" className="btn btn--secondary" onClick={stopRecording} disabled={transcribing}>
