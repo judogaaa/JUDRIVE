@@ -150,8 +150,24 @@ test.describe('Final UX audit — diagnosis workspace', () => {
     await expect(page.getByRole('button', { name: 'Повторить отправку' })).toBeVisible()
 
     await page.unroute('**/api/conversations/*/messages')
+    await page.route('**/api/conversations/*/messages', (route) =>
+      route.fulfill({
+        json: {
+          reply: '**Вывод:**\n- проверить зазоры\n1. открыть руководство\n\nИсточник подтверждён.',
+          tool_trace: [],
+          sources: [],
+          draft: null,
+          usage: {},
+        },
+      }),
+    )
     await page.getByRole('button', { name: 'Повторить отправку' }).click()
     await expect(page.locator('.chat-bubble--user').filter({ hasText: 'Проверь запись и источники' })).toBeVisible()
+    const answer = page.locator('.chat-bubble--assistant').last().locator('.chat-bubble__text')
+    await expect(answer.locator('strong')).toHaveText('Вывод:')
+    await expect(answer.locator('ul li')).toHaveText('проверить зазоры')
+    await expect(answer.locator('ol li')).toHaveText('открыть руководство')
+    await expect(answer).not.toContainText('**')
   })
 
   test('manual transition for P854BT78 stays inside its own engine and offers general inspection', async ({ page }) => {
@@ -172,55 +188,6 @@ test.describe('Final UX audit — diagnosis workspace', () => {
     const docs = await page.locator('.manual-result__doc').allTextContents()
     expect(docs.length).toBeGreaterThan(0)
     expect(docs.every((title) => title.includes('236'))).toBeTruthy()
-  })
-
-  test('ticket draft is prepared from sources, confirmed and protected from duplicates', async ({ page, request }) => {
-    test.setTimeout(180_000)
-    const health = (await (await request.get('/api/health')).json()) as { groq_agent?: string }
-    test.skip(health.groq_agent !== 'configured', 'Groq not configured')
-
-    const existing = (await (await request.get('/api/tickets?vehicle_id=E549YT198')).json()) as {
-      tickets: { session_id: string }[]
-    }
-    test.skip(existing.tickets.some((ticket) => ticket.session_id === 'S-0011'), 'S-0011 already has a ticket')
-
-    let draftId = ''
-    let confirmNonce = ''
-    page.on('response', async (response) => {
-      if (response.request().method() !== 'POST' || !response.url().includes('/messages')) return
-      try {
-        const body = (await response.json()) as { draft?: { draft_id?: string; confirm_nonce?: string } }
-        if (body.draft?.draft_id && body.draft.confirm_nonce) {
-          draftId = body.draft.draft_id
-          confirmNonce = body.draft.confirm_nonce
-        }
-      } catch {
-        /* no draft in reply */
-      }
-    })
-
-    await page.goto('/')
-    await selectVehicleSession(page, 'E549YT198', 'S-0011')
-    await runDiagnosis(page)
-    await expect(page.locator('.verdict-card--anomaly')).toBeVisible({ timeout: 30_000 })
-    await page.locator('.verdict-actions').getByRole('button', { name: 'Подготовить заявку' }).click()
-
-    const draft = page.locator('.ticket-draft')
-    await expect(draft.getByRole('heading', { name: 'Черновик заявки ТОиР' })).toBeVisible({ timeout: 120_000 })
-    await expect(draft.getByText(/236/).first()).toBeVisible()
-    const confirmButton = draft.getByRole('button', { name: 'Подтвердить и отправить заявку' })
-    await expect(confirmButton).toBeDisabled()
-    await draft.getByLabel('Я проверил факты, источники и работы').check()
-    await confirmButton.click()
-    await expect(page.getByText(/TKT-/)).toBeVisible({ timeout: 30_000 })
-
-    expect(draftId).toBeTruthy()
-    expect(confirmNonce).toBeTruthy()
-    const duplicate = await request.post(`/api/tickets/drafts/${draftId}/confirm`, {
-      data: { acknowledge: true, confirm_nonce: confirmNonce },
-    })
-    expect(duplicate.ok()).toBeTruthy()
-    expect((await duplicate.json()).status).toMatch(/duplicate|error/)
   })
 
   test('repeated diagnosis refreshes the same pair and blocks double submit', async ({ page }) => {

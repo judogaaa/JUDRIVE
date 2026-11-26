@@ -5,6 +5,7 @@ import { useI18n } from '../i18n/I18nContext'
 import { formatSessionDateTime } from '../lib/formatLocale'
 import { resolveErrorMessage } from '../lib/i18nError'
 import { AnomalyTrendChart } from './AnomalyTrendChart'
+import { HelpTip } from './HelpTip'
 
 interface VehicleInsightPanelProps {
   vehicleId: string | null
@@ -113,7 +114,9 @@ export function VehicleInsightPanel({ vehicleId, onClose, onOpenDiagnosis, onOpe
             <AnomalyTrendChart points={trend} />
             {row.latest_status === 'anomaly' && !row.needs_rerecord ? (
               <section className="panel" style={{ margin: '1rem 0' }}>
-                <h4>{t('chief.recommendation.title')}</h4>
+                <h4>
+                  {t('chief.recommendation.title')} <HelpTip text={t('help.tip.quarantine')} />
+                </h4>
                 {row.quarantine_basis && <p>{row.quarantine_basis}</p>}
                 <p className="panel__subtitle">{t('chief.recommendation.hint')}</p>
                 <label className="field">

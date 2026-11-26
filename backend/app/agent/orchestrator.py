@@ -43,6 +43,7 @@ class AgentOrchestrator:
         return GroqClient(
             self._settings.groq_api_key,
             self._settings.groq_model,
+            base_url=self._settings.groq_base_url,
             max_tokens=self._settings.groq_max_tokens,
             timeout_s=self._settings.groq_timeout_s,
         )

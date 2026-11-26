@@ -27,12 +27,20 @@ SYSTEM_PROMPT = """Ты — цифровой механик JUDRIVE для ме�
 
 
 class GroqClient:
-    def __init__(self, api_key: str, model: str, *, max_tokens: int, timeout_s: float) -> None:
+    def __init__(
+        self,
+        api_key: str,
+        model: str,
+        *,
+        base_url: str = "https://api.groq.com/openai/v1",
+        max_tokens: int,
+        timeout_s: float,
+    ) -> None:
         self._api_key = api_key
         self._model = model
         self._max_tokens = max_tokens
         self._timeout_s = timeout_s
-        self._base = "https://api.groq.com/openai/v1"
+        self._base = base_url.rstrip("/")
 
     async def run_with_tools(
         self,

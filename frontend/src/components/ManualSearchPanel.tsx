@@ -5,6 +5,7 @@ import type { ManualSearchIntent } from '../lib/workflow'
 import { useI18n } from '../i18n/I18nContext'
 import { resolveErrorMessage } from '../lib/i18nError'
 import { CopyButton } from './CopyButton'
+import { HelpTip } from './HelpTip'
 import { SourceDrawer } from './SourceDrawer'
 
 interface ManualSearchPanelProps {
@@ -157,7 +158,9 @@ export function ManualSearchPanel({ engineModel, searchIntent, onSearchIntentCon
 
       {refusal ? (
         <div className="manual-refusal" role="status">
-          <strong>{t('manual.refusalTitle')}</strong>
+          <strong>
+            {t('manual.refusalTitle')} <HelpTip text={t('help.tip.noSource')} />
+          </strong>
           {locale === 'ru' && payload?.message ? <p>{payload.message}</p> : null}
           {canOfferGeneral ? (
             <button

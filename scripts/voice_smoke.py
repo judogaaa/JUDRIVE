@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import io
+import os
 import wave
 
 import httpx
 
-BASE = "http://127.0.0.1:8080"
+BASE = os.environ.get("JUDRIVE_API_BASE", "http://127.0.0.1:8090")
 
 
 def make_silent_wav(seconds: float = 0.4) -> bytes:

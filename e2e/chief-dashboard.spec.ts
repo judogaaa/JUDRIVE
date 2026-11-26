@@ -42,5 +42,7 @@ test.describe('Chief mechanic auth and filters', () => {
     await expect(categorySelect).toHaveValue('attention')
     await page.locator('.chief-tabs').getByRole('button', { name: 'Транспорт' }).click()
     await expect(categorySelect).toBeVisible()
+    // A chief recommendation must never be labelled as an operational quarantine.
+    await expect(page.getByText('Карантин (подтверждено)')).toHaveCount(0)
   })
 })

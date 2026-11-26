@@ -61,6 +61,16 @@ frontend/src/{app,components,features,api,i18n,styles}, backend/app/{main,config
 
 `GET /api/fleet/dashboard` и `GET /api/fleet/vehicles/{id}/insight` требуют HttpOnly-сессию. Логин `POST /api/auth/login` сверяет имя и PBKDF2-хеш из окружения, ограничивает попытки и не имеет пароля по умолчанию. Диагностика, RAG и заявки остаются без этой сессии.
 
+## Обучение и центр помощи
+
+Обучение и справка — независимый frontend-модуль, не связанный с бизнес-логикой диагностики:
+`frontend/src/help/content.ts` (типизированные шаги/карточки/FAQ), `hooks/useOnboarding.ts`
+(версионированный `localStorage`), `components/Onboarding.tsx` (модальное окно с
+focus trap) и `views/HelpView.tsx` (поиск, карточки, FAQ, язык/тема, повторный запуск).
+Карточки помощи переиспользуют content обучения, поэтому инструкции не расходятся.
+Тексты входят в общий i18n-каталог (397 ключей × 7); LLM и сеть не используются.
+Закрытые данные chief остаются за серверной сессией: help/onboarding их не запрашивают.
+
 ## Стартовые соглашения реализации
 
 Браузер работает только с нашим `/api` (Vite proxy в dev, один origin на стенде). Этап 01: `/api/health`, `/api/vehicles`, `POST /api/diagnose` с валидируемой парой IDs. `PDF_DIR=materials/manuals`, `DB_PATH=local-data/judrive.sqlite`, `FLEET_DATA_PATH=vendor/neurodvs_mock/data/vehicles.json` — пути относительно корня проекта либо абсолютные; не зависеть от случайной текущей директории. Заглушки используют свой `MOCK_DATA_PATH`. Не требовать ключ Groq и PDF для локальной загрузки парка и получения статусов на этапе 01; готовность AI/RAG проверять отдельно. Один worker ТОиР; локальный UUID и журнал разграничивают рестарты, не переписывать поставщика.

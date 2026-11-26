@@ -22,7 +22,8 @@ export function ChiefMechanicView({ onOpenDiagnosis, onOpenTickets }: ChiefMecha
 
   const categoryLabel = (row: VehicleFleetRow) => {
     if (row.category === 'quarantine') {
-      return row.quarantine_confirmed ? t('chief.cat.quarantineConfirmed') : t('chief.cat.quarantineRec')
+      // A recommendation is never presented as an operational quarantine.
+      return t('chief.cat.quarantineRec')
     }
     if (row.category === 'attention') return t('chief.cat.attention')
     return t('chief.cat.normal')
@@ -291,7 +292,7 @@ export function ChiefMechanicView({ onOpenDiagnosis, onOpenTickets }: ChiefMecha
                   <option value="">{t('chief.filter.all')}</option>
                   <option value="normal">{t('chief.cat.normal')}</option>
                   <option value="attention">{t('chief.cat.attention')}</option>
-                  <option value="quarantine">{t('chief.cat.quarantine')}</option>
+                  <option value="quarantine">{t('chief.cat.quarantineRec')}</option>
                 </select>
               </label>
               <label className="field">

@@ -26,6 +26,7 @@ export interface VehicleFleetRow {
   category_reason: string
   needs_rerecord: boolean
   quarantine_basis: string | null
+  quarantine_recommended: boolean
   quarantine_confirmed: boolean
   early_warnings: EarlyWarning[]
   ticket_id: string | null

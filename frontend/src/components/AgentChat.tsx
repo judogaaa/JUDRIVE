@@ -16,6 +16,7 @@ import { SourceDrawer } from './SourceDrawer'
 import { TicketDraftCard } from './TicketDraftCard'
 import { VoiceCapture } from './VoiceCapture'
 import { CopyButton } from './CopyButton'
+import { MessageText } from './MessageText'
 import { manualTopic, usableStatus, type ChatIntent } from '../lib/workflow'
 
 interface AgentChatProps {
@@ -289,7 +290,7 @@ export function AgentChat({
         {messages.map((message) => (
           <article key={message.id} className={`chat-bubble chat-bubble--${message.role}`}>
             <p className="chat-bubble__role">{message.role === 'user' ? t('chat.roleUser') : t('chat.roleAgent')}</p>
-            <p className="chat-bubble__text">{message.content}</p>
+            <MessageText text={message.content} />
             {message.sources?.length ? (
               <details className="evidence-panel" open>
                 <summary>{t('source.eyebrow')}</summary>

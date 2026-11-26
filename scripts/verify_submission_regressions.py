@@ -85,12 +85,16 @@ def main():
                 check("chief explicit confirmation required", client.post(endpoint, json={**recommendation, "acknowledge": False}).status_code == 400)
                 check("chief stale pair refused", client.post(endpoint, json={**recommendation, "session_id": "S-0008"}).status_code == 409)
                 check("chief recommendation saved", client.post(endpoint, json=recommendation).json()["vehicle"]["category"] == "quarantine")
-                check("manual recommendation is confirmed, not automatic",
-                      client.get("/api/fleet/vehicles/B418HK98/insight").json()["vehicle"]["quarantine_confirmed"] is True)
+                recommended = client.get("/api/fleet/vehicles/B418HK98/insight").json()["vehicle"]
+                check("recommendation is flagged as recommendation", recommended["quarantine_recommended"] is True)
+                check("recommendation is not an operational quarantine", recommended["quarantine_confirmed"] is False)
+                check("recommendation tied to exact latest session",
+                      backend.app_repo.quarantine_recommendation("B418HK98", "S-0008") is None)
                 check("dashboard uses recommendation", client.get("/api/fleet/dashboard").json()["summary"]["quarantine"] == 1)
                 check("chief cancellation does not mark as normal", client.post(endpoint, json={**recommendation, "active": False}).json()["vehicle"]["category"] == "attention")
-                check("cancelled recommendation is not confirmed",
-                      client.get("/api/fleet/vehicles/B418HK98/insight").json()["vehicle"]["quarantine_confirmed"] is False)
+                cancelled = client.get("/api/fleet/vehicles/B418HK98/insight").json()["vehicle"]
+                check("cancelled recommendation is not active", cancelled["quarantine_recommended"] is False)
+                check("cancelled recommendation is not operational", cancelled["quarantine_confirmed"] is False)
                 check("chief logout", client.post("/api/auth/logout").status_code == 200 and client.get("/api/fleet/dashboard").status_code == 401)
                 cid = client.post("/api/conversations", json={"vehicle_id": "P456AT178", "session_id": "S-0003"}).json()["conversation_id"]
                 replies = []

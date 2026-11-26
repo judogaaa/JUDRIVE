@@ -159,6 +159,7 @@ def _classify_vehicle(
     category: str = "normal"
     reason = "Последняя проверка: норма"
     quarantine_basis: str | None = None
+    quarantine_recommended = False
     needs_rerecord = latest.get("status") == "check_failed" or latest.get("signal_quality") == "bad"
     ticket_id = high_ticket.get("ticket_id") if high_ticket else None
 
@@ -176,6 +177,7 @@ def _classify_vehicle(
 
     if quarantine and latest.get("status") == "anomaly" and not needs_rerecord:
         category = "quarantine"
+        quarantine_recommended = True
         quarantine_basis = quarantine["reason"]
         reason = quarantine_basis
 
@@ -195,7 +197,10 @@ def _classify_vehicle(
     elif band == "medium":
         priority += 40
 
-    confirmed = bool(quarantine and category == "quarantine")  # Saved only after a chief's explicit acknowledgement.
+    # A chief recommendation is not an operational quarantine. The product has
+    # no confirmed quarantine workflow, so this flag stays false until a real
+    # operational action exists.
+    confirmed = False
     return VehicleFleetRow(
         vehicle_id=vehicle["vehicle_id"],
         garage_no=vehicle["garage_no"],
@@ -217,6 +222,7 @@ def _classify_vehicle(
         category_reason=reason,
         needs_rerecord=needs_rerecord,
         quarantine_basis=quarantine_basis,
+        quarantine_recommended=quarantine_recommended,
         quarantine_confirmed=confirmed,
         early_warnings=warnings,
         ticket_id=ticket_id,

@@ -67,7 +67,10 @@ def test_quarantine_not_from_single_normal(client: TestClient):
     assert resp.status_code == 200
     payload = resp.json()
     for row in payload["vehicles"]:
+        # A recommendation is never exposed as an operational quarantine.
+        assert row["quarantine_confirmed"] is False
         if row["category"] == "quarantine":
+            assert row["quarantine_recommended"] is True
             assert row["quarantine_basis"] or row["ticket_id"]
         if row["latest_status"] == "normal" and row["signal_quality"] == "good":
             assert row["category"] != "quarantine"

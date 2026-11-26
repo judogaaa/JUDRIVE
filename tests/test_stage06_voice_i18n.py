@@ -1,4 +1,5 @@
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -52,6 +53,17 @@ def test_core_locale_strings_are_translated_not_fallback():
             assert any("\u0900" <= char <= "\u097f" for char in data[name]["chat.title"])
         if name == "bn":
             assert any("\u0980" <= char <= "\u09ff" for char in data[name]["chat.title"])
+
+
+def test_locale_values_have_no_placeholder_or_mojibake_artifacts():
+    i18n = ROOT / "frontend" / "src" / "i18n" / "locales"
+    for name in ("ru", "uz", "kk", "tg", "ky", "hi", "bn"):
+        data = json.loads((i18n / f"{name}.json").read_text(encoding="utf-8"))
+        for key, value in data.items():
+            text = str(value)
+            assert not re.search(r"__[^_]{1,10}__", text), f"{name}/{key} leaked a translation placeholder: {text!r}"
+            assert "\ufffd" not in text, f"{name}/{key} contains replacement characters: {text!r}"
+            assert "Ð" not in text, f"{name}/{key} contains mojibake: {text!r}"
 
 
 def test_chat_accepts_locale_field():

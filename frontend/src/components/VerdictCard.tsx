@@ -4,6 +4,7 @@ import { useI18n } from '../i18n/I18nContext'
 import type { TranslationKey } from '../i18n/translations'
 import { formatMetric } from '../lib/verdict'
 import { usableStatus } from '../lib/workflow'
+import { HelpTip } from './HelpTip'
 import { VerdictActions, type VerdictActionsProps } from './VerdictActions'
 
 interface VerdictCardProps {
@@ -125,7 +126,9 @@ export function VerdictCard({ result, loading, error, vehicleId, actions, onRetr
         <>
           {result.description ? (
             <dl className="verdict-card__reason">
-              <dt>{t('verdict.failed.reason')}</dt>
+              <dt>
+                {t('verdict.failed.reason')} <HelpTip text={t('help.tip.failed')} />
+              </dt>
               <dd>{result.description}</dd>
             </dl>
           ) : null}
@@ -146,7 +149,9 @@ export function VerdictCard({ result, loading, error, vehicleId, actions, onRetr
               <dd>{signalLabel(result.signal_quality)}</dd>
             </div>
             <div>
-              <dt>{t('verdict.confidence')}</dt>
+              <dt>
+                {t('verdict.confidence')} <HelpTip text={t('help.tip.confidence')} />
+              </dt>
               <dd>{formatMetric(result.confidence)}</dd>
             </div>
             {effective === 'anomaly' ? (
@@ -155,7 +160,7 @@ export function VerdictCard({ result, loading, error, vehicleId, actions, onRetr
                 <dd>
                   {result.anomaly_type} — {result.anomaly_title}
                   <span className="verdict-card__metric-sub">
-                    {t('verdict.score')}: {formatMetric(result.anomaly_score)}
+                    {t('verdict.score')}: {formatMetric(result.anomaly_score)} <HelpTip text={t('help.tip.score')} />
                   </span>
                 </dd>
               </div>

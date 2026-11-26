@@ -1,10 +1,10 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
-import { Activity, BookOpen, Bus, Check, ClipboardList, ChevronDown, Globe, LayoutDashboard, Monitor, Moon, Sun, Truck } from 'lucide-react'
+import { Activity, BookOpen, Bus, Check, ChevronDown, CircleHelp, ClipboardList, Globe, LayoutDashboard, Monitor, Moon, Sun, Truck } from 'lucide-react'
 import type { ThemeMode } from '../../hooks/useTheme'
 import { useI18n } from '../../i18n/I18nContext'
 import type { LocaleCode } from '../../i18n/translations'
 
-export type AppView = 'diagnosis' | 'chief' | 'fleet' | 'tickets' | 'manuals'
+export type AppView = 'diagnosis' | 'chief' | 'fleet' | 'tickets' | 'manuals' | 'help'
 
 interface WorkspaceShellProps {
   view: AppView
@@ -146,6 +146,16 @@ export function WorkspaceShell({ view, onViewChange, themeMode, onThemeChange, c
               </ul>
             ) : null}
           </div>
+
+          <button
+            type="button"
+            className="icon-btn shell-help-mobile"
+            aria-label={t('nav.help')}
+            title={t('nav.help')}
+            onClick={() => onViewChange('help')}
+          >
+            <CircleHelp size={18} aria-hidden />
+          </button>
         </div>
       </header>
 
@@ -176,6 +186,16 @@ export function WorkspaceShell({ view, onViewChange, themeMode, onThemeChange, c
               {label}
             </button>
           ))}
+          <div className="shell-nav__footer">
+            <button
+              type="button"
+              className={view === 'help' ? 'nav-item nav-item--active' : 'nav-item'}
+              onClick={() => onViewChange('help')}
+            >
+              <CircleHelp size={18} aria-hidden />
+              {t('nav.help')}
+            </button>
+          </div>
         </nav>
         <main className="shell-main">{children}</main>
       </div>

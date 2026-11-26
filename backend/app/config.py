@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     api_prefix: str = "/api"
 
     groq_api_key: str | None = None
+    groq_base_url: str = "https://api.groq.com/openai/v1"
     groq_model: str = "openai/gpt-oss-120b"
     groq_max_tokens: int = 1200
     groq_timeout_s: float = 60.0

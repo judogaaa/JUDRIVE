@@ -41,6 +41,7 @@ class VehicleFleetRow(BaseModel):
     category_reason: str
     needs_rerecord: bool = False
     quarantine_basis: str | None = None
+    quarantine_recommended: bool = False
     quarantine_confirmed: bool = False
     early_warnings: list[EarlyWarning] = Field(default_factory=list)
     ticket_id: str | None = None
