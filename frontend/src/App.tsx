@@ -113,7 +113,7 @@ export default function App() {
 
   return (
     <>
-      <WorkspaceShell view={view} onViewChange={setView} themeMode={themeMode} onThemeChange={setThemeMode}>
+      <WorkspaceShell modalOpen={onboarding.open} view={view} onViewChange={setView} themeMode={themeMode} onThemeChange={setThemeMode}>
         <div hidden={view !== 'diagnosis'}>
           <DiagnosisView
             vehicles={vehicles}

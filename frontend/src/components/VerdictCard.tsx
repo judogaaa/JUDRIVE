@@ -137,6 +137,32 @@ export function VerdictCard({ result, loading, error, vehicleId, actions, onRetr
       ) : (
         <>
           {result.description ? <p className="verdict-card__body">{result.description}</p> : null}
+          {result.signal_quality === 'warning' ? (
+            <p className="verdict-card__quality">{t('verdict.signal.warningNote')}</p>
+          ) : null}
+          {effective === 'anomaly' && result.review_priority ? (
+            <p className="verdict-card__priority">
+              <strong>{t('verdict.reviewPriority')}:</strong> {t(`ticket.urgency.${result.review_priority}`)}
+            </p>
+          ) : null}
+        </>
+      )}
+
+      {actions ? (
+        <VerdictActions
+          result={result}
+          onExplain={actions.onExplain}
+          onWhatToCheck={actions.onWhatToCheck}
+          onSearchManual={actions.onSearchManual}
+          onPrepareTicket={actions.onPrepareTicket}
+          onCopyPlan={actions.onCopyPlan}
+          onOtherSession={actions.onOtherSession}
+          onRetry={actions.onRetry}
+        />
+      ) : null}
+
+      {effective !== 'check_failed' ? (
+        <>
           <dl className="verdict-card__meta">
             {result.engine_model ? (
               <div>
@@ -166,17 +192,9 @@ export function VerdictCard({ result, loading, error, vehicleId, actions, onRetr
               </div>
             ) : null}
           </dl>
-          {result.signal_quality === 'warning' ? (
-            <p className="verdict-card__quality">{t('verdict.signal.warningNote')}</p>
-          ) : null}
-          {effective === 'anomaly' && result.review_priority ? (
-            <p className="verdict-card__priority">
-              <strong>{t('verdict.reviewPriority')}:</strong> {t(`ticket.urgency.${result.review_priority}`)}
-            </p>
-          ) : null}
           {footnoteKey ? <p className="verdict-card__footnote">{t(footnoteKey)}</p> : null}
         </>
-      )}
+      ) : null}
 
       {steps.length ? (
         <div className="verdict-card__steps">
@@ -187,19 +205,6 @@ export function VerdictCard({ result, loading, error, vehicleId, actions, onRetr
             ))}
           </ol>
         </div>
-      ) : null}
-
-      {actions ? (
-        <VerdictActions
-          result={result}
-          onExplain={actions.onExplain}
-          onWhatToCheck={actions.onWhatToCheck}
-          onSearchManual={actions.onSearchManual}
-          onPrepareTicket={actions.onPrepareTicket}
-          onCopyPlan={actions.onCopyPlan}
-          onOtherSession={actions.onOtherSession}
-          onRetry={actions.onRetry}
-        />
       ) : null}
     </section>
   )

@@ -1299,7 +1299,7 @@ select {
 }
 
 .verdict-actions {
-  margin-top: 18px;
+  margin: 18px 0 14px;
   padding-top: 15px;
   border-top: 1px solid var(--border);
 }

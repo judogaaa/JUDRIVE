@@ -30,11 +30,11 @@ function renderBlocks(text: string): ReactNode[] {
       continue
     }
 
-    const heading = line.match(/^#{1,4}\s+(.+)$/)
+    const heading = line.match(/^#{1,4}\s+(.*)$/)
     if (heading) {
       blocks.push(
         <p key={`h-${index}`} className="chat-bubble__heading">
-          {renderInline(heading[1])}
+          {renderInline(heading[1].trim() || line.trim())}
         </p>,
       )
       index += 1

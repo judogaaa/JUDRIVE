@@ -105,3 +105,17 @@ test.describe('Targeted regressions after 02f96dd', () => {
     await expect(run).toBeEnabled({ timeout: 30_000 })
   })
 })
+
+test('model Markdown with an empty heading renders safely without hanging', async ({ page }) => {
+  await page.route('**/api/conversations/*/messages', (route) => route.fulfill({
+    status: 200, contentType: 'application/json',
+    body: JSON.stringify({ reply: '# \n## \n**Проверка завершена**\n<img src=x onerror=alert(1)>', sources: [], tool_trace: [], draft: null }),
+  }))
+  await page.goto('/')
+  await selectVehicleSession(page, 'B418HK98', 'S-0009')
+  await runDiagnosis(page)
+  await expect(page.locator('.verdict-card--anomaly')).toBeVisible()
+  await page.locator('.verdict-actions').getByRole('button', { name: 'Объяснить результат' }).click()
+  await expect(page.locator('.chat-bubble__text strong').filter({ hasText: 'Проверка завершена' })).toBeVisible()
+  await expect(page.locator('.chat-bubble__text img')).toHaveCount(0)
+})

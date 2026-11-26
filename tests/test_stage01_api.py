@@ -17,7 +17,7 @@ def test_vehicles_endpoint():
     assert len(vehicles) == 50
 
 
-def test_vehicle_diagnosis_history_public():
+def test_vehicle_diagnosis_history_public(monkeypatch):
     client = TestClient(app)
     vehicles = client.get("/api/vehicles").json()["vehicles"]
     vid = vehicles[0]["vehicle_id"]
@@ -26,5 +26,13 @@ def test_vehicle_diagnosis_history_public():
     body = response.json()
     assert body["vehicle_id"] == vid
     assert isinstance(body["trend_points"], list)
+    from app.config import get_settings
+    from app.auth.chief_session import hash_password
+    cfg = get_settings().model_copy(update={"chief_username": "test-chief",
+        "chief_password_hash": hash_password("test-only-password", "testsalt"),
+        "session_secret": "test-only-session-secret"})
+    monkeypatch.setattr("app.main.get_settings", lambda: cfg)
     dashboard = client.get("/api/fleet/dashboard")
-    assert dashboard.status_code in (401, 403)
+    assert dashboard.status_code == 401
+    monkeypatch.setattr("app.main.get_settings", lambda: cfg.model_copy(update={"chief_username": None}))
+    assert client.get("/api/fleet/dashboard").status_code == 503

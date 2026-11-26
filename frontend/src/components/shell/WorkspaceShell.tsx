@@ -11,10 +11,11 @@ interface WorkspaceShellProps {
   onViewChange: (view: AppView) => void
   themeMode: ThemeMode
   onThemeChange: (mode: ThemeMode) => void
+  modalOpen?: boolean
   children: ReactNode
 }
 
-export function WorkspaceShell({ view, onViewChange, themeMode, onThemeChange, children }: WorkspaceShellProps) {
+export function WorkspaceShell({ view, onViewChange, themeMode, onThemeChange, modalOpen, children }: WorkspaceShellProps) {
   const { t, locale, setLocale, locales, localeLabels } = useI18n()
   const [langOpen, setLangOpen] = useState(false)
   const [themeOpen, setThemeOpen] = useState(false)
@@ -59,7 +60,7 @@ export function WorkspaceShell({ view, onViewChange, themeMode, onThemeChange, c
   const ThemeIcon = themeOptions.find((o) => o.id === themeMode)?.icon ?? Sun
 
   return (
-    <div className="shell">
+    <div className="shell" inert={modalOpen || undefined}>
       <header className="shell-top">
         <div className="shell-brand">
           <BrandIcon />

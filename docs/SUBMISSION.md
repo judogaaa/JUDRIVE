@@ -44,12 +44,13 @@ PDF и переменные окружения предоставляются о
 низкокачественный текст не считается доказательством. Лексическая проверка
 работ не гарантирует семантическую правильность; окончательное решение специалиста.
 
-## Локальная приёмка (26.11, ветка fix/submission-hardening)
+## Локальная приёмка (26–27.11, ветка fix/submission-hardening)
 
-- `pytest` 54 passed; production `npm run build` без warning о размере чанков.
-- Playwright 50 passed, **0 skipped**: включая обучение/помощь, полный вход chief
-  с локальными `E2E_CHIEF_PASSWORD`, заявки на изолированной SQLite + Mock ТОиР
-  `:8003` и детерминированном OpenAI-совместимом stub агента `:8004` (без квоты Groq).
+- Независимая приёмка: `pytest` 69 passed (включая vendor и новые регрессии); production `npm run build` без warning о размере чанков.
+- Независимый Playwright 52 passed, **0 skipped**: полностью изолированный стенд,
+  генерируемые тестовые chief credentials, Mock ML/ТОиР, отдельная SQLite и
+  детерминированный OpenAI-совместимый stub агента (без квоты Groq). C1 seed через
+  API проверяет реальный RAG, применимые PDF 33–34 и подтверждение Mock ТОиР.
 - `scripts/verify_submission_regressions.py`, `verify_rag_queries.py` 8/8, deterministic check_failed/C2 — OK; live STT smoke HTTP 200.
 - Локализация 397 ключей × 7, даты и ошибки проверены; PDF.js лениво вынесен в отдельный chunk; onboarding/help не вызывают LLM.
 - Семантика карантина: `quarantine_recommended` отделён от `quarantine_confirmed=false`; UI никогда не пишет «Карантин (подтверждено)»; pytest + E2E + submission regression.
@@ -92,5 +93,5 @@ PDF и переменные окружения предоставляются о
 ≈ $0,000711 / 0,0585 ₽ на сообщение, ≈ $0,0391 / 3,22 ₽ за весь замер.
 Excel: `submission/JUDRIVE_usage_cost_2026-11-26.xlsx`; исходный CSV —
 `submission/usage_cost.csv`; методика и ограничения — `submission/USAGE_EVIDENCE.md`.
-STT: Whisper Large v3 Turbo $0,04/час; live smoke 0,4 с ≈ 0,0004 ₽.
+STT: Whisper Large v3 Turbo $0,04/час; live smoke 0,4 с, минимально оплачиваются 10 с ≈ 0,00915 ₽.
 Инфраструктура локальная, платный сервер не использовался (0 ₽).

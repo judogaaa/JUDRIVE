@@ -58,15 +58,7 @@ export function VerdictActions({
       onClick: onCopyPlan,
     })
   } else {
-    if (effective === 'anomaly' && onPrepareTicket) {
-      actions.push({
-        id: 'prepare-ticket',
-        label: t('chat.suggest3'),
-        icon: FilePlus2,
-        onClick: onPrepareTicket,
-        primary: true,
-      })
-    } else if (onSearchManual) {
+    if (onSearchManual) {
       actions.push({
         id: 'search-manual',
         label: t('verdict.action.searchManual'),
@@ -75,12 +67,13 @@ export function VerdictActions({
         primary: true,
       })
     }
-    if (onSearchManual && !actions.some((action) => action.id === 'search-manual')) {
+    if (effective === 'anomaly' && onPrepareTicket) {
       actions.push({
-        id: 'search-manual',
-        label: t('verdict.action.searchManual'),
-        icon: BookOpen,
-        onClick: onSearchManual,
+        id: 'prepare-ticket',
+        label: t('chat.suggest3'),
+        icon: FilePlus2,
+        onClick: onPrepareTicket,
+        primary: !onSearchManual,
       })
     }
     actions.push({

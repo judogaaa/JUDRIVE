@@ -137,3 +137,19 @@ test.describe('Help center and onboarding restart', () => {
     await expect(page.getByRole('heading', { name: 'Вход главного механика' })).toBeVisible()
   })
 })
+
+test.describe('Onboarding accessibility edge cases', () => {
+  test.use({ storageState: { cookies: [], origins: [] } })
+  test('invalid persisted step recovers and background is inert', async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem('judrive-onboarding', JSON.stringify({ version: 1, status: 'in_progress', step: 1.5 })))
+    await page.goto('/')
+    const dialog = page.getByRole('dialog', { name: 'Знакомство с JUDRIVE' })
+    await expect(dialog.getByRole('heading', { name: 'Добро пожаловать в JUDRIVE' })).toBeVisible()
+    await expect(page.locator('.shell')).toHaveAttribute('inert', '')
+    for (let i = 0; i < 6; i++) await dialog.getByRole('button', { name: 'Далее' }).click()
+    await page.keyboard.press('Tab')
+    expect(await dialog.evaluate((el) => el.contains(document.activeElement))).toBeTruthy()
+    await page.keyboard.press('Escape')
+    await expect(page.locator('.shell')).not.toHaveAttribute('inert', '')
+  })
+})

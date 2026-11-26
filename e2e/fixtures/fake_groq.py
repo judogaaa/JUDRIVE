@@ -24,6 +24,13 @@ def _log(payload: dict) -> None:
         pass
 
 SCENARIOS = {
+    "S-0009": {
+        "query": "тепловые зазоры клапанного механизма",
+        "pages": [33, 34],
+        "doc_id": "y236-re",
+        "operations": ["Проверить тепловые зазоры клапанного механизма по руководству"],
+        "spare_parts": [],
+    },
     "S-0008": {
         "query": "зазор клапанного механизма регулировка",
         "pages": [255, 34],
@@ -126,7 +133,7 @@ async def chat(request: Request) -> dict:
     ]
     if search_results:
         results = search_results[-1]["results"]
-        preferred = [hit for hit in results if hit.get("pdf_page") in scenario["pages"]]
+        preferred = [hit for hit in results if hit.get("pdf_page") in scenario["pages"] and (not scenario.get("doc_id") or hit.get("doc_id") == scenario["doc_id"])]
         chosen = preferred or results[:2]
         evidence_ids = [hit["evidence_id"] for hit in chosen]
         operations = scenario["operations"] or [

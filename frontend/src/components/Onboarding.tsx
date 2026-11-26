@@ -29,6 +29,7 @@ export function Onboarding({
   const { t } = useI18n()
   const dialogRef = useRef<HTMLDivElement>(null)
   const closeRef = useRef<HTMLButtonElement>(null)
+  const headingRef = useRef<HTMLHeadingElement>(null)
   const onCloseRef = useRef(onClose)
   onCloseRef.current = onClose
 
@@ -69,6 +70,14 @@ export function Onboarding({
     }
   }, [open])
 
+  useEffect(() => {
+    // The next button can become disabled on the final slide; keep focus inside.
+    if (open && (!dialogRef.current?.contains(document.activeElement) ||
+      (document.activeElement instanceof HTMLButtonElement && document.activeElement.disabled))) {
+      headingRef.current?.focus()
+    }
+  }, [open, step])
+
   if (!open) return null
 
   const current = ONBOARDING_STEPS[step] ?? ONBOARDING_STEPS[0]
@@ -82,7 +91,7 @@ export function Onboarding({
         <header className="onboarding__head">
           <div>
             <p className="eyebrow">{t('onboarding.title')}</p>
-            <h2 id="onboarding-title">{t(current.titleKey)}</h2>
+            <h2 id="onboarding-title" ref={headingRef} tabIndex={-1}>{t(current.titleKey)}</h2>
           </div>
           <button ref={closeRef} type="button" className="icon-btn" aria-label={t('onboarding.close')} onClick={onClose}>
             <X size={18} aria-hidden />

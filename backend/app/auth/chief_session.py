@@ -69,7 +69,7 @@ def session_ok(request: Request, settings: Settings) -> bool:
     if "." not in raw:
         return False
     payload, sig = raw.rsplit(".", 1)
-    if not hmac.compare_digest(sig, _sign(settings, payload)):
+    if not hmac.compare_digest(sig.encode("utf-8"), _sign(settings, payload).encode("ascii")):
         return False
     try:
         role, exp = payload.split(":", 1)
@@ -92,12 +92,12 @@ def login(request: Request, response: Response, settings: Settings, username: st
     if _locked(key):
         raise HTTPException(status_code=429, detail="Слишком много попыток. Повторите позже.")
     stored = settings.chief_password_hash or ""
-    ok_user = hmac.compare_digest(username, settings.chief_username or "")
+    ok_user = hmac.compare_digest(username.encode("utf-8"), (settings.chief_username or "").encode("utf-8"))
     ok_pass = False
     if "$" in stored:
         salt, digest = stored.split("$", 1)
         candidate = hash_password(password, salt).split("$", 1)[1]
-        ok_pass = hmac.compare_digest(candidate, digest)
+        ok_pass = hmac.compare_digest(candidate.encode("ascii"), digest.encode("utf-8"))
     if not (ok_user and ok_pass):
         _attempts[key].append(time.time())
         raise HTTPException(status_code=401, detail="Неверное имя или пароль")

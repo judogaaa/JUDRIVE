@@ -316,7 +316,7 @@ test.describe('Final UX audit — fleet, tickets and chief', () => {
     const dialog = page.getByRole('dialog')
     await expect(dialog).toBeVisible()
     await expect(dialog.getByRole('button', { name: 'Закрыть' })).toBeVisible()
-    await expect(dialog.getByText('F01')).toBeVisible()
+    await expect(dialog.getByText('F01', { exact: true })).toBeVisible()
     const source = dialog.getByRole('button', { name: /236-3902150/ }).first()
     await expect(source).toBeVisible()
     await source.click()

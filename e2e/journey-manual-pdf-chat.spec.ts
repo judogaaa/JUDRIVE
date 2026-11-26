@@ -6,12 +6,16 @@ test.beforeAll(() => loadDotEnv())
 test.describe('Diagnosis → manual → PDF → chat', () => {
   test('anomaly context through sources', async ({ page }) => {
     test.setTimeout(120_000)
+    await page.setViewportSize({ width: 1440, height: 900 })
     await page.goto('/')
     await selectVehicleSession(page, 'B418HK98', 'S-0009')
     await runDiagnosis(page)
     await expect(page.locator('.verdict-card--anomaly')).toBeVisible({ timeout: 30_000 })
 
-    await page.getByRole('button', { name: 'Найти в руководстве' }).click()
+    const nextStep = page.locator('.verdict-actions__primary')
+    await expect(nextStep).toHaveText('Найти в руководстве')
+    await expect(nextStep).toBeInViewport({ ratio: 1 })
+    await nextStep.click()
     await expect(page.getByRole('button', { name: 'Диагностика' })).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Поиск по руководству' })).toBeVisible()
 

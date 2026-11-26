@@ -209,11 +209,23 @@ class AgentOrchestrator:
 
 
 def _is_manual_question(text: str) -> bool:
-    q = text.lower()
-    return any(token in q for token in ("руковод", "момент", "зазор", "страниц", "рэ", "рк", "manual", "pdf"))
+    q = text.casefold()
+    return any(token in q for token in (
+        "руковод", "момент", "зазор", "страниц", "рэ", "рк", "manual", "pdf",
+        "qo‘llanma", "qo'llanma", "қўлланма", "нұсқаулық", "нұсқаулы",
+        "дастур", "колдонмо", "मैनुअल", "निर्देशिका", "নির্দেশিকা", "ম্যানুয়াল",
+    ))
+
 
 def _is_drive_permission_question(text: str) -> bool:
+    # Known clearance intents across supported locales. Other phrasing remains
+    # subject to the system safety rules; this shortcut is not a classifier.
     q = text.casefold()
-    return any(term in q for term in ("перегон", "перегнать", "своим ходом", "можно ехать",
-                                     "можно ли ехать", "можно ли ездить", "допуск к эксплуатации",
-                                     "can i drive", "safe to drive", "haydash mumkin", "жүруге бола"))
+    return any(term in q for term in (
+        "перегон", "перегнать", "своим ходом", "можно ехать", "можно ли ехать",
+        "можно ли ездить", "допуск к эксплуатации", "разрешено ли ехать",
+        "can i drive", "safe to drive", "haydash mumkin", "haydasam bo‘ladimi", "haydasam bo'ladimi",
+        "жүруге бола", "жүргізуге бола", "рондан мумкин", "рондан иҷозат", "айдаса болобу",
+        "айдасам болобу", "жүрүүгө болобу", "गाड़ी चला सकता", "गाड़ी चला सकती", "वाहन चला सकता",
+        "क्या गाड़ी चला", "গাড়ি চালাতে পারি", "গাড়ি চালানো যাবে", "গাড়ি চালানো কি নিরাপদ",
+    ))

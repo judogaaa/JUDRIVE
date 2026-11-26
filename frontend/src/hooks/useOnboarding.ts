@@ -28,12 +28,14 @@ function readState(): OnboardingState {
     if (parsed.version !== VERSION) return INITIAL
     const status: OnboardingStatus =
       parsed.status === 'completed' || parsed.status === 'skipped' ? parsed.status : 'in_progress'
-    const step = Math.max(0, Math.min(LAST_STEP, Number(parsed.step) || 0))
+    const step = typeof parsed.step === 'number' && Number.isInteger(parsed.step)
+      ? Math.max(0, Math.min(LAST_STEP, parsed.step))
+      : 0
     return {
       version: VERSION,
       status,
       step,
-      acknowledged: Boolean(parsed.acknowledged),
+      acknowledged: parsed.acknowledged === true,
     }
   } catch {
     return INITIAL

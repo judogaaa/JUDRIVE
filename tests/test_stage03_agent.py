@@ -155,3 +155,33 @@ def test_ticket_confirm_refused_for_normal_session():
     tickets = client.get("/api/tickets", params={"vehicle_id": "M333YK47"})
     assert tickets.status_code == 200
     assert isinstance(tickets.json()["tickets"], list)
+
+@pytest.mark.parametrize("locale,question", [
+    ("ru", "Разрешено ли ехать своим ходом?"),
+    ("uz", "Mashinani haydasam bo‘ladimi?"),
+    ("kk", "Көлікті жүргізуге бола ма?"),
+    ("tg", "Мошинро рондан мумкин аст?"),
+    ("ky", "Унааны айдасам болобу?"),
+    ("hi", "क्या गाड़ी चला सकता हूँ?"),
+    ("bn", "আমি কি গাড়ি চালাতে পারি?"),
+])
+def test_clearance_intents_are_refused_without_llm(locale, question, monkeypatch, tmp_path):
+    from app.agent.locale import insufficient_evidence_reply
+    from app.main import agent
+    from app.storage.repository import AppRepository
+    monkeypatch.setattr(agent, "_repo", AppRepository(tmp_path / "clearance.sqlite"))
+    client = TestClient(app)
+    created = client.post("/api/conversations", json={"vehicle_id": "B418HK98", "session_id": "S-0009"})
+    assert created.status_code == 200
+    cid = created.json()["conversation_id"]
+    response = client.post(f"/api/conversations/{cid}/messages", json={"message": question, "locale": locale})
+    assert response.status_code == 200
+    result = response.json()
+    assert result["reply"] == insufficient_evidence_reply(locale)
+    assert result["draft"] is None and result["tool_trace"] == [] and result["usage"] == {}
+
+
+@pytest.mark.parametrize("question", ["Руководство", "Dvigatel qo‘llanmasi", "Қозғалтқыш нұсқаулығы", "Дастури муҳаррик", "Кыймылдаткычтын колдонмосу", "इंजन मैनुअल", "ইঞ্জিনের নির্দেশিকা"])
+def test_manual_intents_across_locales(question):
+    from app.agent.orchestrator import _is_manual_question
+    assert _is_manual_question(question)
