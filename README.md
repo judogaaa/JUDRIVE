@@ -21,7 +21,8 @@ AI-powered engine diagnostics and intelligent fleet management platform.
 9. [docs/SOURCES.md](docs/SOURCES.md) — состав исходных материалов и порядок их подключения.
 10. [docs/ORGANIZER_QA.md](docs/ORGANIZER_QA.md) — полный конспект 24 вопросов, брифинга и регламента.
 11. [docs/SOURCE_MANIFEST.json](docs/SOURCE_MANIFEST.json) — контрольные SHA-256 оригиналов и заглушек.
-12. [vendor/neurodvs_mock/](vendor/neurodvs_mock/) — оригинальные заглушки, OpenAPI, тесты и синтетический набор заказчика.
+12. [docs/REGULATION.md](docs/REGULATION.md) — актуальная система отбора, оценки и сдачи; оставшиеся материалы.
+13. [vendor/neurodvs_mock/](vendor/neurodvs_mock/) — оригинальные заглушки, OpenAPI, тесты и синтетический набор заказчика.
 
 ## Планируемые возможности
 
