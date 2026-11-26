@@ -8,11 +8,11 @@ AI-powered engine diagnostics and intelligent fleet management platform.
 
 **26.11.2026 — этапы 01–03 готовы.** Mock ML, FTS5/RAG, Groq-агент с tools и подтверждёнными заявками ТОиР. UI-полировка — этап 04+.
 
-## Локальный запуск (этапы 01–02)
+## Локальный запуск (этапы 01–03)
 
 Требования: Python 3.11+ (проверено на 3.14), Node.js LTS, UTF-8 в терминале Windows.
 
-1. Скопируйте `.env.example` в `.env` при необходимости (значения по умолчанию совпадают).
+1. Скопируйте `.env.example` в `.env`; для чата добавьте `GROQ_API_KEY` (только локально, файл в `.gitignore`).
 2. **PDF (этап 02):** положите шесть оригиналов в `materials/manuals/` (папка в `.gitignore`) по [docs/SOURCES.md](docs/SOURCES.md). Быстрое копирование, если файлы уже в `Documents`:
 
 ```powershell
@@ -50,11 +50,13 @@ npm install
 npm run dev
 ```
 
-Откройте `http://127.0.0.1:5173`. Health: `GET /api/health` — `mock_ml`, `mock_toir`, `manuals_index` (при подключённых PDF).
+Откройте `http://127.0.0.1:5173`. Health: `GET /api/health` — `mock_ml`, `mock_toir`, `manuals_index`, `groq_agent` (при подключённых PDF и ключе Groq).
 
-**RAG API (без LLM):** `POST /api/manuals/search` `{ "engine_model": "ЯМЗ-236М2", "query": "..." }`, `GET /api/sources/evidence/{id}`, `GET /api/sources/pdf/{doc_id}`.
+**RAG API:** `POST /api/manuals/search`, `GET /api/sources/evidence/{id}`, `GET /api/sources/pdf/{doc_id}`.
 
-Переиндексация вручную: `backend\.venv\Scripts\python.exe scripts\build_manual_index.py` (флаг `--force` — принудительно). Контрольные запросы: `scripts\verify_rag_queries.py`.
+**Агент (этап 03):** `POST /api/conversations` `{ vehicle_id, session_id }`, `POST /api/conversations/{id}/messages`, `POST /api/tickets/drafts/{id}/confirm` с `acknowledge: true`.
+
+Переиндексация: `scripts\build_manual_index.py`. Контроль RAG: `scripts\verify_rag_queries.py`. Контроль агента (live Groq + mocks): `backend\.venv\Scripts\python.exe scripts\verify_agent_scenarios.py`.
 
 **Groq (этап 03):** добавьте `GROQ_API_KEY` в локальный `.env` (см. `.env.example`, в Git не коммитить). После смены кода перезапускайте backend с `--reload`. Чат в UI; сценарии: `backend\.venv\Scripts\python.exe scripts\verify_agent_scenarios.py`.
 
@@ -65,7 +67,7 @@ cd backend
 .\.venv\Scripts\Activate.ps1
 pip install -r ..\tests\requirements-dev.txt
 cd ..
-pytest -q tests/test_stage01_api.py tests/test_stage01_fleet.py tests/test_stage02_rag.py
+pytest -q tests/
 ```
 
 Параметрические вызовы Mock ML в `test_stage01_fleet.py` выполняются только если заглушка на порту 8001 уже запущена.

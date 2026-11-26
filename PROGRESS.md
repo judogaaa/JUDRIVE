@@ -1,6 +1,6 @@
 # Текущее состояние JUDRIVE
 
-Дата фиксации: 26.11.2026. Этапы 01–02 выполнены в рабочей копии репозитория.
+Дата фиксации: 26.11.2026. Этапы 01–03 выполнены в рабочей копии репозитория.
 
 ## Что действительно сделано
 
@@ -61,7 +61,8 @@
 
 - `pytest` 23 passed; `npm run build`.
 - Pipeline B418 (tools+RAG+TKT) при запущенных mock и PDF.
-- `scripts/verify_agent_scenarios.py` — три пары ACCEPTANCE + Groq (при ключе в `.env`).
+- `scripts/verify_agent_scenarios.py` — **3/3 OK** с live Groq (26.11): normal / anomaly+черновик / check_failed без заявки.
+- Токены прогона сценариев: prompt 8541, completion 1434, total 9975; в SQLite `groq_usage` Σ total_tokens=11501 (4 записи).
 
 ### Ограничения
 
