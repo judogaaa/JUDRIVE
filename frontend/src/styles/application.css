@@ -3796,3 +3796,6 @@ select {
 .chat-citation:disabled { opacity: .55; cursor: wait; }
 .chat-bubble__text { overflow-wrap: anywhere; }
 .ticket-review .chat-bubble__text { white-space: normal; }
+
+.chat-attached-source { align-items: center; justify-content: space-between; flex-wrap: nowrap; margin-bottom: 8px; }
+.chat-attached-source > span { min-width: 0; overflow-wrap: anywhere; }

@@ -248,3 +248,38 @@ def test_chat_rejects_missing_and_other_engine_source(monkeypatch, tmp_path):
         assert response.status_code == 422
 
     assert client.get(url).json()["messages"] == []
+
+
+def test_valid_attached_page_is_grounded_and_cannot_prepare_ticket(monkeypatch, tmp_path):
+    from app.main import agent
+    from app.storage.repository import AppRepository
+
+    monkeypatch.setattr(agent, "_repo", AppRepository(tmp_path / "attachment-valid.sqlite"))
+    page = {"evidence_id": "y236-re:p0033", "doc_id": "y236-re",
+            "manual_title": "Руководство ЯМЗ-236", "pdf_page": 33,
+            "quote": "Проверьте зазор клапанного механизма.", "extraction": "poppler-layout"}
+    monkeypatch.setattr(agent._rag, "get_evidence", lambda evidence_id, **kwargs: page if evidence_id == page["evidence_id"] else None)
+
+    async def diagnose(vehicle_id, session_id):
+        return _diag(vehicle_id=vehicle_id, session_id=session_id, status="anomaly",
+                     anomaly_type="F01", engine_model="ЯМЗ-236М2")
+
+    class Provider:
+        async def run_with_tools(self, messages, tools, execute, *, max_steps):
+            assert any(page["evidence_id"] in row.get("content", "") for row in messages)
+            assert not any("затем подготовь черновик через prepare_defect_ticket" in row.get("content", "") for row in messages)
+            assert (await execute("prepare_defect_ticket", {}))["status"] == "refused"
+            return "Проверьте зазор клапанного механизма. [y236-re:p0033]", [], {}
+
+    monkeypatch.setattr(agent._mock_ml, "diagnose", diagnose)
+    monkeypatch.setattr(agent, "_groq", lambda: Provider())
+    client = TestClient(app)
+    created = client.post("/api/conversations", json={"vehicle_id": "B418HK98", "session_id": "S-0009"})
+    assert created.status_code == 200
+    url = f"/api/conversations/{created.json()['conversation_id']}/messages"
+    reply = client.post(url, json={"message": "Объясни страницу", "evidence_id": page["evidence_id"], "action": "prepare_ticket"})
+    assert reply.status_code == 200
+    body = reply.json()
+    assert body["draft"] is None
+    assert body["sources"][0]["evidence_id"] == page["evidence_id"]
+    assert "[y236-re:p0033]" in body["reply"]

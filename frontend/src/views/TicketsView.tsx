@@ -93,13 +93,24 @@ export function TicketsView({ isVisible, filterVehicleId, linkedTicketId, onLink
   }, [filterVehicleId, onFilterConsumed])
 
   useEffect(() => {
-    if (!isVisible) return
+    if (!isVisible || filterVehicleId) return
     let cancelled = false
     setLoading(true)
     setError(null)
     fetchTickets(vehicleFilter || undefined)
       .then((rows) => {
-        if (!cancelled) setTickets(rows)
+        if (cancelled) return
+        setTickets(rows)
+        if (linkedTicketId) {
+          const linked = rows.find((row) => row.ticket_id === linkedTicketId)
+          if (!linked) {
+            selectTicket(null)
+            setError(`${linkedTicketId}: ${t('tickets.noPayload')}`)
+            return
+          }
+          selectTicket(linked.local_id)
+          onLinkedTicketConsumed?.()
+        }
       })
       .catch((err: unknown) => {
         if (!cancelled) setError(resolveErrorMessage(t, err, 'error.tickets'))
@@ -110,7 +121,7 @@ export function TicketsView({ isVisible, filterVehicleId, linkedTicketId, onLink
     return () => {
       cancelled = true
     }
-  }, [retry, t, vehicleFilter, isVisible])
+  }, [retry, t, vehicleFilter, isVisible, filterVehicleId])
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -192,14 +203,7 @@ export function TicketsView({ isVisible, filterVehicleId, linkedTicketId, onLink
     }
   }
 
-  useEffect(() => {
-    if (!linkedTicketId || !isVisible || loading || error || filterVehicleId) return
-    const linked = tickets.find((row) => row.ticket_id === linkedTicketId)
-    if (linked) selectTicket(linked.local_id)
-    onLinkedTicketConsumed?.()
-  }, [error, filterVehicleId, isVisible, linkedTicketId, loading, onLinkedTicketConsumed, tickets])
-
-  const open = tickets.find((row) => row.local_id === openId) ?? null
+  const open = !loading && !error ? tickets.find((row) => row.local_id === openId) ?? null : null
   const payload = parsePayload(open?.payload_snapshot ?? null)
 
   return (
@@ -438,7 +442,7 @@ export function TicketsView({ isVisible, filterVehicleId, linkedTicketId, onLink
           </aside>
         </div>
       ) : null}
-      <SourceDrawer hit={source} onClose={() => setSource(null)} />
+      <SourceDrawer hit={isVisible ? source : null} onClose={() => setSource(null)} />
     </>
   )
 }

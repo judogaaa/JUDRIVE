@@ -13,7 +13,7 @@ interface FleetViewProps {
   fleetError: string | null
   onRetryFleet?: () => void
   onOpenDiagnosis: (vehicleId: string, sessionId?: string) => void
-  onOpenManuals?: (engine: string) => void
+  onOpenManuals?: (vehicle: VehicleSummary) => void
   onOpenTickets?: (vehicleId: string) => void
 }
 
@@ -311,7 +311,7 @@ export function FleetView({ vehicles, fleetError, onRetryFleet, onOpenDiagnosis,
                 <ArrowRight size={18} aria-hidden />
               </button>
               {onOpenManuals && (
-                <button type="button" className="btn btn--secondary" onClick={() => onOpenManuals(active.engine_model)}>
+                <button type="button" className="btn btn--secondary" onClick={() => onOpenManuals(active)}>
                   {t('nav.manuals')}
                 </button>
               )}

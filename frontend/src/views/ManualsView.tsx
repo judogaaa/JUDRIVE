@@ -15,17 +15,19 @@ interface CatalogDoc {
 
 interface ManualsViewProps {
   engineModel: string | null
+  isVisible: boolean
   chatEngineModel: string | null
+  chatTargetLabel?: string
   searchIntent?: ManualSearchIntent | null
   onSearchIntentConsumed?: () => void
-  onAskInChat?: (text: string, engine: string, evidenceId: string) => void
+  onAskInChat?: (text: string, engine: string, evidenceId: string, evidenceLabel: string) => void
   onBack?: () => void
   backLabel?: string
 }
 
 const FAV_KEY = 'judrive-manual-fav'
 
-export function ManualsView({ engineModel, chatEngineModel, searchIntent, onSearchIntentConsumed, onAskInChat, onBack, backLabel }: ManualsViewProps) {
+export function ManualsView({ engineModel, isVisible, chatEngineModel, chatTargetLabel, searchIntent, onSearchIntentConsumed, onAskInChat, onBack, backLabel }: ManualsViewProps) {
   const { t } = useI18n()
   const [engines, setEngines] = useState<{ engine_model: string; documents: CatalogDoc[] }[]>([])
   const [catalogLoading, setCatalogLoading] = useState(true)
@@ -65,6 +67,8 @@ export function ManualsView({ engineModel, chatEngineModel, searchIntent, onSear
       controller.abort()
     }
   }, [catalogRevision])
+
+  useEffect(() => { if (!isVisible) setOpen(null) }, [isVisible])
 
   const allDocs = useMemo(() => {
     const byId = new Map<string, CatalogDoc & { engines: string[] }>()
@@ -231,13 +235,15 @@ export function ManualsView({ engineModel, chatEngineModel, searchIntent, onSear
       </section>
 
       <ManualSearchPanel
+        isVisible={isVisible}
+        chatTargetLabel={chatTargetLabel}
         engineModel={(searchIntent?.engineModel ?? engine) || null}
         searchIntent={searchIntent}
         onSearchIntentConsumed={onSearchIntentConsumed}
         onAskInChat={engine === chatEngineModel ? onAskInChat : undefined}
         onRecentChange={setRecent}
       />
-      <SourceDrawer hit={open} onClose={() => setOpen(null)} onRecentChange={setRecent} />
+      <SourceDrawer hit={isVisible ? open : null} onClose={() => setOpen(null)} onRecentChange={setRecent} />
     </div>
   )
 }

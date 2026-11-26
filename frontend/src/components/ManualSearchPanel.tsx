@@ -11,9 +11,11 @@ import { SourceDrawer } from './SourceDrawer'
 
 interface ManualSearchPanelProps {
   engineModel: string | null
+  isVisible?: boolean
+  chatTargetLabel?: string
   searchIntent?: ManualSearchIntent | null
   onSearchIntentConsumed?: () => void
-  onAskInChat?: (text: string, engine: string, evidenceId: string) => void
+  onAskInChat?: (text: string, engine: string, evidenceId: string, evidenceLabel: string) => void
   onRecentChange?: (pages: RecentPage[]) => void
 }
 
@@ -25,7 +27,7 @@ const QUICK_QUERIES = [
 
 const GENERAL_INSPECTION_QUERY = 'осмотр двигателя техническое обслуживание'
 
-export function ManualSearchPanel({ engineModel, searchIntent, onSearchIntentConsumed, onAskInChat, onRecentChange }: ManualSearchPanelProps) {
+export function ManualSearchPanel({ engineModel, isVisible = true, chatTargetLabel, searchIntent, onSearchIntentConsumed, onAskInChat, onRecentChange }: ManualSearchPanelProps) {
   const { locale, t } = useI18n()
   const [query, setQuery] = useState(searchIntent?.query ?? '')
   const [loading, setLoading] = useState(false)
@@ -35,6 +37,9 @@ export function ManualSearchPanel({ engineModel, searchIntent, onSearchIntentCon
   const lastIntentRef = useRef<number | null>(null)
   const requestRef = useRef<AbortController | null>(null)
   const mountedRef = useRef(true)
+  const visibleRef = useRef(isVisible)
+  visibleRef.current = isVisible
+  useEffect(() => { if (!isVisible) setActive(null) }, [isVisible])
   const lastEngineRef = useRef(engineModel)
 
   useEffect(() => {
@@ -78,7 +83,7 @@ export function ManualSearchPanel({ engineModel, searchIntent, onSearchIntentCon
         const result = await searchManuals(engineModel, q.trim(), 6, request.signal)
         if (!mountedRef.current || request.signal.aborted) return
         setPayload(result)
-        if (autoOpenSingle && result.status === 'ok' && result.results.length === 1) {
+        if (visibleRef.current && autoOpenSingle && result.status === 'ok' && result.results.length === 1) {
           setActive(result.results[0])
         }
       } catch (err: unknown) {
@@ -111,6 +116,7 @@ export function ManualSearchPanel({ engineModel, searchIntent, onSearchIntentCon
         <div>
           <h2 className="panel__title">{t('manual.title')}</h2>
           <p className="panel__subtitle">{hint}</p>
+          {onAskInChat && chatTargetLabel && <p className="panel__subtitle manual-chat-target">{t('action.toChat')} · {t('diag.vehicle')}: {chatTargetLabel}</p>}
         </div>
       </div>
 
@@ -208,6 +214,7 @@ export function ManualSearchPanel({ engineModel, searchIntent, onSearchIntentCon
                         `${t('action.askSource')}\n${hit.manual_title}, ${t('ticket.pdfPage')} ${hit.pdf_page}`,
                         engineModel,
                         hit.evidence_id,
+                        `${hit.manual_title}, ${t('ticket.pdfPage')} ${hit.pdf_page}`,
                       )
                     }
                   >
@@ -220,7 +227,7 @@ export function ManualSearchPanel({ engineModel, searchIntent, onSearchIntentCon
         </ul>
       ) : null}
 
-      <SourceDrawer hit={active} onClose={() => setActive(null)} onRecentChange={onRecentChange} />
+      <SourceDrawer hit={isVisible ? active : null} onClose={() => setActive(null)} onRecentChange={onRecentChange} />
     </section>
   )
 }

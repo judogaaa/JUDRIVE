@@ -29,6 +29,14 @@ test.describe('Ticket draft → confirm → journal', () => {
     })
 
     await page.goto('/')
+    // Visit the same filtered journal before creating a new ticket. A stale
+    // cached list must not consume the link to the later confirmed ticket.
+    await openNav(page, 'Автопарк')
+    await page.locator('.fleet-table tbody tr').filter({ hasText: 'E549YT198' }).click()
+    await page.getByRole('dialog').getByRole('button', { name: 'Заявки', exact: true }).click()
+    await expect(page.locator('.filter-chip')).toContainText('E549YT198')
+    await expect(page.locator('.toolbar-meta:visible')).toContainText('Показано')
+    await openNav(page, 'Диагностика')
     await selectVehicleSession(page, 'E549YT198', 'S-0011')
     await runDiagnosis(page)
     await expect(page.locator('.verdict-card--anomaly')).toBeVisible({ timeout: 30_000 })
@@ -42,6 +50,12 @@ test.describe('Ticket draft → confirm → journal', () => {
     await draft.getByLabel('Я проверил факты, источники и работы').check()
     await confirmButton.click()
     await expect(page.getByText(/TKT-/)).toBeVisible({ timeout: 30_000 })
+
+    await page.locator('.chat-log > .ticket-draft__ok').getByRole('button', { name: 'Заявки', exact: true }).click()
+    const openedTicket = page.locator('.ticket-drawer')
+    await expect(openedTicket).toBeVisible()
+    await expect(openedTicket.getByRole('button', { name: /E549YT198/ })).toBeVisible()
+    await expect(openedTicket).toContainText('S-0011')
 
     expect(draftId).toBeTruthy()
     expect(confirmNonce).toBeTruthy()

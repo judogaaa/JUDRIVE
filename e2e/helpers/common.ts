@@ -43,5 +43,5 @@ export async function runDiagnosis(page: Page) {
 }
 
 export async function openNav(page: Page, label: RegExp | string) {
-  await page.getByRole('button', { name: label }).click()
+  await page.getByRole('button', { name: label, exact: typeof label === 'string' }).click()
 }

@@ -66,7 +66,7 @@ export function AgentChat({
   const sendAbortRef = useRef<AbortController | null>(null)
   const pendingIntent = useRef<{ text: string; action?: DiagnosisAction } | null>(null)
   const sourceRequest = useRef(0)
-  const composerEvidence = useRef<string | undefined>(undefined)
+  const [composerEvidence, setComposerEvidence] = useState<{ id: string; label: string } | null>(null)
   const chatIntentRef = useRef<number | null>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const tRef = useRef(t)
@@ -180,7 +180,7 @@ export function AgentChat({
       try {
         const reply = await sendChatMessage(convId, trimmed, locale, false, controller.signal, action, evidenceId)
         if (epoch !== sendGen.current || contextRef.current !== key) return
-        if (composerEvidence.current === evidenceId) composerEvidence.current = undefined
+        setComposerEvidence((current) => current?.id === evidenceId ? null : current)
         const assistantMsg: ChatMessage = {
           id: crypto.randomUUID(),
           role: 'assistant',
@@ -215,7 +215,7 @@ export function AgentChat({
     if (chatIntent.autoSend) {
       pendingIntent.current = { text: chatIntent.message, action: chatIntent.action }
     } else {
-      composerEvidence.current = chatIntent.evidenceId
+      setComposerEvidence(chatIntent.evidenceId ? { id: chatIntent.evidenceId, label: chatIntent.evidenceLabel ?? chatIntent.message } : null)
       prefill(chatIntent.message)
     }
     onChatIntentConsumed?.()
@@ -443,9 +443,17 @@ export function AgentChat({
         className="chat-compose"
         onSubmit={(event) => {
           event.preventDefault()
-          void send(input, undefined, composerEvidence.current)
+          void send(input, undefined, composerEvidence?.id)
         }}
       >
+        {composerEvidence && (
+          <div className="chip-row chat-attached-source">
+            <span className="panel__subtitle">{composerEvidence.label}</span>
+            <button type="button" className="icon-btn" aria-label={t('common.close')} onClick={() => { setComposerEvidence(null); setRetryMessage((current) => current?.evidenceId ? null : current) }}>
+              <X size={15} aria-hidden />
+            </button>
+          </div>
+        )}
         <div className="chat-compose__bar">
           <textarea
             ref={inputRef}
@@ -458,7 +466,7 @@ export function AgentChat({
             onKeyDown={(event) => {
               if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
                 event.preventDefault()
-                if (!loading && input.trim()) void send(input, undefined, composerEvidence.current)
+                if (!loading && input.trim()) void send(input, undefined, composerEvidence?.id)
               }
             }}
           />

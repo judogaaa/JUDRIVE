@@ -16,6 +16,8 @@ import type { ChatIntent, ManualSearchIntent } from './lib/workflow'
 import { latestSessionId } from './lib/vehicle'
 import { resolveErrorMessage } from './lib/i18nError'
 
+type VehicleTarget = { vehicleId: string; sessionId: string; engineModel: string }
+
 export default function App() {
   const { t } = useI18n()
   const { mode: themeMode, setMode: setThemeMode } = useTheme()
@@ -26,6 +28,7 @@ export default function App() {
   const [diagnosisOrigin, setDiagnosisOrigin] = useState<AppView | null>(null)
   const [manualOrigin, setManualOrigin] = useState<AppView | null>(null)
   const [manualEngine, setManualEngine] = useState<string | null>(null)
+  const [manualTarget, setManualTarget] = useState<VehicleTarget | null>(null)
   const [manualRevision, setManualRevision] = useState(0)
   const scrollPositions = useRef<Partial<Record<AppView, number>>>({})
   const navigate = (next: AppView) => {
@@ -50,6 +53,8 @@ export default function App() {
   tRef.current = t
 
   const currentEngine = vehicles.find((v) => v.vehicle_id === vehicleId)?.engine_model ?? null
+  const currentTarget = currentEngine && vehicleId && sessionId ? { vehicleId, sessionId, engineModel: currentEngine } : null
+  const manualChatTarget = manualTarget ?? currentTarget
 
   useEffect(() => {
     window.scrollTo({ top: scrollPositions.current[view] ?? 0, behavior: 'auto' })
@@ -61,12 +66,13 @@ export default function App() {
     if (target) document.getElementById(target)?.focus()
   }, [view])
 
-  const openManuals = (intent: Omit<ManualSearchIntent, 'id'> | string) => {
+  const openManuals = (intent: Omit<ManualSearchIntent, 'id'> | string, target = currentTarget) => {
     const engine = typeof intent === 'string' ? currentEngine : intent.engineModel
     const query = typeof intent === 'string' ? intent : intent.query
     if (!engine) return
     setManualOrigin(view)
     setManualEngine(engine)
+    setManualTarget(target)
     setManualRevision((value) => value + 1)
     setManualIntent(query.trim() ? {
       id: ++sequence.current,
@@ -77,9 +83,9 @@ export default function App() {
     navigate('manuals')
   }
 
-  const askInChat = (message: string, autoSend = true, evidenceId?: string) => {
-    const vid = vehicleId
-    const sid = sessionId
+  const askInChat = (message: string, evidenceId: string, evidenceLabel: string, target: VehicleTarget) => {
+    const vid = target.vehicleId
+    const sid = target.sessionId
     if (!vid || !sid || !message.trim()) return
     setVehicleId(vid)
     setSessionId(sid)
@@ -88,8 +94,9 @@ export default function App() {
       vehicleId: vid,
       sessionId: sid,
       message,
-      autoSend,
+      autoSend: false,
       evidenceId,
+      evidenceLabel,
     })
     setDiagnosisOrigin(view)
     helpDestination.current = 'diagnosis-chat'
@@ -185,11 +192,13 @@ export default function App() {
             <ManualsView
               key={manualRevision}
               engineModel={manualEngine ?? currentEngine}
-              chatEngineModel={currentEngine}
+              isVisible={view === 'manuals'}
+              chatEngineModel={manualChatTarget?.engineModel ?? null}
+              chatTargetLabel={manualChatTarget ? `${manualChatTarget.vehicleId} · ${manualChatTarget.sessionId}` : undefined}
               searchIntent={manualIntent}
               onSearchIntentConsumed={() => setManualIntent(null)}
-              onAskInChat={(text, engine, evidenceId) => {
-                if (engine === currentEngine) askInChat(text, false, evidenceId)
+              onAskInChat={(text, engine, evidenceId, evidenceLabel) => {
+                if (manualChatTarget && engine === manualChatTarget.engineModel) askInChat(text, evidenceId, evidenceLabel, manualChatTarget)
               }}
               onBack={manualOrigin ? () => navigate(manualOrigin) : undefined}
               backLabel={manualOrigin ? t(`nav.${manualOrigin}`) : undefined}
@@ -210,7 +219,9 @@ export default function App() {
               vehicles={vehicles}
               fleetError={fleetError}
               onRetryFleet={retryFleet}
-              onOpenManuals={(engineModel) => openManuals({ engineModel, query: '' })}
+              onOpenManuals={(vehicle) => openManuals({ engineModel: vehicle.engine_model, query: '' }, {
+                vehicleId: vehicle.vehicle_id, sessionId: latestSessionId(vehicle), engineModel: vehicle.engine_model,
+              })}
               onOpenDiagnosis={openDiagnosisForVehicle}
               onOpenTickets={openTicketsForVehicle}
             />
