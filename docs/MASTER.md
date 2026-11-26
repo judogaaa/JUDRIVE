@@ -39,6 +39,8 @@
 
 ## 04. Материалы разбор и данные
 
+Повторная сверка: оригинальный внутренний mock-пакет полностью опубликован в vendor/neurodvs_mock (13 файлов), контрольные хеши исходных материалов в docs/SOURCE_MANIFEST.json, конспект всех 24 ответов в docs/ORGANIZER_QA.md. Полный внешний ZIP, PDF и DOCX остаются внешними материалами, локально подключаются по docs/SOURCES.md.
+
 Официальный комплект: архив 007_хакатон_ИИ.zip, внутри neurodvs_hackathon_mock_2026-11-16.zip, шесть PDF, ТЗ v6 от 16.11.2026, описание кейса v2 от 15.11.2026, описание бизнес-процессов v6. Ссылка заказчика: https://disk.yandex.ru/d/QdAA8p4m0ySe8Q .
 
 Внутренний архив: mock_ml/app.py, mock_toir/app.py, data/vehicles.json, data/fault_types.json, openapi_ml.json, openapi_toir.json, .env.example, README, requirements.txt, tests/test_mocks.py, tools/export_openapi.py. Сохранять заглушки исходно, не менять смысл данных. Тесты архива проверяют именно заглушки, а не продукт. ТЗ версии 6 и реальные OpenAPI имеют приоритет перед старым FAQ и досье.
@@ -188,7 +190,7 @@ Groq whisper-large-v3 (или turbo после сравнения) для мул
 Предлагаемая структура (уточнить строго после просмотра фактических файлов):
 - frontend/src/{app,components,features,api,i18n,styles}
 - backend/app/{main,config,schemas,services,agent,rag,storage}
-- vendor/neurodvs_mock/ — выданные заглушки и синтетические данные (при разрешённой публикации); материалы вне source tree либо mount.
+- vendor/neurodvs_mock/ — оригинальные выданные заглушки, OpenAPI и синтетические данные; полные PDF вне source tree либо mount.
 - scripts/ — ingest, запуск, при необходимости health smoke.
 - tests/ — компактные проверки контрактов, guardrails и поиска.
 - AGENTS.md, ARCHITECTURE.md, TASKS.md, PROGRESS.md, README.md, .env.example, .gitignore, Dockerfile/compose.yaml при выбранном запуске.

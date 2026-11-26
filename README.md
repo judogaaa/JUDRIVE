@@ -19,6 +19,9 @@ AI-powered engine diagnostics and intelligent fleet management platform.
 7. [docs/DESIGN.md](docs/DESIGN.md) — продуктовый интерфейс.
 8. [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md) — сценарии проверки.
 9. [docs/SOURCES.md](docs/SOURCES.md) — состав исходных материалов и порядок их подключения.
+10. [docs/ORGANIZER_QA.md](docs/ORGANIZER_QA.md) — полный конспект 24 вопросов, брифинга и регламента.
+11. [docs/SOURCE_MANIFEST.json](docs/SOURCE_MANIFEST.json) — контрольные SHA-256 оригиналов и заглушек.
+12. [vendor/neurodvs_mock/](vendor/neurodvs_mock/) — оригинальные заглушки, OpenAPI, тесты и синтетический набор заказчика.
 
 ## Планируемые возможности
 
@@ -28,6 +31,6 @@ AI-powered engine diagnostics and intelligent fleet management platform.
 - История, график динамики и сводка главного механика.
 - Голосовой ввод и мультиязычный адаптивный интерфейс.
 
-Планируемый стек: React + TypeScript + Vite, FastAPI, SQLite, Groq GPT-OSS 120B, Whisper, локальная база знаний и PDF.js. Прототип не обучает акустическую ML-модель, не подтверждает техническую исправность двигателя и не заменяет специалиста. Публикация полных PDF требует ясности прав на распространение. Конкурсные материалы подключаются по инструкции из docs/SOURCES.md.
+Планируемый стек: React + TypeScript + Vite, FastAPI, SQLite, Groq GPT-OSS 120B, Whisper, локальная база знаний и PDF.js. Прототип не обучает акустическую ML-модель, не подтверждает техническую исправность двигателя и не заменяет специалиста. Публикация полных PDF требует ясности прав на распространение. Оригинальные Mock API и синтетические данные уже находятся в vendor/neurodvs_mock; шесть полных PDF подключаются по инструкции из docs/SOURCES.md.
 
 Ориентир завершения: 28.11.2026 10:00 МСК; рабочий стенд требуется согласно актуальным правилам хакатона. Текущее состояние всегда в PROGRESS.md.

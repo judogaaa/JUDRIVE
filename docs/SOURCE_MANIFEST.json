@@ -1,0 +1,186 @@
+{
+  "archive": {
+    "filename": "007_хакатон_ИИ.zip",
+    "bytes": 139638670,
+    "sha256": "c8080c3a985040ef5cc3c039a0822e1e76b3ce0b06cc8ebdc345610523da3c89"
+  },
+  "source_files": [
+    {
+      "filename": "neurodvs_hackathon_mock_2026-11-16.zip",
+      "archive_path": "007_хакатон_ИИ/neurodvs_hackathon_mock_2026-11-16.zip",
+      "bytes": 23447,
+      "sha256": "a76b22573a0b7185229827fe148d94c35a93a2b4ec8bc47daedbb3f100490e1e",
+      "separate_upload_identical": null
+    },
+    {
+      "filename": "yamz-536_re_2016.pdf",
+      "archive_path": "007_хакатон_ИИ/yamz-536_re_2016.pdf",
+      "bytes": 6708993,
+      "sha256": "402bc070b9f63d9aab3058e44e8418fcfaf5b9198f7a22a4cc93d9bbef94a7c3",
+      "separate_upload_identical": true
+    },
+    {
+      "filename": "yamz-536_rk_2013.pdf",
+      "archive_path": "007_хакатон_ИИ/yamz-536_rk_2013.pdf",
+      "bytes": 99267551,
+      "sha256": "9b8b920c6757ee2492d97d0d29159507219997ba05678d835d778ba25e402828",
+      "separate_upload_identical": true
+    },
+    {
+      "filename": "zmz-40904-40905_rk_2025.pdf",
+      "archive_path": "007_хакатон_ИИ/zmz-40904-40905_rk_2025.pdf",
+      "bytes": 15297950,
+      "sha256": "99cf64334c578d668ce67bc4c9a1d7b0bb1e9c59ddac982b6061ea18533a7147",
+      "separate_upload_identical": true
+    },
+    {
+      "filename": "zmz-5234_rk_2025.pdf",
+      "archive_path": "007_хакатон_ИИ/zmz-5234_rk_2025.pdf",
+      "bytes": 5115519,
+      "sha256": "1abd24d9c7f81167a895bec4372bc439e85995aa6207349d8b6e8edb4eac9c09",
+      "separate_upload_identical": true
+    },
+    {
+      "filename": "Описание_кейса_ИИкузница_НейроДВС_v2_2026-11-15.docx",
+      "archive_path": "007_хакатон_ИИ/Описание_кейса_ИИкузница_НейроДВС_v2_2026-11-15.docx",
+      "bytes": 20622,
+      "sha256": "703b3d2df955520c1446dd5c70dc97833967fca758ae37bcc815f295b75c6d10",
+      "separate_upload_identical": true
+    },
+    {
+      "filename": "ТЗ_хакатон_ИИкузница_НейроДВС_v6_2026-11-16.docx",
+      "archive_path": "007_хакатон_ИИ/ТЗ_хакатон_ИИкузница_НейроДВС_v6_2026-11-16.docx",
+      "bytes": 35782,
+      "sha256": "580b85011dce689507d0998d5aa11fcd730bf0fff9eb677e996a7edcc77608f5",
+      "separate_upload_identical": true
+    },
+    {
+      "filename": "Цифровой механик_Описание БПроцессов для команд (v6).docx",
+      "archive_path": "007_хакатон_ИИ/Цифровой механик_Описание БПроцессов для команд (v6).docx",
+      "bytes": 22179,
+      "sha256": "63c3335675b9f04c9692f3b21da44439574ebe1f4ec67e2f649e30251474bf1d",
+      "separate_upload_identical": true
+    },
+    {
+      "filename": "ЯМЗ_236_руководство по РЕМОНТУ.pdf",
+      "archive_path": "007_хакатон_ИИ/ЯМЗ_236_руководство по РЕМОНТУ.pdf",
+      "bytes": 24554186,
+      "sha256": "231e067ea9d220dec0ab7629bf19fbbf59d29e01d81e9f3bf5b0b1dee76a141b",
+      "separate_upload_identical": true
+    },
+    {
+      "filename": "ЯМЗ_236_руководство по эксплуатации.pdf",
+      "archive_path": "007_хакатон_ИИ/ЯМЗ_236_руководство по эксплуатации.pdf",
+      "bytes": 5379610,
+      "sha256": "4268a9519e02a668a826fe6d154de0360f6767015868ca2de7410ba570d73dd1",
+      "separate_upload_identical": true
+    }
+  ],
+  "included_mock_files": [
+    {
+      "repository_path": "vendor/neurodvs_mock/.env.example",
+      "original_archive_path": "neurodvs_hackathon_mock_2026-11-16/.env.example",
+      "bytes": 70,
+      "sha256": "edd085a061887e30bac103804b6ef135349296c69175cd06c355bfee5417e77e"
+    },
+    {
+      "repository_path": "vendor/neurodvs_mock/README.md",
+      "original_archive_path": "neurodvs_hackathon_mock_2026-11-16/README.md",
+      "bytes": 11991,
+      "sha256": "c0810ebfeca7b7fb10652f295bffd9f9361df5b5718c930c4031bb33835445a7"
+    },
+    {
+      "repository_path": "vendor/neurodvs_mock/data/fault_types.json",
+      "original_archive_path": "neurodvs_hackathon_mock_2026-11-16/data/fault_types.json",
+      "bytes": 1103,
+      "sha256": "021bf7ffc72a659774bc23b43b21a5e26d47f9326fcd6bd2899e31589bb5fe35"
+    },
+    {
+      "repository_path": "vendor/neurodvs_mock/data/vehicles.json",
+      "original_archive_path": "neurodvs_hackathon_mock_2026-11-16/data/vehicles.json",
+      "bytes": 104629,
+      "sha256": "7011e79870b97cba26c08ea8323ba90a316b17bcde185693e59a2582db359ac8"
+    },
+    {
+      "repository_path": "vendor/neurodvs_mock/mock_ml/__init__.py",
+      "original_archive_path": "neurodvs_hackathon_mock_2026-11-16/mock_ml/__init__.py",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "repository_path": "vendor/neurodvs_mock/mock_ml/app.py",
+      "original_archive_path": "neurodvs_hackathon_mock_2026-11-16/mock_ml/app.py",
+      "bytes": 2919,
+      "sha256": "46db07d683b49afe6dcec3491daac384b7ba932c96a3a7b76c09e6396f340b3e"
+    },
+    {
+      "repository_path": "vendor/neurodvs_mock/mock_toir/__init__.py",
+      "original_archive_path": "neurodvs_hackathon_mock_2026-11-16/mock_toir/__init__.py",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "repository_path": "vendor/neurodvs_mock/mock_toir/app.py",
+      "original_archive_path": "neurodvs_hackathon_mock_2026-11-16/mock_toir/app.py",
+      "bytes": 4908,
+      "sha256": "b457e4d85fb9672128c134785ff8afd0ed93e66e0191cec82043bac8149dfca8"
+    },
+    {
+      "repository_path": "vendor/neurodvs_mock/openapi_ml.json",
+      "original_archive_path": "neurodvs_hackathon_mock_2026-11-16/openapi_ml.json",
+      "bytes": 4742,
+      "sha256": "08fb1671bbd15e058ce131220db05b39b2beac00b9990e07fba1410a58ed0274"
+    },
+    {
+      "repository_path": "vendor/neurodvs_mock/openapi_toir.json",
+      "original_archive_path": "neurodvs_hackathon_mock_2026-11-16/openapi_toir.json",
+      "bytes": 5049,
+      "sha256": "abd09f84013bc0929ea8d623a09e09e50c948b32c7db1d70aaa121b2bce4adf4"
+    },
+    {
+      "repository_path": "vendor/neurodvs_mock/requirements.txt",
+      "original_archive_path": "neurodvs_hackathon_mock_2026-11-16/requirements.txt",
+      "bytes": 96,
+      "sha256": "05fc5ce4f939e239ca50219da1f0ce0eacc28db37bf1773181e9ec3b8ef9bac4"
+    },
+    {
+      "repository_path": "vendor/neurodvs_mock/tests/test_mocks.py",
+      "original_archive_path": "neurodvs_hackathon_mock_2026-11-16/tests/test_mocks.py",
+      "bytes": 5167,
+      "sha256": "a4e01a38a890697df3e81fe57d28ff8a851cca82a3f853b38b3e957316ac82d7"
+    },
+    {
+      "repository_path": "vendor/neurodvs_mock/tools/export_openapi.py",
+      "original_archive_path": "neurodvs_hackathon_mock_2026-11-16/tools/export_openapi.py",
+      "bytes": 686,
+      "sha256": "f9c3f15dc33788afaff770dcd533e0b1f20cb14fbde243de3603e70e7cf233eb"
+    }
+  ],
+  "data_summary": {
+    "vehicles": 50,
+    "sessions": 195,
+    "statuses": {
+      "normal": 111,
+      "check_failed": 15,
+      "anomaly": 69
+    },
+    "signal_quality": {
+      "good": 163,
+      "bad": 15,
+      "warning": 17
+    },
+    "latest_statuses": {
+      "check_failed": 2,
+      "normal": 25,
+      "anomaly": 23
+    },
+    "engine_model_counts": {
+      "ЯМЗ-236М2": 13,
+      "ЯМЗ-536": 12,
+      "ЗМЗ-5234.10": 13,
+      "ЗМЗ-40905.10": 8,
+      "ЗМЗ-40904.10": 4
+    },
+    "null_vehicle_model": 12
+  }
+}

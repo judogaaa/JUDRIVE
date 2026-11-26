@@ -25,7 +25,7 @@ FastAPI / Pydantic (валидация контекста, API, guardrails)
 
 ## Контракт внешних сервисов
 
-ML: MOCK_ML_URL (локально http://127.0.0.1:8001), GET /health, POST /diagnose с vehicle_id и session_id. Ответ: vehicle_id, session_id, status normal/anomaly/check_failed, anomaly_type F01–F14 или null, anomaly_title, anomaly_score и confidence 0..1 или null, signal_quality good/warning/bad, description, model_version. Источник двигателя — vehicles.json. Сессия имеет checked_at.
+ML: MOCK_ML_URL (локально http://127.0.0.1:8001), GET /health, POST /diagnose с vehicle_id и session_id. Ответ: vehicle_id, session_id, status normal/anomaly/check_failed, anomaly_type F01–F14 или null, anomaly_title, anomaly_score и confidence 0..1 или null, signal_quality good/warning/bad, description, model_version. Источник двигателя — vendor/neurodvs_mock/data/vehicles.json. Сессия имеет checked_at. Схема обязательных nullable полей — в оригинальном OpenAPI. Обе заглушки поддерживают MOCK_DATA_PATH для замены файла данных.
 
 ТОиР: MOCK_TOIR_URL (локально http://127.0.0.1:8002), GET /health, POST /tickets. Только schema v6:
 
@@ -42,7 +42,7 @@ ML: MOCK_ML_URL (локально http://127.0.0.1:8001), GET /health, POST /dia
 }
 ```
 
-Пример формы, не готовое универсальное решение. Реальный ответ 201 с ticket_id/status=created. Не использовать старые fault_id/diagnosis/priority/works/parts/source_pages/document/page: заглушка специально проверяет legacy поля. Валидация ссылки и заявки на нашей стороне, заглушка проверяет схему и пару IDs. Хранить локальный ID + ticket_id + snapshot + timestamps, атомарная защита от дублей/неопределённой отправки. Не повторять запрос с неизвестным исходом автоматически.
+Пример формы, не готовое универсальное решение. Реальный ответ 201 с ticket_id/status=created. 404 неизвестная пара, 422 схема; в README также указана 400 на неразбираемое тело запроса. Обрабатывать сетевые ошибки отдельно. Не использовать старые fault_id/diagnosis/priority/works/parts/source_pages/document/page: заглушка специально проверяет legacy поля. Валидация ссылки и заявки на нашей стороне, заглушка проверяет схему и пару IDs. Хранить локальный ID + ticket_id + snapshot + timestamps, атомарная защита от дублей/неопределённой отправки. Не повторять запрос с неизвестным исходом автоматически.
 
 ## Evidence Engine
 
@@ -52,6 +52,6 @@ ML: MOCK_ML_URL (локально http://127.0.0.1:8001), GET /health, POST /dia
 
 ## Предлагаемая структура
 
-frontend/src/{app,components,features,api,i18n,styles}, backend/app/{main,config,schemas,services,agent,rag,storage}, vendor/neurodvs_mock (поставщик), scripts, tests, docs. Материалы подключаются локально согласно docs/SOURCES.md. Дополнить .env.example и README реальными командами после выбора запуска. Не создавать пустые обещающие готовность модули заранее.
+frontend/src/{app,components,features,api,i18n,styles}, backend/app/{main,config,schemas,services,agent,rag,storage}, vendor/neurodvs_mock (поставщик, уже добавлен оригинальный пакет), scripts, tests, docs. Материалы подключаются локально согласно docs/SOURCES.md. Дополнить .env.example и README реальными командами после выбора запуска. Не создавать пустые обещающие готовность модули заранее.
 
 Внутренние API группы: transport/session/history, fleet analytics, diagnostic/chat, draft/confirm/list ticket, source/page, voice/transcribe, health. Согласовать один формат DTO, ошибки и nullable; РУ источники и IDs не переводить. Локализация одним словарём. Голос — запись речи пользователя по кнопке, транскрипция сервером, редактируемый текст; не аудио двигателя. Постоянные журналы и индекс, отдельные контексты посетителей, лимиты/таймауты. Не предоставлять приложению произвольный shell/HTTP.
