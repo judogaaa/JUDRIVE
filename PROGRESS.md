@@ -61,8 +61,8 @@
 
 - `pytest` 23 passed; `npm run build`.
 - Pipeline B418 (tools+RAG+TKT) при запущенных mock и PDF.
-- `scripts/verify_agent_scenarios.py` — **3/3 OK** с live Groq (26.11): normal / anomaly+черновик / check_failed без заявки.
-- Токены прогона сценариев: prompt 8541, completion 1434, total 9975; в SQLite `groq_usage` Σ total_tokens=11501 (4 записи).
+- `scripts/verify_agent_scenarios.py` — **3/3 OK** с live Groq (26.11): normal / anomaly+черновик / check_failed без заявки; повторный прогон — duplicate TKT по B418 допустим.
+- Последний прогон сценариев: prompt 7364, completion 1148, total 8512; в SQLite `groq_usage` — 7 записей, Σ total_tokens≈20013 (нарастающий журнал).
 
 ### Ограничения
 
