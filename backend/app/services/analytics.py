@@ -187,6 +187,7 @@ def _classify_vehicle(
     elif band == "medium":
         priority += 40
 
+    confirmed = bool(high_ticket and high_ticket.get("ticket_id"))
     return VehicleFleetRow(
         vehicle_id=vehicle["vehicle_id"],
         garage_no=vehicle["garage_no"],
@@ -208,6 +209,7 @@ def _classify_vehicle(
         category_reason=reason,
         needs_rerecord=needs_rerecord,
         quarantine_basis=quarantine_basis,
+        quarantine_confirmed=confirmed,
         early_warnings=warnings,
         ticket_id=ticket_id,
     )

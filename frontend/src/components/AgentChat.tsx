@@ -9,8 +9,10 @@ import {
 } from '../api/chat'
 import type { DiagnoseResponse } from '../api/types'
 import { fetchEvidence, type ManualSearchHit } from '../api/manuals'
+import { useI18n } from '../i18n/I18nContext'
 import { SourceDrawer } from './SourceDrawer'
 import { TicketDraftCard } from './TicketDraftCard'
+import { VoiceCapture } from './VoiceCapture'
 
 interface AgentChatProps {
   vehicleId: string
@@ -25,6 +27,7 @@ const SUGGESTIONS = [
 ]
 
 export function AgentChat({ vehicleId, sessionId, diagnoseResult }: AgentChatProps) {
+  const { locale, t } = useI18n()
   const contextKey = useMemo(() => `${vehicleId}:${sessionId}`, [vehicleId, sessionId])
   const [conversationId, setConversationId] = useState<string | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -72,7 +75,7 @@ export function AgentChat({ vehicleId, sessionId, diagnoseResult }: AgentChatPro
     setInput('')
 
     try {
-      const reply = await sendChatMessage(conversationId, text.trim())
+      const reply = await sendChatMessage(conversationId, text.trim(), locale)
       const assistantMsg: ChatMessage = {
         id: crypto.randomUUID(),
         role: 'assistant',
@@ -118,11 +121,10 @@ export function AgentChat({ vehicleId, sessionId, diagnoseResult }: AgentChatPro
     <section className="panel chat-panel">
       <div className="panel__title" style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
         <MessageSquare size={18} aria-hidden />
-        <h2 style={{ margin: 0, font: 'inherit' }}>Чат с цифровым механиком</h2>
+        <h2 style={{ margin: 0, font: 'inherit' }}>{t('chat.title')}</h2>
       </div>
       <p className="panel__subtitle">
-        Агент выбирает инструменты: диагностика, руководства, история, черновик заявки.
-        {diagnoseResult ? ` Текущий статус ML: ${diagnoseResult.status}.` : ''}
+        {diagnoseResult ? `ML: ${diagnoseResult.status}.` : null}
       </p>
 
       <div className="chip-row">
@@ -142,7 +144,7 @@ export function AgentChat({ vehicleId, sessionId, diagnoseResult }: AgentChatPro
       <div className="chat-log" aria-live="polite">
         {messages.length === 0 ? (
           <p className="panel__subtitle" style={{ margin: 0 }}>
-            Задайте вопрос по выбранной машине и сессии.
+            {t('chat.empty')}
           </p>
         ) : null}
         {messages.map((msg) => (
@@ -167,11 +169,12 @@ export function AgentChat({ vehicleId, sessionId, diagnoseResult }: AgentChatPro
             ) : null}
           </article>
         ))}
-        {loading ? <p className="panel__subtitle">Агент обрабатывает запрос…</p> : null}
+        {loading ? <p className="panel__subtitle">{t('chat.processing')}</p> : null}
       </div>
 
       {error ? <p className="panel__error">{error}</p> : null}
 
+      <VoiceCapture disabled={loading || !conversationId} onText={(text) => setInput(text)} />
       <form
         className="chat-compose"
         onSubmit={(e) => {
@@ -182,13 +185,13 @@ export function AgentChat({ vehicleId, sessionId, diagnoseResult }: AgentChatPro
         <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Вопрос или команда механика…"
+          placeholder={t('chat.placeholder')}
           rows={3}
           disabled={loading || !conversationId}
         />
         <button type="submit" className="btn btn--primary" disabled={loading || !conversationId || !input.trim()}>
           <Send size={18} aria-hidden />
-          Отправить
+          {t('chat.send')}
         </button>
       </form>
 

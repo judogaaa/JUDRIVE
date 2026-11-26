@@ -57,11 +57,15 @@ export async function createConversation(vehicleId: string, sessionId: string): 
   return (await response.json()) as Conversation
 }
 
-export async function sendChatMessage(conversationId: string, message: string): Promise<ChatReply> {
+export async function sendChatMessage(
+  conversationId: string,
+  message: string,
+  locale = 'ru',
+): Promise<ChatReply> {
   const response = await fetch(`/api/conversations/${conversationId}/messages`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({ message, locale }),
   })
   if (!response.ok) throw new Error(await readError(response))
   return (await response.json()) as ChatReply

@@ -6,6 +6,8 @@ import { AgentChat } from '../components/AgentChat'
 import { ManualSearchPanel } from '../components/ManualSearchPanel'
 import { VehicleHistoryPanel } from '../components/VehicleHistoryPanel'
 import { VerdictCard } from '../components/VerdictCard'
+import { VoiceCapture } from '../components/VoiceCapture'
+import { useI18n } from '../i18n/I18nContext'
 
 interface DiagnosisViewProps {
   vehicles: VehicleSummary[]
@@ -35,6 +37,7 @@ export function DiagnosisView({
   onVehicleChange,
   onSessionChange,
 }: DiagnosisViewProps) {
+  const { t } = useI18n()
   const [vehicleQuery, setVehicleQuery] = useState('')
   const [result, setResult] = useState<DiagnoseResponse | null>(null)
   const [loading, setLoading] = useState(false)
@@ -91,8 +94,8 @@ export function DiagnosisView({
   return (
     <>
       <header className="page-header">
-        <h1>Диагностика</h1>
-        <p>Выберите транспорт и сессию, получите вердикт ML, уточните в чате и подтвердите заявку при необходимости.</p>
+        <h1>{t('diag.title')}</h1>
+        <p>{t('diag.subtitle')}</p>
       </header>
 
       <section className="panel diag-context">
@@ -150,8 +153,14 @@ export function DiagnosisView({
               onClick={() => void runDiagnosis()}
             >
               <Play size={18} aria-hidden />
-              {loading ? 'Запрос к Mock ML…' : 'Получить результат диагностики'}
+              {loading ? t('diag.running') : t('diag.run')}
             </button>
+            <VoiceCapture
+              disabled={loading || !vehicleId || !sessionId}
+              onText={(text) => {
+                if (isDiagnoseVoiceCommand(text)) void runDiagnosis()
+              }}
+            />
           </>
         )}
       </section>
@@ -173,6 +182,11 @@ export function DiagnosisView({
       </div>
     </>
   )
+}
+
+function isDiagnoseVoiceCommand(text: string): boolean {
+  const q = text.toLowerCase()
+  return /диагност|diagnost|tekshir|талда|निदान|নির্ণয়/.test(q)
 }
 
 function DiagnosisSideColumn({

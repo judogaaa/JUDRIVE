@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react'
 import { Activity, Bus, ClipboardList, LayoutDashboard, Moon, Sun, Truck } from 'lucide-react'
 import type { ThemeMode } from '../../hooks/useTheme'
+import { useI18n } from '../../i18n/I18nContext'
+import type { LocaleCode } from '../../i18n/translations'
 
 export type AppView = 'diagnosis' | 'chief' | 'fleet' | 'tickets'
 
@@ -12,14 +14,14 @@ interface WorkspaceShellProps {
   children: ReactNode
 }
 
-const NAV: { id: AppView; label: string; icon: typeof Activity }[] = [
-  { id: 'diagnosis', label: 'Диагностика', icon: Activity },
-  { id: 'chief', label: 'Главный механик', icon: LayoutDashboard },
-  { id: 'fleet', label: 'Автопарк', icon: Bus },
-  { id: 'tickets', label: 'Заявки', icon: ClipboardList },
-]
-
 export function WorkspaceShell({ view, onViewChange, themeMode, onThemeCycle, children }: WorkspaceShellProps) {
+  const { t, locale, setLocale, locales, localeLabels } = useI18n()
+  const NAV: { id: AppView; label: string; icon: typeof Activity }[] = [
+    { id: 'diagnosis', label: t('nav.diagnosis'), icon: Activity },
+    { id: 'chief', label: t('nav.chief'), icon: LayoutDashboard },
+    { id: 'fleet', label: t('nav.fleet'), icon: Bus },
+    { id: 'tickets', label: t('nav.tickets'), icon: ClipboardList },
+  ]
   const ThemeIcon = themeMode === 'dark' ? Moon : Sun
   const themeLabel =
     themeMode === 'system' ? 'Системная тема' : themeMode === 'dark' ? 'Тёмная тема' : 'Светлая тема'
@@ -31,13 +33,24 @@ export function WorkspaceShell({ view, onViewChange, themeMode, onThemeCycle, ch
           <BrandIcon />
           <div>
             <p className="shell-brand__title">JUDRIVE</p>
-            <p className="shell-brand__caption">Цифровой механик</p>
+            <p className="shell-brand__caption">{t('app.caption')}</p>
           </div>
         </div>
         <div className="shell-toolbar">
-          <span className="lang-pill" title="Полная локализация — этап 06">
-            RU
-          </span>
+          <label className="lang-select">
+            <span className="sr-only">Язык</span>
+            <select
+              value={locale}
+              onChange={(e) => setLocale(e.target.value as LocaleCode)}
+              aria-label="Язык интерфейса"
+            >
+              {locales.map((code) => (
+                <option key={code} value={code}>
+                  {localeLabels[code]}
+                </option>
+              ))}
+            </select>
+          </label>
           <button type="button" className="icon-btn" onClick={onThemeCycle} aria-label={themeLabel} title={themeLabel}>
             <ThemeIcon size={18} strokeWidth={2} aria-hidden />
           </button>

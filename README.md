@@ -6,7 +6,7 @@ AI-powered engine diagnostics and intelligent fleet management platform.
 
 ## Статус
 
-**26.11.2026 — этапы 01–05 готовы.** Добавлен дашборд главного механика (аналитика без LLM).
+**26.11.2026 — этапы 01–06 готовы.** Голос (Groq Whisper) и 7 языков UI/агента.
 
 ## Локальный запуск (этапы 01–03)
 
@@ -57,6 +57,10 @@ npm run dev
 **Агент (этап 03):** `POST /api/conversations` `{ vehicle_id, session_id }`, `POST /api/conversations/{id}/messages`, `POST /api/tickets/drafts/{id}/confirm` с `acknowledge: true`.
 
 **Аналитика парка (этап 05):** `GET /api/fleet/dashboard`, `GET /api/fleet/vehicles/{vehicle_id}/insight` — категории, очередь, график anomaly_score, ранние предупреждения; данные из `vehicles.json` + журнал заявок.
+
+**Голос (этап 06):** `POST /api/voice/transcribe` (multipart audio + `locale`); в UI — кнопка записи в диагностике и чате. Заявки только явной кнопкой, не голосом.
+
+**Языки (этап 06):** переключатель в шапке — ru, uz, kk, tg, ky, hi, bn; ответ агента на выбранном языке, RAG по русским техтерминам.
 
 Переиндексация: `scripts\build_manual_index.py`. Контроль RAG: `scripts\verify_rag_queries.py`. Контроль агента (live Groq + mocks): `backend\.venv\Scripts\python.exe scripts\verify_agent_scenarios.py`.
 

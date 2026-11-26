@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 import json
 
 import httpx
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
@@ -19,6 +19,8 @@ from app.services.analytics import FleetAnalyticsService
 from app.services.fleet import FleetService
 from app.services.mock_clients import MockMlClient, MockToirClient
 from app.services.tickets import TicketService
+from app.services.voice import VoiceService
+from app.agent.locale import WHISPER_LANG, normalize_locale
 from app.storage.repository import AppRepository
 
 settings = get_settings()
@@ -30,6 +32,7 @@ app_repo = AppRepository(settings.db_path)
 agent = AgentOrchestrator(settings, fleet, mock_ml, rag_service, app_repo)
 ticket_service = TicketService(app_repo, fleet, mock_ml, mock_toir)
 fleet_analytics = FleetAnalyticsService(fleet, app_repo, settings.fleet_data_path)
+voice_service = VoiceService(settings.groq_api_key, settings.groq_stt_model, settings.groq_stt_timeout_s)
 
 
 @asynccontextmanager
@@ -147,7 +150,16 @@ async def conversation_messages(conversation_id: str):
 
 @app.post(f"{settings.api_prefix}/conversations/{{conversation_id}}/messages")
 async def conversation_send(conversation_id: str, body: ChatMessageRequest):
-    return await agent.send_message(conversation_id, body.message)
+    return await agent.send_message(conversation_id, body.message, locale=body.locale)
+
+
+@app.post(f"{settings.api_prefix}/voice/transcribe")
+async def voice_transcribe(
+    file: UploadFile = File(...),
+    locale: str = Form(default="ru"),
+):
+    lang = WHISPER_LANG.get(normalize_locale(locale))
+    return await voice_service.transcribe(file, language=lang)
 
 
 @app.get(f"{settings.api_prefix}/tickets/drafts/{{draft_id}}")

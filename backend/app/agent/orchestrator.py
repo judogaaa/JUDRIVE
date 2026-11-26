@@ -6,6 +6,7 @@ import json
 from fastapi import HTTPException
 
 from app.agent.groq_client import GroqClient, SYSTEM_PROMPT
+from app.agent.locale import agent_language_instruction, normalize_locale
 from app.agent.guardrails import sanitize_user_message
 from app.agent.tools import TOOL_DEFINITIONS, ToolRuntime
 from app.config import Settings
@@ -56,7 +57,7 @@ class AgentOrchestrator:
             "engine_model": engine,
         }
 
-    async def send_message(self, conversation_id: str, user_message: str) -> dict:
+    async def send_message(self, conversation_id: str, user_message: str, locale: str = "ru") -> dict:
         conv = self._repo.get_conversation(conversation_id)
         if not conv:
             raise HTTPException(status_code=404, detail="Диалог не найден")
@@ -84,15 +85,18 @@ class AgentOrchestrator:
             if row["role"] in {"user", "assistant"}:
                 llm_messages.append({"role": row["role"], "content": row["content"]})
 
+        loc = normalize_locale(locale)
         llm_messages.append(
             {
                 "role": "system",
                 "content": (
                     f"Контекст сессии: vehicle_id={conv['vehicle_id']}, "
-                    f"session_id={conv['session_id']}, engine_model={conv['engine_model']}."
+                    f"session_id={conv['session_id']}, engine_model={conv['engine_model']}. "
+                    f"Исходный вопрос пользователя сохранён; RAG только по русским техтерминам."
                 ),
             }
         )
+        llm_messages.append({"role": "system", "content": agent_language_instruction(loc)})
 
         groq = self._groq()
         try:

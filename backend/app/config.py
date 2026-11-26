@@ -24,6 +24,8 @@ class Settings(BaseSettings):
     groq_model: str = "openai/gpt-oss-120b"
     groq_max_tokens: int = 1200
     groq_timeout_s: float = 60.0
+    groq_stt_model: str = "whisper-large-v3-turbo"
+    groq_stt_timeout_s: float = 45.0
     agent_max_tool_steps: int = 4
 
 

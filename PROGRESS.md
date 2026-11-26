@@ -106,9 +106,26 @@
 - Карантин по рекомендации high — только при критичном типе + повтор + score ≥0.8; иначе «внимание». Подтверждённый high — из заявки ТОиР.
 - Перезапустить backend, если `/api/fleet/dashboard` отдаёт 404.
 
-## Следующий шаг (06)
+## Этап 06 (26.11.2026)
 
-Голос и локализация (оценка): Whisper, HTTPS-микрофон, ru/uz smoke.
+- Groq Whisper: `POST /api/voice/transcribe`, `VoiceCapture` (MediaRecorder, правка текста, ошибка микрофона).
+- Локализация UI и ответов агента: ru/uz/kk/tg/ky/hi/bn, `frontend/src/i18n/translations.ts`, `locale` в chat API; RAG-запросы на русском.
+- Карантин в дашборде: «рекомендация» vs «подтверждено» (`quarantine_confirmed`).
+
+### Проверено
+
+- `pytest` 29 passed; `npm run build`.
+- STT endpoint: схема multipart; live Groq — при `GROQ_API_KEY` и перезапуске backend.
+
+### Ограничения
+
+- Микрофон: localhost/HTTPS; точность STT на цеховом шуме не гарантирована.
+- Переводы не полные для всех экранов; ключевые разделы + fallback ru.
+- Заявка только кнопкой в UI.
+
+## Следующий шаг (07)
+
+Деплой HTTPS, финальный регресс, README, демо ≤3 мин, форма сдачи.
 
 ## Открытые технические вопросы
 

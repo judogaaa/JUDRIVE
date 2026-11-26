@@ -7,18 +7,22 @@ import {
   type VehicleFleetRow,
 } from '../api/fleet'
 import { VehicleInsightPanel } from '../components/VehicleInsightPanel'
+import { useI18n } from '../i18n/I18nContext'
 
 interface ChiefMechanicViewProps {
   onOpenDiagnosis: (vehicleId: string, sessionId?: string) => void
 }
 
-const CATEGORY_LABELS = {
-  normal: 'Норма',
-  attention: 'Требует внимания',
-  quarantine: 'Карантин',
-} as const
-
 export function ChiefMechanicView({ onOpenDiagnosis }: ChiefMechanicViewProps) {
+  const { t } = useI18n()
+
+  const categoryLabel = (row: VehicleFleetRow) => {
+    if (row.category === 'quarantine') {
+      return row.quarantine_confirmed ? t('chief.cat.quarantineConfirmed') : t('chief.cat.quarantineRec')
+    }
+    if (row.category === 'attention') return t('chief.cat.attention')
+    return t('chief.cat.normal')
+  }
   const [data, setData] = useState<FleetDashboard | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -47,11 +51,8 @@ export function ChiefMechanicView({ onOpenDiagnosis }: ChiefMechanicViewProps) {
   return (
     <>
       <header className="page-header">
-        <h1>Главный механик</h1>
-        <p>
-          Сводка по последней проверке каждого ТС (50 машин). Категории взаимоисключающие; карантин не выводится из
-          одного ML-score. Данные синтетические, Mock ML.
-        </p>
+        <h1>{t('chief.title')}</h1>
+        <p>{t('chief.subtitle')}</p>
       </header>
 
       {error ? <p className="panel__error">{error}</p> : null}
@@ -63,21 +64,21 @@ export function ChiefMechanicView({ onOpenDiagnosis }: ChiefMechanicViewProps) {
             <SummaryCard
               tone="ok"
               icon={<CheckCircle2 size={20} />}
-              label={CATEGORY_LABELS.normal}
+              label={t('chief.cat.normal')}
               value={data.summary.normal}
               hint={`Последние ML: normal ${data.session_stats.latest_by_status.normal ?? 0}`}
             />
             <SummaryCard
               tone="warn"
               icon={<AlertTriangle size={20} />}
-              label={CATEGORY_LABELS.attention}
+              label={t('chief.cat.attention')}
               value={data.summary.attention}
               hint={`ML последняя сессия: ${data.session_stats.latest_by_status.anomaly ?? 0} anomaly · ${data.session_stats.latest_by_status.check_failed ?? 0} failed`}
             />
             <SummaryCard
               tone="danger"
               icon={<AlertOctagon size={20} />}
-              label={CATEGORY_LABELS.quarantine}
+              label={t('chief.cat.quarantineRec')}
               value={data.summary.quarantine}
               hint="High + обоснование или заявка"
             />
@@ -101,7 +102,7 @@ export function ChiefMechanicView({ onOpenDiagnosis }: ChiefMechanicViewProps) {
             <ul className="priority-queue">
               {data.priority_queue.slice(0, 12).map((row) => (
                 <li key={row.vehicle_id}>
-                  <QueueRow row={row} onClick={() => setSelectedVehicle(row.vehicle_id)} />
+                  <QueueRow row={row} label={categoryLabel(row)} onClick={() => setSelectedVehicle(row.vehicle_id)} />
                 </li>
               ))}
             </ul>
@@ -196,7 +197,12 @@ export function ChiefMechanicView({ onOpenDiagnosis }: ChiefMechanicViewProps) {
                 </thead>
                 <tbody>
                   {data.vehicles.map((row) => (
-                    <ChiefTableRow key={row.vehicle_id} row={row} onClick={() => setSelectedVehicle(row.vehicle_id)} />
+                    <ChiefTableRow
+                      key={row.vehicle_id}
+                      row={row}
+                      label={categoryLabel(row)}
+                      onClick={() => setSelectedVehicle(row.vehicle_id)}
+                    />
                   ))}
                 </tbody>
               </table>
@@ -259,10 +265,10 @@ function StatBlock({ title, items }: { title: string; items: Record<string, numb
   )
 }
 
-function QueueRow({ row, onClick }: { row: VehicleFleetRow; onClick: () => void }) {
+function QueueRow({ row, label, onClick }: { row: VehicleFleetRow; label: string; onClick: () => void }) {
   return (
     <button type="button" className="queue-row" onClick={onClick}>
-      <span className={`badge badge--${row.category}`}>{CATEGORY_LABELS[row.category]}</span>
+      <span className={`badge badge--${row.category}`}>{label}</span>
       <span className="queue-row__id">
         {row.vehicle_id} · {row.anomaly_type ?? row.latest_status}
       </span>
@@ -271,7 +277,7 @@ function QueueRow({ row, onClick }: { row: VehicleFleetRow; onClick: () => void 
   )
 }
 
-function ChiefTableRow({ row, onClick }: { row: VehicleFleetRow; onClick: () => void }) {
+function ChiefTableRow({ row, label, onClick }: { row: VehicleFleetRow; label: string; onClick: () => void }) {
   return (
     <tr
       onClick={onClick}
@@ -289,7 +295,7 @@ function ChiefTableRow({ row, onClick }: { row: VehicleFleetRow; onClick: () => 
         <span className="ticket-row__meta">{row.engine_model}</span>
       </td>
       <td>
-        <span className={`badge badge--${row.category}`}>{CATEGORY_LABELS[row.category]}</span>
+        <span className={`badge badge--${row.category}`}>{label}</span>
         {row.needs_rerecord ? <span className="badge badge--rerecord">Повтор записи</span> : null}
       </td>
       <td>
