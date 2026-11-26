@@ -166,6 +166,57 @@ class AppRepository:
             )
             conn.commit()
 
+    def claim_pair_sending(
+        self,
+        draft_id: str,
+        vehicle_id: str,
+        session_id: str,
+        payload_snapshot: dict,
+    ) -> str | None:
+        """Одна активная отправка на пару ТС/сессия до ответа ТОиР."""
+        local_id = str(uuid.uuid4())
+        try:
+            with self._connect() as conn:
+                conn.execute(
+                    """
+                    INSERT INTO ticket_submissions
+                    (local_id, draft_id, vehicle_id, session_id, ticket_id, submit_status,
+                     payload_snapshot, error_detail, created_at)
+                    VALUES (?, ?, ?, ?, NULL, 'sending', ?, NULL, ?)
+                    """,
+                    (
+                        local_id,
+                        draft_id,
+                        vehicle_id,
+                        session_id,
+                        json.dumps(payload_snapshot, ensure_ascii=False),
+                        _now(),
+                    ),
+                )
+                conn.commit()
+        except sqlite3.IntegrityError:
+            return None
+        return local_id
+
+    def finish_submission(
+        self,
+        local_id: str,
+        *,
+        submit_status: str,
+        ticket_id: str | None = None,
+        error_detail: str | None = None,
+    ) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                """
+                UPDATE ticket_submissions
+                SET submit_status = ?, ticket_id = ?, error_detail = ?
+                WHERE local_id = ?
+                """,
+                (submit_status, ticket_id, error_detail, local_id),
+            )
+            conn.commit()
+
     def has_blocking_submission(self, vehicle_id: str, session_id: str) -> sqlite3.Row | None:
         with self._connect() as conn:
             return conn.execute(

@@ -109,22 +109,13 @@ async def _pipeline_b418():
     from app.storage.repository import AppRepository
     from app.agent.tools import ToolRuntime
 
+    import tempfile
+
     fleet = FleetService(settings.fleet_data_path)
-    repo = AppRepository(settings.db_path)
     rag = ManualRagService(settings.db_path, settings.pdf_dir)
     if rag.status().get("missing_files"):
         pytest.skip("PDF missing")
-
-    with repo._connect() as conn:  # noqa: SLF001
-        conn.execute(
-            "DELETE FROM ticket_submissions WHERE vehicle_id = ? AND session_id = ?",
-            ("B418HK98", "S-0009"),
-        )
-        conn.execute(
-            "DELETE FROM ticket_drafts WHERE vehicle_id = ? AND session_id = ?",
-            ("B418HK98", "S-0009"),
-        )
-        conn.commit()
+    repo = AppRepository(Path(tempfile.mkdtemp()) / "guardrails.sqlite")
 
     conv_id = repo.create_conversation("B418HK98", "S-0009", "ЯМЗ-236М2", "test")
     runtime = ToolRuntime(

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import sqlite3
 
 import httpx
 
@@ -66,24 +65,25 @@ class TicketService:
         if not self._repo.claim_draft_sending(draft_id, confirm_nonce):
             return {"status": "error", "message": "Черновик уже обрабатывается или устарел"}
 
+        local_id = self._repo.claim_pair_sending(draft_id, vehicle_id, session_id, payload)
+        if not local_id:
+            self._repo.set_draft_status(draft_id, "draft")
+            return {
+                "status": "duplicate",
+                "message": "Заявка по этой паре уже отправляется или отправлена.",
+            }
+
         diag = await self._mock_ml.diagnose(vehicle_id, session_id)
         diag.engine_model = self._fleet.session_engine(vehicle_id, session_id)
         ok, reason = can_create_ticket(diag)
         if not ok:
             self._repo.set_draft_status(draft_id, "refused")
-            self._repo.record_submission(
-                draft_id,
-                vehicle_id,
-                session_id,
-                ticket_id=None,
-                submit_status="refused",
-                payload_snapshot=payload,
-                error_detail=reason,
-            )
+            self._repo.finish_submission(local_id, submit_status="refused", error_detail=reason)
             return {"status": "refused", "message": reason}
 
         if diagnosis_hash(diag) != draft["diagnosis_hash"]:
             self._repo.set_draft_status(draft_id, "stale")
+            self._repo.finish_submission(local_id, submit_status="refused", error_detail="stale")
             return {
                 "status": "stale",
                 "message": "Диагностика изменилась с момента черновика. Подготовьте заявку заново.",
@@ -91,6 +91,7 @@ class TicketService:
 
         if payload.get("anomaly_type") != diag.anomaly_type:
             self._repo.set_draft_status(draft_id, "refused")
+            self._repo.finish_submission(local_id, submit_status="refused", error_detail="anomaly_mismatch")
             return {"status": "refused", "message": "Код отклонения не совпадает с актуальной диагностикой"}
 
         try:
@@ -98,27 +99,11 @@ class TicketService:
         except httpx.HTTPStatusError as exc:
             detail = exc.response.text
             self._repo.set_draft_status(draft_id, "failed")
-            self._repo.record_submission(
-                draft_id,
-                vehicle_id,
-                session_id,
-                ticket_id=None,
-                submit_status="failed",
-                payload_snapshot=payload,
-                error_detail=detail,
-            )
+            self._repo.finish_submission(local_id, submit_status="failed", error_detail=detail)
             return {"status": "failed", "message": "Ошибка Mock ТОиР", "detail": detail}
         except httpx.HTTPError:
             self._repo.set_draft_status(draft_id, "unknown")
-            self._repo.record_submission(
-                draft_id,
-                vehicle_id,
-                session_id,
-                ticket_id=None,
-                submit_status="unknown",
-                payload_snapshot=payload,
-                error_detail="network_error",
-            )
+            self._repo.finish_submission(local_id, submit_status="unknown", error_detail="network_error")
             return {
                 "status": "unknown",
                 "message": "Исход отправки неизвестен. Повторная автоотправка запрещена.",
@@ -126,19 +111,5 @@ class TicketService:
 
         ticket_id = result.get("ticket_id")
         self._repo.mark_draft_submitted(draft_id)
-        try:
-            self._repo.record_submission(
-                draft_id,
-                vehicle_id,
-                session_id,
-                ticket_id=ticket_id,
-                submit_status="created",
-                payload_snapshot=payload,
-            )
-        except sqlite3.IntegrityError:
-            return {
-                "status": "duplicate",
-                "message": "Заявка по этой паре уже зафиксирована.",
-                "ticket_id": ticket_id,
-            }
+        self._repo.finish_submission(local_id, submit_status="created", ticket_id=ticket_id)
         return {"status": "created", "ticket_id": ticket_id, "payload": payload}

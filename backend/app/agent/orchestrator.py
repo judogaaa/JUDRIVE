@@ -49,7 +49,6 @@ class AgentOrchestrator:
             raise HTTPException(status_code=400, detail="Неизвестный двигатель")
         context_hash = hashlib.sha256(f"{vehicle_id}:{session_id}".encode()).hexdigest()
         cid = self._repo.create_conversation(vehicle_id, session_id, engine, context_hash)
-        self._repo.invalidate_drafts_for_context(vehicle_id, session_id)
         return {
             "conversation_id": cid,
             "vehicle_id": vehicle_id,
@@ -67,6 +66,18 @@ class AgentOrchestrator:
             raise HTTPException(status_code=400, detail="Пустое сообщение")
 
         self._repo.add_message(conversation_id, "user", content)
+
+        if not _is_manual_question(content):
+            diag = await self._mock_ml.diagnose(conv["vehicle_id"], conv["session_id"])
+            blocked = diag.status == "check_failed" or diag.signal_quality == "bad"
+            if blocked:
+                reply = (
+                    "Запись непригодна для диагноза. Повторите запись. "
+                    "Заявку и оценку неисправности по этой проверке готовить нельзя. "
+                    "Вопрос по руководству этого двигателя можно задать отдельно."
+                )
+                self._repo.add_message(conversation_id, "assistant", reply, tool_trace=[], sources=[])
+                return {"reply": reply, "tool_trace": [], "sources": [], "draft": None, "usage": {}}
 
         runtime = ToolRuntime(
             fleet=self._fleet,
@@ -153,3 +164,8 @@ class AgentOrchestrator:
                 }
             )
         return out
+
+
+def _is_manual_question(text: str) -> bool:
+    q = text.lower()
+    return any(token in q for token in ("руковод", "момент", "зазор", "страниц", "рэ", "рк", "manual", "pdf"))

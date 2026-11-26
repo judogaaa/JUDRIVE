@@ -133,6 +133,12 @@ class ToolRuntime:
             return {"status": "refused", "message": "Нужен непустой список работ"}
 
         evidence_ids = [str(x) for x in args.get("evidence_ids", []) if str(x)]
+        known = {str(hit.get("evidence_id")) for hit in self.sources}
+        if not evidence_ids or any(eid not in known for eid in evidence_ids):
+            return {
+                "status": "refused",
+                "message": "Источник не из результатов search_manuals этого диалога",
+            }
         resolved, errors = resolve_evidence_ids(self.rag, evidence_ids)
         if errors or not resolved:
             return {"status": "refused", "message": "Нет подтверждённых источников", "errors": errors}

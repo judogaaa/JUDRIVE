@@ -145,9 +145,8 @@ def _classify_vehicle(
     ticket_id = high_ticket.get("ticket_id") if high_ticket else None
 
     if high_ticket:
-        category = "quarantine"
-        quarantine_basis = "Подтверждённая заявка ТОиР с приоритетом high"
-        reason = quarantine_basis
+        category = "attention"
+        reason = "Заявка с urgency high не подтверждает карантин — решение принимает специалист"
     elif band == "high" and latest.get("status") == "anomaly" and latest.get("anomaly_type") in HIGH_RISK_ANOMALY_TYPES:
         if _recurring_type(sessions, latest.get("anomaly_type")) and isinstance(latest.get("anomaly_score"), (int, float)):
             if float(latest["anomaly_score"]) >= 0.8:

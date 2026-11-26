@@ -201,6 +201,8 @@ export function AgentChat({ vehicleId, sessionId, diagnoseResult, onDiagnoseComm
             <p className="chat-bubble__role">{msg.role === 'user' ? t('chat.roleUser') : t('chat.roleAgent')}</p>
             <p className="chat-bubble__text">{msg.content}</p>
             {msg.sources?.length ? (
+              <details className="evidence-panel">
+                <summary>{t('source.eyebrow')}</summary>
               <ul className="chat-sources">
                 {msg.sources.map((s) => (
                   <li key={s.evidence_id}>
@@ -215,6 +217,7 @@ export function AgentChat({ vehicleId, sessionId, diagnoseResult, onDiagnoseComm
                   </li>
                 ))}
               </ul>
+              </details>
             ) : null}
           </article>
         ))}

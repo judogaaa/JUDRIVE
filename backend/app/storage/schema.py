@@ -52,6 +52,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_ticket_created_once
 ON ticket_submissions(vehicle_id, session_id)
 WHERE submit_status = 'created' AND ticket_id IS NOT NULL;
 
+CREATE UNIQUE INDEX IF NOT EXISTS idx_ticket_pair_inflight
+ON ticket_submissions(vehicle_id, session_id)
+WHERE submit_status IN ('sending', 'created', 'unknown');
+
 CREATE TABLE IF NOT EXISTS groq_usage (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     conversation_id TEXT,
