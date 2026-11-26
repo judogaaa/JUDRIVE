@@ -8,9 +8,21 @@ services:
   ml:
     <<: *runtime
     command: ["python", "-m", "uvicorn", "mock_ml.app:app", "--host", "0.0.0.0", "--port", "8001"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
   toir:
     <<: *runtime
     command: ["python", "-m", "uvicorn", "mock_toir.app:app", "--host", "0.0.0.0", "--port", "8002"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8002/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
   backend:
     <<: *runtime
     env_file: .env
@@ -21,7 +33,17 @@ services:
       PDF_DIR: /app/materials/manuals
       DB_PATH: /app/local-data/judrive.sqlite
       COOKIE_SECURE: "true"
-    depends_on: [ml, toir]
+    depends_on:
+      ml:
+        condition: service_healthy
+      toir:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/api/health', timeout=5)"]
+      interval: 20s
+      timeout: 10s
+      retries: 30
+      start_period: 180s
     volumes:
       - ./materials/manuals:/app/materials/manuals:ro
       - ./local-data:/app/local-data
@@ -30,7 +52,9 @@ services:
       context: .
       dockerfile: deploy/Dockerfile.web
     restart: unless-stopped
-    depends_on: [backend]
+    depends_on:
+      backend:
+        condition: service_healthy
     environment:
       JUDRIVE_DOMAIN: ${JUDRIVE_DOMAIN:?Set JUDRIVE_DOMAIN in .env}
     ports: ["80:80", "443:443"]

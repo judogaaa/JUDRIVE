@@ -40,10 +40,12 @@ test.describe('Final UX audit — diagnosis workspace', () => {
   test('vehicle picker supports keyboard-only selection', async ({ page }) => {
     await page.goto('/')
     const trigger = page.locator('.vehicle-picker__trigger')
+    await expect(trigger).toContainText('P456AT178')
     await trigger.focus()
     await page.keyboard.press('Enter')
     const combo = page.getByRole('combobox', { name: 'Поиск' })
     await expect(combo).toBeFocused()
+    await expect(page.getByRole('listbox').getByRole('option')).toHaveCount(50)
     await page.keyboard.press('ArrowDown')
     await page.keyboard.press('Enter')
     await expect(trigger).toContainText('M333YK47')
@@ -237,6 +239,53 @@ test.describe('Final UX audit — diagnosis workspace', () => {
     expect(calls).toBeGreaterThanOrEqual(2)
   })
 
+  test('fleet load failure is localized and retryable', async ({ page }) => {
+    let fail = true
+    await page.route('**/api/vehicles', (route) => (fail ? route.abort('failed') : route.continue()))
+    await page.goto('/')
+    const error = page.locator('.panel__error').first()
+    await expect(error).toContainText('Нет связи с сервером')
+    await expect(error).not.toContainText('@i18n')
+
+    fail = false
+    await error.getByRole('button', { name: 'Повторить' }).click()
+    await expect(page.locator('.vehicle-picker__trigger')).toContainText('P456AT178', { timeout: 20_000 })
+  })
+
+  test('diagnosis HTTP 503 is localized and retry works', async ({ page }) => {
+    await page.route('**/api/diagnose', (route) =>
+      route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ detail: 'Mock ML временно недоступен' }),
+      }),
+    )
+    await page.goto('/')
+    await selectVehicleSession(page, 'M333YK47', 'S-0006')
+    await runDiagnosis(page)
+    const card = page.locator('.verdict-card--error')
+    await expect(card).toContainText('Mock ML временно недоступен', { timeout: 20_000 })
+    await expect(card).not.toContainText('@i18n')
+
+    await page.unroute('**/api/diagnose')
+    await card.getByRole('button', { name: 'Повторить' }).click()
+    await expect(page.locator('.verdict-card--normal')).toBeVisible({ timeout: 30_000 })
+  })
+
+  test('related manual sources open the cited PDF page', async ({ page }) => {
+    await page.goto('/')
+    await selectVehicleSession(page, 'B418HK98', 'S-0009')
+    await runDiagnosis(page)
+    await expect(page.locator('.verdict-card--anomaly')).toBeVisible({ timeout: 30_000 })
+
+    const related = page.locator('.related-manuals')
+    await expect(related.locator('.history-item').first()).toBeVisible({ timeout: 20_000 })
+    await related.locator('.history-item').first().click()
+    const viewer = page.getByRole('dialog')
+    await expect(viewer.locator('canvas')).toBeVisible({ timeout: 45_000 })
+    await expect(viewer.getByRole('textbox', { name: 'Страница PDF' })).not.toHaveValue('')
+  })
+
   test('viewport sweep has no horizontal overflow in diagnosis', async ({ page }) => {
     for (const viewport of [
       { width: 1920, height: 1080 },
@@ -255,6 +304,24 @@ test.describe('Final UX audit — diagnosis workspace', () => {
 })
 
 test.describe('Final UX audit — fleet, tickets and chief', () => {
+  test('fleet status filter exposes latest check state and resets cleanly', async ({ page }) => {
+    await page.goto('/')
+    await openNav(page, 'Автопарк')
+    const status = page.getByLabel('Статус')
+    await expect(status).toBeVisible()
+    await status.selectOption('failed')
+    await expect(page.locator('.fleet-table tbody tr').first()).toBeVisible()
+    await expect(page.locator('.fleet-table tbody tr .badge').first()).toHaveText('Запись непригодна')
+    const rows = page.locator('.fleet-table tbody tr')
+    const count = await rows.count()
+    expect(count).toBeGreaterThan(0)
+    for (let index = 0; index < count; index += 1) {
+      expect(await rows.nth(index).locator('.badge').first().textContent()).toContain('Запись непригодна')
+    }
+    await page.getByRole('button', { name: 'Сбросить фильтры' }).click()
+    await expect(page.locator('.toolbar-meta')).toContainText('Показано 50 из 50')
+  })
+
   test('fleet card opens diagnosis and tickets with the same vehicle', async ({ page }) => {
     await page.goto('/')
     await openNav(page, 'Автопарк')

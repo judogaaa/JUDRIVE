@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import csv
 import sqlite3
+from contextlib import closing
 from decimal import Decimal
 from pathlib import Path
 import sys
@@ -28,7 +29,7 @@ def main():
     for val in (args.input_usd_per_million, args.output_usd_per_million, args.usd_rub):
         if val is not None and (not val.is_finite() or val < 0):
             parser.error("Тарифы/курс должны быть неотрицательными конечными числами")
-    with sqlite3.connect(f"{args.db.resolve().as_uri()}?mode=ro", uri=True) as conn:
+    with closing(sqlite3.connect(f"{args.db.resolve().as_uri()}?mode=ro", uri=True)) as conn:
         n, tokens_in, tokens_out, total, latency = conn.execute("""
             SELECT COUNT(*), COALESCE(SUM(prompt_tokens),0), COALESCE(SUM(completion_tokens),0),
                    COALESCE(SUM(total_tokens),0), COALESCE(AVG(latency_ms),0)

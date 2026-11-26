@@ -27,6 +27,7 @@ docker compose logs -f backend
 В первый запуск backend строит индекс. Poppler сохраняет строки и столбцы таблиц;
 без Poppler локальный pypdf fallback может терять формат. Для полного качества рекомендуется
 установить `pdftotext` (Windows: Poppler в PATH; Linux: poppler-utils), пересобрать индекс.
+Compose содержит healthchecks для ML, ТОиР и backend; web стартует после readiness backend.
 Caddy получает HTTPS-сертификат через ACME при доступном DNS/портах.
 Состояние заявки/чата/рекомендаций в SQLite сохраняется между рестартами. Vendor Mock ТОиР
 сам по себе хранит выданные номера в памяти, поэтому не останавливать его во время демонстрации.

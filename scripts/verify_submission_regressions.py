@@ -45,7 +45,7 @@ def check(label, condition):
 
 def main():
     original_settings = get_settings()
-    with tempfile.TemporaryDirectory(prefix="judrive-submission-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="judrive-submission-", ignore_cleanup_errors=True) as tmp:
         os.environ.update(DB_PATH=str(Path(tmp) / "test.sqlite"), PDF_DIR=str(original_settings.pdf_dir),
                           MOCK_ML_URL="http://mock:8001", MOCK_TOIR_URL="http://mock:8002",
                           CHIEF_USERNAME="test-chief", CHIEF_PASSWORD_HASH=hash_password("temporary-test-only", "test-salt"),
@@ -85,8 +85,12 @@ def main():
                 check("chief explicit confirmation required", client.post(endpoint, json={**recommendation, "acknowledge": False}).status_code == 400)
                 check("chief stale pair refused", client.post(endpoint, json={**recommendation, "session_id": "S-0008"}).status_code == 409)
                 check("chief recommendation saved", client.post(endpoint, json=recommendation).json()["vehicle"]["category"] == "quarantine")
+                check("manual recommendation is confirmed, not automatic",
+                      client.get("/api/fleet/vehicles/B418HK98/insight").json()["vehicle"]["quarantine_confirmed"] is True)
                 check("dashboard uses recommendation", client.get("/api/fleet/dashboard").json()["summary"]["quarantine"] == 1)
                 check("chief cancellation does not mark as normal", client.post(endpoint, json={**recommendation, "active": False}).json()["vehicle"]["category"] == "attention")
+                check("cancelled recommendation is not confirmed",
+                      client.get("/api/fleet/vehicles/B418HK98/insight").json()["vehicle"]["quarantine_confirmed"] is False)
                 check("chief logout", client.post("/api/auth/logout").status_code == 200 and client.get("/api/fleet/dashboard").status_code == 401)
                 cid = client.post("/api/conversations", json={"vehicle_id": "P456AT178", "session_id": "S-0003"}).json()["conversation_id"]
                 replies = []
@@ -101,8 +105,12 @@ def main():
                 asyncio.run(ticket_checks(backend))
         finally:
             httpx.AsyncClient = original
-    manifest = json.loads((ROOT / "docs/SOURCE_MANIFEST.json").read_text())
-    check("vendor files unchanged", all(hashlib.sha256((ROOT / i["repository_path"]).read_bytes()).hexdigest() == i["sha256"] for i in manifest["included_mock_files"]))
+    manifest = json.loads((ROOT / "docs/SOURCE_MANIFEST.json").read_text(encoding="utf-8"))
+    # Manifest hashes are canonical LF blobs; Windows checkout may materialize CRLF.
+    check("vendor files unchanged", all(
+        hashlib.sha256((ROOT / i["repository_path"]).read_bytes().replace(b"\r\n", b"\n")).hexdigest() == i["sha256"]
+        for i in manifest["included_mock_files"]
+    ))
 
 
 async def ticket_checks(backend):

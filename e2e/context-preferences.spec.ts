@@ -25,6 +25,16 @@ test.describe('Context, locale and theme', () => {
     expect(stored).toBe('uz')
   })
 
+  test('switches locale to Hindi without Uzbek fallback', async ({ page }) => {
+    await page.goto('/')
+    await page.getByRole('button', { name: 'Русский' }).click()
+    await page.getByRole('option', { name: 'हिन्दी' }).click()
+    await expect(page.getByRole('button', { name: 'निदान', exact: true })).toBeVisible()
+    await expect(page.getByText('डिजिटल मैकेनिक', { exact: true }).first()).toBeVisible()
+    await expect(page.getByText('Tekshiruvni boshlang')).toHaveCount(0)
+    await expect(page.getByText('Raqamli mexanik bilan chat')).toHaveCount(0)
+  })
+
   test('switches theme to dark', async ({ page }) => {
     await page.goto('/')
     await page.locator('html').evaluate((el) => el.setAttribute('data-theme', 'light'))

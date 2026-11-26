@@ -38,6 +38,22 @@ def test_all_locale_json_have_same_keys_as_ru():
         assert keys == ru_keys, f"{name}.json keys mismatch: missing {ru_keys - keys}, extra {keys - ru_keys}"
 
 
+def test_core_locale_strings_are_translated_not_fallback():
+    i18n = ROOT / "frontend" / "src" / "i18n" / "locales"
+    data = {name: json.loads((i18n / f"{name}.json").read_text(encoding="utf-8"))
+            for name in ("uz", "kk", "tg", "ky", "hi", "bn")}
+    core = ("diag.run", "verdict.failed.title", "verdict.empty.title", "verdict.score",
+            "verdict.signal", "chat.title", "history.title", "chat.send")
+    for name in ("kk", "tg", "ky", "hi", "bn"):
+        for key in core:
+            assert data[name][key] != data["uz"][key], f"{name}/{key} still uses Uzbek fallback"
+            assert "Ð" not in data[name][key], f"{name}/{key} contains mojibake"
+        if name == "hi":
+            assert any("\u0900" <= char <= "\u097f" for char in data[name]["chat.title"])
+        if name == "bn":
+            assert any("\u0980" <= char <= "\u09ff" for char in data[name]["chat.title"])
+
+
 def test_chat_accepts_locale_field():
     client = TestClient(app)
     conv = client.post(
