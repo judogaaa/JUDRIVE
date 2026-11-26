@@ -10,6 +10,7 @@ import { formatSessionDateTime } from '../lib/formatLocale'
 interface TicketsViewProps {
   filterVehicleId?: string
   onFilterConsumed?: () => void
+  onOpenDiagnosis?: (vehicleId: string, sessionId?: string) => void
 }
 
 function docIdFromTitle(title: string): string {
@@ -42,7 +43,7 @@ function parsePayload(snapshot: string | null): {
   }
 }
 
-export function TicketsView({ filterVehicleId, onFilterConsumed }: TicketsViewProps) {
+export function TicketsView({ filterVehicleId, onFilterConsumed, onOpenDiagnosis }: TicketsViewProps) {
   const { t, locale } = useI18n()
   const [tickets, setTickets] = useState<TicketSubmission[]>([])
   const [loading, setLoading] = useState(true)
@@ -186,7 +187,18 @@ export function TicketsView({ filterVehicleId, onFilterConsumed }: TicketsViewPr
               <h2>{open.ticket_id ?? '—'}</h2>
               <button type="button" className="icon-btn" aria-label={t('common.close')} onClick={() => setOpenId(null)}><X size={18} /></button>
             </div>
-            <p>{open.vehicle_id} · {open.session_id} · {open.submit_status === 'created' ? t('tickets.statusCreated') : open.submit_status}</p>
+            <p>
+              {onOpenDiagnosis ? (
+                <button type="button" className="chat-source-link" onClick={() => onOpenDiagnosis(open.vehicle_id, open.session_id)}>
+                  {open.vehicle_id} · {open.session_id}
+                </button>
+              ) : (
+                <>
+                  {open.vehicle_id} · {open.session_id}
+                </>
+              )}{' '}
+              · {open.submit_status === 'created' ? t('tickets.statusCreated') : open.submit_status}
+            </p>
             {payload?.urgency ? <p>{payload.urgency}</p> : null}
             {payload?.conclusion ? <p>{payload.conclusion}</p> : null}
             {payload?.operations?.length ? <ul>{payload.operations.map((item) => <li key={item}>{item}</li>)}</ul> : null}

@@ -17,12 +17,14 @@ interface ManualsViewProps {
   engineModel: string | null
   searchIntent?: ManualSearchIntent | null
   onSearchIntentConsumed?: () => void
+  onAskInChat?: (text: string) => void
+  onBack?: () => void
 }
 
 const FAV_KEY = 'judrive-manual-fav'
 const RECENT_KEY = 'judrive-manual-recent'
 
-export function ManualsView({ engineModel, searchIntent, onSearchIntentConsumed }: ManualsViewProps) {
+export function ManualsView({ engineModel, searchIntent, onSearchIntentConsumed, onAskInChat, onBack }: ManualsViewProps) {
   const { t } = useI18n()
   const [engines, setEngines] = useState<{ engine_model: string; documents: CatalogDoc[] }[]>([])
   const [engine, setEngine] = useState(engineModel ?? '')
@@ -72,6 +74,11 @@ export function ManualsView({ engineModel, searchIntent, onSearchIntentConsumed 
     <div className="manual-sections">
       <header className="page-header page-header--compact">
         <h1>{t('nav.manuals')}</h1>
+        {onBack ? (
+          <button type="button" className="btn btn--secondary" onClick={onBack}>
+            {t('action.backDiagnosis')}
+          </button>
+        ) : null}
       </header>
       <section className="panel">
         <div className="toolbar-bar">
@@ -126,6 +133,7 @@ export function ManualsView({ engineModel, searchIntent, onSearchIntentConsumed 
         engineModel={(searchIntent?.engineModel ?? engine) || null}
         searchIntent={searchIntent}
         onSearchIntentConsumed={onSearchIntentConsumed}
+        onAskInChat={onAskInChat}
       />
       <SourceDrawer hit={open} onClose={() => setOpen(null)} />
     </div>

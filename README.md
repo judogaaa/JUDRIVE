@@ -96,6 +96,19 @@ pytest -q tests/
 
 Сборка UI: `cd frontend && npm run build`.
 
+### Playwright E2E (приёмка ML в UI)
+
+При запущенных заглушках, backend `:8090` и `npm run dev` в `frontend/`:
+
+```powershell
+npm install
+npx playwright install chromium
+$env:E2E_SKIP_SERVERS = "1"
+npm run e2e
+```
+
+Сценарии: `normal` / `anomaly` / `check_failed` и переход «Найти в руководстве» — см. `e2e/diagnosis-status.spec.ts`, матрица — [docs/REQUIREMENTS_MATRIX.md](docs/REQUIREMENTS_MATRIX.md).
+
 ### UI (этап 04)
 
 - Оболочка: **Диагностика** / **Автопарк** / **Заявки**, светлая/тёмная/системная тема, Manrope, Lucide.

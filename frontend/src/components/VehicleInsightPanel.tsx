@@ -10,9 +10,10 @@ interface VehicleInsightPanelProps {
   vehicleId: string | null
   onClose: () => void
   onOpenDiagnosis: (vehicleId: string, sessionId: string) => void
+  onOpenTickets?: (vehicleId: string) => void
 }
 
-export function VehicleInsightPanel({ vehicleId, onClose, onOpenDiagnosis }: VehicleInsightPanelProps) {
+export function VehicleInsightPanel({ vehicleId, onClose, onOpenDiagnosis, onOpenTickets }: VehicleInsightPanelProps) {
   const { t, locale } = useI18n()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -79,13 +80,20 @@ export function VehicleInsightPanel({ vehicleId, onClose, onOpenDiagnosis }: Veh
                 ))}
               </ul>
             ) : null}
-            <button
-              type="button"
-              className="btn btn--primary btn--block"
-              onClick={() => onOpenDiagnosis(row.vehicle_id, row.latest_session_id)}
-            >
-              {t('insight.openDiagnosis')}
-            </button>
+            <div className="workflow-actions">
+              <button
+                type="button"
+                className="btn btn--primary btn--block"
+                onClick={() => onOpenDiagnosis(row.vehicle_id, row.latest_session_id)}
+              >
+                {t('insight.openDiagnosis')}
+              </button>
+              {onOpenTickets ? (
+                <button type="button" className="btn btn--secondary btn--block" onClick={() => onOpenTickets(row.vehicle_id)}>
+                  {t('nav.tickets')}
+                </button>
+              ) : null}
+            </div>
             <ul className="history-list" style={{ maxHeight: 'none', marginTop: '1rem' }}>
               {history.map((h) => (
                 <li key={h.session_id}>

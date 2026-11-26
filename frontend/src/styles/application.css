@@ -1725,6 +1725,129 @@ a:focus-visible {
   padding: 0 var(--space-3);
 }
 
+.workflow-actions,
+.message-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: start;
+  margin-top: var(--space-3);
+}
+
+.workflow-actions > .btn--primary {
+  flex: 1 1 100%;
+}
+
+.workflow-actions .btn,
+.message-actions .btn {
+  min-height: 42px;
+  white-space: normal;
+}
+
+.copy-action {
+  min-width: 0;
+}
+
+.copy-fallback {
+  display: block;
+  width: 100%;
+  margin-top: var(--space-2);
+  min-height: 5rem;
+  resize: vertical;
+}
+
+.manual-sections > .page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.source-drawer {
+  z-index: 70;
+}
+
+.source-drawer--full .source-drawer__panel {
+  max-width: min(96vw, 1200px);
+  height: min(96dvh, 100%);
+}
+
+.source-quote {
+  flex: 0 1 auto;
+  max-height: 24dvh;
+  overflow: auto;
+  font-size: 0.88rem;
+}
+
+.source-quote summary {
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.source-drawer__tools {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.pdf-tool-group {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.pdf-page-form {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--text-muted);
+  font-size: 0.86rem;
+}
+
+.pdf-page-form input {
+  width: 3.4rem;
+  min-height: 40px;
+  text-align: center;
+  padding: var(--space-1);
+  border: 1px solid var(--border);
+  background: var(--surface-elevated);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+}
+
+.pdf-fit {
+  font-size: 0.78rem;
+  min-height: 40px;
+  padding-inline: var(--space-2);
+}
+
+.source-drawer__canvas-wrap {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 120px;
+  overflow: auto;
+}
+
+.pdf-status {
+  padding: var(--space-4);
+  color: var(--text);
+}
+
+.source-external {
+  align-self: flex-start;
+  flex-shrink: 0;
+}
+
+.source-drawer__panel {
+  display: flex;
+  flex-direction: column;
+  max-height: min(92dvh, 100%);
+}
+
 @media (max-width: 1100px) {
   .diag-toolbar {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);

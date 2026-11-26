@@ -8,6 +8,7 @@ interface ManualSearchPanelProps {
   engineModel: string | null
   searchIntent?: ManualSearchIntent | null
   onSearchIntentConsumed?: () => void
+  onAskInChat?: (text: string) => void
 }
 
 const QUICK_QUERIES = [
@@ -16,7 +17,7 @@ const QUICK_QUERIES = [
   'давление масла',
 ]
 
-export function ManualSearchPanel({ engineModel, searchIntent, onSearchIntentConsumed }: ManualSearchPanelProps) {
+export function ManualSearchPanel({ engineModel, searchIntent, onSearchIntentConsumed, onAskInChat }: ManualSearchPanelProps) {
   const { t } = useI18n()
   const [query, setQuery] = useState(QUICK_QUERIES[0])
   const [loading, setLoading] = useState(false)
@@ -114,9 +115,24 @@ export function ManualSearchPanel({ engineModel, searchIntent, onSearchIntentCon
                 <span className="manual-result__page">PDF {hit.pdf_page}</span>
               </div>
               <blockquote className="manual-result__quote">{hit.quote}</blockquote>
-              <button type="button" className="ghost-button" onClick={() => setActive(hit)}>
-                {t('manual.openSource')}
-              </button>
+              <div className="message-actions">
+                <button type="button" className="ghost-button" onClick={() => setActive(hit)}>
+                  {t('manual.openSource')}
+                </button>
+                {onAskInChat ? (
+                  <button
+                    type="button"
+                    className="btn btn--secondary"
+                    onClick={() =>
+                      onAskInChat(
+                        `${t('action.askSource')}\n${hit.manual_title}, ${t('ticket.pdfPage')} ${hit.pdf_page}\n${hit.quote}`,
+                      )
+                    }
+                  >
+                    {t('action.toChat')}
+                  </button>
+                ) : null}
+              </div>
             </li>
           ))}
         </ul>

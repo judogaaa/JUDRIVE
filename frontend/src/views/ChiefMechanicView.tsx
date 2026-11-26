@@ -11,9 +11,10 @@ import { useI18n } from '../i18n/I18nContext'
 
 interface ChiefMechanicViewProps {
   onOpenDiagnosis: (vehicleId: string, sessionId?: string) => void
+  onOpenTickets?: (vehicleId: string) => void
 }
 
-export function ChiefMechanicView({ onOpenDiagnosis }: ChiefMechanicViewProps) {
+export function ChiefMechanicView({ onOpenDiagnosis, onOpenTickets }: ChiefMechanicViewProps) {
   const { t } = useI18n()
   const [authed, setAuthed] = useState<boolean | null>(null)
   const [tab, setTab] = useState<'overview' | 'queue' | 'analytics' | 'warnings' | 'fleet'>('overview')
@@ -302,6 +303,14 @@ export function ChiefMechanicView({ onOpenDiagnosis }: ChiefMechanicViewProps) {
           setSelectedVehicle(null)
           onOpenDiagnosis(id, sessionId)
         }}
+        onOpenTickets={
+          onOpenTickets
+            ? (id) => {
+                setSelectedVehicle(null)
+                onOpenTickets(id)
+              }
+            : undefined
+        }
       />
     </>
   )

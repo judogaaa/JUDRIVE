@@ -179,9 +179,21 @@ export function DiagnosisView({
     if (!result) return null
     return {
       onExplain: () =>
-        onChatIntent({ id: Date.now(), message: buildExplainDiagnosisMessage(result), autoSend: true }),
+        onChatIntent({
+          id: Date.now(),
+          vehicleId,
+          sessionId,
+          message: buildExplainDiagnosisMessage(result),
+          autoSend: true,
+        }),
       onWhatToCheck: () =>
-        onChatIntent({ id: Date.now(), message: buildWhatToCheckMessage(result), autoSend: true }),
+        onChatIntent({
+          id: Date.now(),
+          vehicleId,
+          sessionId,
+          message: buildWhatToCheckMessage(result),
+          autoSend: true,
+        }),
       onSearchManual: () => {
         if (!engineModel) return
         onOpenManuals({
@@ -193,7 +205,14 @@ export function DiagnosisView({
       },
       onPrepareTicket:
         result.status === 'anomaly' && result.signal_quality !== 'bad'
-          ? () => onChatIntent({ id: Date.now(), message: buildPrepareTicketMessage(result), autoSend: true })
+          ? () =>
+              onChatIntent({
+                id: Date.now(),
+                vehicleId,
+                sessionId,
+                message: buildPrepareTicketMessage(result),
+                autoSend: true,
+              })
           : undefined,
       onCopyPlan: () => void copyVerdictPlan(),
       onOtherSession:
@@ -204,7 +223,7 @@ export function DiagnosisView({
             }
           : undefined,
     }
-  }, [copyVerdictPlan, engineModel, onChatIntent, onOpenManuals, result])
+  }, [copyVerdictPlan, engineModel, onChatIntent, onOpenManuals, result, sessionId, vehicleId])
 
   return (
     <div className="diag-page">
@@ -253,7 +272,12 @@ export function DiagnosisView({
             </div>
             <label className="field">
               <span>{t('diag.check')}</span>
-              <select ref={sessionRef} value={sessionId} onChange={(e) => onSessionSelect(e.target.value)}>
+              <select
+                ref={sessionRef}
+                aria-label={t('diag.check')}
+                value={sessionId}
+                onChange={(e) => onSessionSelect(e.target.value)}
+              >
                 {sortedSessions.map((s) => (
                   <option key={s.session_id} value={s.session_id}>
                     {s.session_id} · {formatSessionDateTime(locale, s.checked_at)}
@@ -301,6 +325,15 @@ export function DiagnosisView({
                 onDiagnoseCommand={() => void runDiagnosis()}
                 chatIntent={chatIntent}
                 onChatIntentConsumed={onChatIntentConsumed}
+                onOpenManuals={(query) => {
+                  if (!engineModel) return
+                  onOpenManuals({
+                    id: Date.now(),
+                    engineModel,
+                    query,
+                    autoOpenSingle: false,
+                  })
+                }}
               />
             ) : null}
           </section>

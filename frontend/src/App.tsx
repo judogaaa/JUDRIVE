@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { fetchVehicles } from './api/client'
 import type { VehicleSummary } from './api/types'
 import { WorkspaceShell, type AppView } from './components/shell/WorkspaceShell'
@@ -27,6 +27,38 @@ export default function App() {
   const [manualIntent, setManualIntent] = useState<ManualSearchIntent | null>(null)
   const [chatIntent, setChatIntent] = useState<ChatIntent | null>(null)
   const [ticketsVehicleFilter, setTicketsVehicleFilter] = useState<string | undefined>(undefined)
+  const sequence = useRef(0)
+
+  const currentEngine = vehicles.find((v) => v.vehicle_id === vehicleId)?.engine_model ?? null
+
+  const openManuals = (intent: Omit<ManualSearchIntent, 'id'> | string) => {
+    const engine = typeof intent === 'string' ? currentEngine : intent.engineModel
+    const query = typeof intent === 'string' ? intent : intent.query
+    if (!engine || !query.trim()) return
+    setManualIntent({
+      id: ++sequence.current,
+      engineModel: engine,
+      query,
+      autoOpenSingle: typeof intent !== 'string' ? intent.autoOpenSingle : false,
+    })
+    setView('manuals')
+  }
+
+  const askInChat = (message: string, autoSend = true, target?: { vehicleId: string; sessionId: string }) => {
+    const vid = target?.vehicleId ?? vehicleId
+    const sid = target?.sessionId ?? sessionId
+    if (!vid || !sid || !message.trim()) return
+    setVehicleId(vid)
+    setSessionId(sid)
+    setChatIntent({
+      id: ++sequence.current,
+      vehicleId: vid,
+      sessionId: sid,
+      message,
+      autoSend,
+    })
+    setView('diagnosis')
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -47,7 +79,7 @@ export default function App() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [t])
 
   const openDiagnosisForVehicle = (id: string, sessionOverride?: string) => {
     setVehicleId(id)
@@ -56,9 +88,9 @@ export default function App() {
     setView('diagnosis')
   }
 
-  const openManualsWithIntent = (intent: ManualSearchIntent) => {
-    setManualIntent(intent)
-    setView('manuals')
+  const openTicketsForVehicle = (id: string) => {
+    setTicketsVehicleFilter(id)
+    setView('tickets')
   }
 
   return (
@@ -71,25 +103,45 @@ export default function App() {
           sessionId={sessionId}
           onVehicleChange={setVehicleId}
           onSessionChange={setSessionId}
-          onOpenManuals={openManualsWithIntent}
-          onChatIntent={setChatIntent}
+          onOpenManuals={(intent) => openManuals(intent)}
+          onChatIntent={(intent) => {
+            setVehicleId(intent.vehicleId)
+            setSessionId(intent.sessionId)
+            setChatIntent(intent)
+          }}
           chatIntent={chatIntent}
           onChatIntentConsumed={() => setChatIntent(null)}
         />
       </div>
       {view === 'manuals' ? (
         <ManualsView
-          engineModel={vehicles.find((v) => v.vehicle_id === vehicleId)?.engine_model ?? null}
+          engineModel={currentEngine}
           searchIntent={manualIntent}
           onSearchIntentConsumed={() => setManualIntent(null)}
+          onAskInChat={(text) => askInChat(text, false)}
+          onBack={() => setView('diagnosis')}
         />
       ) : null}
-      {view === 'chief' ? <ChiefMechanicView onOpenDiagnosis={openDiagnosisForVehicle} /> : null}
+      {view === 'chief' ? (
+        <ChiefMechanicView
+          onOpenDiagnosis={openDiagnosisForVehicle}
+          onOpenTickets={openTicketsForVehicle}
+        />
+      ) : null}
       {view === 'fleet' ? (
-        <FleetView vehicles={vehicles} fleetError={fleetError} onOpenDiagnosis={(id) => openDiagnosisForVehicle(id)} />
+        <FleetView
+          vehicles={vehicles}
+          fleetError={fleetError}
+          onOpenDiagnosis={openDiagnosisForVehicle}
+          onOpenTickets={openTicketsForVehicle}
+        />
       ) : null}
       {view === 'tickets' ? (
-        <TicketsView filterVehicleId={ticketsVehicleFilter} onFilterConsumed={() => setTicketsVehicleFilter(undefined)} />
+        <TicketsView
+          filterVehicleId={ticketsVehicleFilter}
+          onFilterConsumed={() => setTicketsVehicleFilter(undefined)}
+          onOpenDiagnosis={openDiagnosisForVehicle}
+        />
       ) : null}
     </WorkspaceShell>
   )

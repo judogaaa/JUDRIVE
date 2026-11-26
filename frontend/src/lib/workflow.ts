@@ -9,18 +9,44 @@ export type ManualSearchIntent = {
 
 export type ChatIntent = {
   id: number
+  vehicleId: string
+  sessionId: string
   message: string
   autoSend?: boolean
+  /** @deprecated tickets review-only */
+  analysisOnly?: boolean
+}
+
+const TOPICS: Record<string, string> = {
+  F01: 'тепловые зазоры клапанного механизма',
+  F02: 'давление масла система смазки',
+  F03: 'перегрев система охлаждения охлаждающая жидкость',
+  F04: 'ремень привода агрегатов натяжение',
+  F05: 'генератор проверка',
+  F06: 'сцепление проверка',
+  F07: 'коробка передач проверка',
+  F08: 'топливная система дизельного двигателя',
+  F09: 'турбокомпрессор наддув',
+  F10: 'компрессор насос гидроусилителя',
+  F11: 'рециркуляция отработавших газов',
+  F12: 'система зажигания',
+  F13: 'система подачи топлива бензиновый двигатель',
+  F14: 'цепь газораспределительного механизма натяжитель',
+}
+
+export function usableStatus(result: DiagnoseResponse): DiagnoseResponse['status'] {
+  return result.signal_quality === 'bad' ? 'check_failed' : result.status
+}
+
+export function manualTopic(result: DiagnoseResponse | null | undefined): string {
+  if (result && usableStatus(result) === 'anomaly') {
+    return TOPICS[result.anomaly_type ?? ''] ?? 'осмотр двигателя техническое обслуживание'
+  }
+  return 'осмотр двигателя техническое обслуживание'
 }
 
 export function manualQueryFromDiagnosis(result: DiagnoseResponse): string {
-  if (result.status === 'anomaly') {
-    const title = result.anomaly_title?.trim()
-    if (title) return `проверка ${title}`
-    if (result.anomaly_type) return `диагностика ${result.anomaly_type}`
-    return 'порядок диагностики двигателя'
-  }
-  return 'общий осмотр двигателя'
+  return manualTopic(result)
 }
 
 export function buildExplainDiagnosisMessage(result: DiagnoseResponse): string {
@@ -64,6 +90,6 @@ export function buildCheckFailedChatMessage(): string {
 }
 
 export function buildWhatToCheckMessage(result: DiagnoseResponse): string {
-  if (result.status === 'check_failed') return buildCheckFailedChatMessage()
+  if (usableStatus(result) === 'check_failed') return buildCheckFailedChatMessage()
   return 'По результату этой проверки: что проверить на машине в первую очередь и в каком порядке? Опирайся на руководство двигателя.'
 }

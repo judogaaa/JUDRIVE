@@ -229,11 +229,25 @@
 - Документ пути: `docs/UX_JOURNEY.md`.
 - Проверено: `npm run build`, pytest 10 (api+guardrails+i18n), браузерный smoke диагностики.
 
+### Сквозной контекст и приёмка (26.11, после 895d2c6)
+
+- Точечно интегрированы `SourceDrawer`/`CopyButton` с `origin/fix/diagnosis-workspace` (без merge ветки).
+- Workflow: `ChatIntent`/`ManualSearchIntent`, переходы диагностика ↔ чат ↔ руководства ↔ автопарк ↔ заявки ↔ chief; кликабельные ТС/сессии в заявках.
+- `AgentChat`: копирование, уточнение, переход в руководства; `VerdictActions` + PDF (fit/zoom/fullscreen/страница).
+- i18n: 233 ключа × 7 языков (`.ts` + `.json`), `scripts/sync_i18n_block.py`.
+- Документы: `docs/REQUIREMENTS_MATRIX.md`, `docs/DEPLOY_HTTPS.md`.
+- Playwright: корневой `npm run e2e`, `e2e/diagnosis-status.spec.ts` — **4/4** (normal/anomaly/check_failed + переход в руководства).
+
+### Проверено
+
+- `npm run build`, `pytest` 27 passed, `npm run e2e` (стенд :8090/:5173).
+- Локальный стенд остаётся на 8090/5173.
+
 ### Остаточные риски
 
 - Live Groq/голос — квота 429 при частых прогонах.
-- Нет Playwright в репозитории.
-- Полировка кабинета главного механика и мобильная адаптация — частично.
+- HTTPS-стенд в облаке ещё не поднят (инструкция в `docs/DEPLOY_HTTPS.md`).
+- Расширенный Playwright (chief, ticket confirm, mobile viewports) — по желанию перед сдачей.
 
 ## Точечные UX-исправления (после 8152081)
 
