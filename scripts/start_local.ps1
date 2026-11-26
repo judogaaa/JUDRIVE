@@ -11,10 +11,10 @@ if (-not (Test-Path $Python)) {
   throw "Нет backend venv: backend\.venv"
 }
 
-function Start-Bg([string]$Title, [string]$Exe, [string[]]$Args, [hashtable]$EnvExtra = @{}) {
+function Start-Bg([string]$Title, [string]$Exe, [string[]]$ProcessArgs, [hashtable]$EnvExtra = @{}) {
   $psi = @{
     FilePath     = $Exe
-    ArgumentList = $Args
+    ArgumentList = $ProcessArgs
     WorkingDirectory = $Root
     WindowStyle  = "Hidden"
   }
@@ -25,7 +25,7 @@ function Start-Bg([string]$Title, [string]$Exe, [string[]]$Args, [hashtable]$Env
       [Environment]::SetEnvironmentVariable($k, $EnvExtra[$k], "Process")
     }
   }
-  Write-Host "[$Title] $($Exe) $($Args -join ' ')"
+  Write-Host "[$Title] $($Exe) $($ProcessArgs -join ' ')"
   try { Start-Process @psi | Out-Null }
   finally {
     foreach ($k in $EnvExtra.Keys) {
