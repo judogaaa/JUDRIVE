@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronRight, Copy, Filter, X } from 'lucide-react'
-import { createConversation, sendChatMessage } from '../api/chat'
-import type { ManualSearchHit } from '../api/manuals'
+import { createConversation, sendChatMessage, type SourceHit } from '../api/chat'
+import { fetchEvidence, type ManualSearchHit } from '../api/manuals'
 import { fetchTickets, type TicketSubmission } from '../api/tickets'
+import { MessageText, readableAnswer } from '../components/MessageText'
 import { CopyButton } from '../components/CopyButton'
 import { SourceDrawer } from '../components/SourceDrawer'
 import { useI18n } from '../i18n/I18nContext'
@@ -47,6 +48,8 @@ export function TicketsView({ filterVehicleId, onFilterConsumed, onOpenDiagnosis
   const [vehicleFilter, setVehicleFilter] = useState(filterVehicleId ?? '')
   const [openId, setOpenId] = useState<string | null>(null)
   const [review, setReview] = useState<string | null>(null)
+  const [reviewSources, setReviewSources] = useState<SourceHit[]>([])
+  const [reviewError, setReviewError] = useState<string | null>(null)
   const [reviewing, setReviewing] = useState(false)
   const [source, setSource] = useState<ManualSearchHit | null>(null)
   const reviewGen = useRef(0)
@@ -129,16 +132,39 @@ export function TicketsView({ filterVehicleId, onFilterConsumed, onOpenDiagnosis
     ].join('\n')
   }
 
+  const selectTicket = (id: string | null) => {
+    reviewGen.current += 1
+    setReview(null)
+    setReviewSources([])
+    setReviewError(null)
+    setReviewing(false)
+    setSource(null)
+    setOpenId(id)
+  }
+
+  const openReviewSource = async (hit: SourceHit) => {
+    const generation = reviewGen.current
+    setReviewError(null)
+    try {
+      const record = await fetchEvidence(hit.evidence_id)
+      if (generation === reviewGen.current) setSource(record)
+    } catch {
+      if (generation === reviewGen.current) setReviewError(t('error.source'))
+    }
+  }
+
   const explain = async (row: TicketSubmission) => {
     const generation = ++reviewGen.current
     setReviewing(true)
     setReview(null)
+    setReviewSources([])
+    setReviewError(null)
     try {
       const conversation = await createConversation(row.vehicle_id, row.session_id)
       const reply = await sendChatMessage(conversation.conversation_id, buildTicketReviewMessage(row), locale, true)
-      if (generation === reviewGen.current) setReview(reply.reply)
+      if (generation === reviewGen.current) { setReview(reply.reply); setReviewSources(reply.sources ?? []) }
     } catch (err: unknown) {
-      if (generation === reviewGen.current) setReview(resolveErrorMessage(t, err, 'error.agent'))
+      if (generation === reviewGen.current) setReviewError(resolveErrorMessage(t, err, 'error.agent'))
     } finally {
       if (generation === reviewGen.current) setReviewing(false)
     }
@@ -204,7 +230,7 @@ export function TicketsView({ filterVehicleId, onFilterConsumed, onOpenDiagnosis
                 const rowPayload = parsePayload(row.payload_snapshot)
                 return (
                   <article key={row.local_id} className="ticket-row">
-                    <button type="button" className="ticket-row__head" onClick={() => setOpenId(row.local_id)}>
+                    <button type="button" className="ticket-row__head" onClick={() => selectTicket(row.local_id)}>
                       <span className="ticket-row__id">{row.ticket_id ?? '—'}</span>
                       <span className="ticket-row__meta">{formatSessionDateTime(locale, row.created_at)}</span>
                     </button>
@@ -215,7 +241,7 @@ export function TicketsView({ filterVehicleId, onFilterConsumed, onOpenDiagnosis
                       {rowPayload?.anomaly_type ? <span className="badge">{rowPayload.anomaly_type}</span> : null}
                     </div>
                     {rowPayload?.conclusion ? <p className="ticket-row__conclusion">{rowPayload.conclusion}</p> : null}
-                    <button type="button" className="ticket-row__open" onClick={() => setOpenId(row.local_id)}>
+                    <button type="button" className="ticket-row__open" onClick={() => selectTicket(row.local_id)}>
                       {t('tickets.more')}
                       <ChevronRight size={16} aria-hidden />
                     </button>
@@ -228,7 +254,7 @@ export function TicketsView({ filterVehicleId, onFilterConsumed, onOpenDiagnosis
       ) : null}
 
       {open ? (
-        <div className="drawer-scrim" role="presentation" onClick={() => setOpenId(null)}>
+        <div className="drawer-scrim" role="presentation" onClick={() => selectTicket(null)}>
           <aside
             className="history-drawer ticket-drawer"
             role="dialog"
@@ -242,7 +268,7 @@ export function TicketsView({ filterVehicleId, onFilterConsumed, onOpenDiagnosis
                 <h2 id="ticket-detail-title">{open.ticket_id ?? '—'}</h2>
                 <p className="ticket-row__meta">{formatSessionDateTime(locale, open.created_at)}</p>
               </div>
-              <button type="button" className="icon-btn" aria-label={t('common.close')} onClick={() => setOpenId(null)}>
+              <button type="button" className="icon-btn" aria-label={t('common.close')} onClick={() => selectTicket(null)}>
                 <X size={18} aria-hidden />
               </button>
             </div>
@@ -376,7 +402,19 @@ export function TicketsView({ filterVehicleId, onFilterConsumed, onOpenDiagnosis
                 {reviewing ? t('chat.processing') : t('tickets.review')}
               </button>
             </div>
-            {review ? <div className="ticket-review">{review}</div> : null}
+            {reviewError ? <p className="panel__error" role="alert">{reviewError}</p> : null}
+            {review ? <div className="ticket-review">
+              <MessageText text={review} sources={reviewSources} onOpenSource={(hit) => void openReviewSource(hit)} />
+              {reviewSources.length > 0 && <div className="evidence-panel">
+                <strong>{t('chat.sourcesTitle')}</strong>
+                <ul className="chat-sources">{reviewSources.map((hit) => <li key={hit.evidence_id}>
+                  <button type="button" className="chat-source-link" onClick={() => void openReviewSource(hit)}>
+                    {hit.manual_title}, {t('ticket.pdfPage')} {hit.pdf_page}
+                  </button>
+                </li>)}</ul>
+              </div>}
+              <CopyButton text={readableAnswer(review, reviewSources, t('ticket.pdfPage'))} />
+            </div> : null}
           </aside>
         </div>
       ) : null}

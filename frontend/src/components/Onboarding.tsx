@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react'
-import { ArrowLeft, ArrowRight, Check, CircleHelp, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, LockKeyhole, X } from 'lucide-react'
 import { useI18n } from '../i18n/I18nContext'
 import { ONBOARDING_STEPS } from '../help/content'
+import type { LocaleCode } from '../i18n/translations'
 
 interface OnboardingProps {
   open: boolean
@@ -9,8 +10,6 @@ interface OnboardingProps {
   acknowledged: boolean
   onNext: () => void
   onBack: () => void
-  onSkip: () => void
-  onClose: () => void
   onAcknowledge: (value: boolean) => void
   onStart: () => void
 }
@@ -21,40 +20,39 @@ export function Onboarding({
   acknowledged,
   onNext,
   onBack,
-  onSkip,
-  onClose,
   onAcknowledge,
   onStart,
 }: OnboardingProps) {
-  const { t } = useI18n()
+  const { t, locale, setLocale, locales, localeLabels } = useI18n()
   const dialogRef = useRef<HTMLDivElement>(null)
-  const closeRef = useRef<HTMLButtonElement>(null)
   const headingRef = useRef<HTMLHeadingElement>(null)
-  const onCloseRef = useRef(onClose)
-  onCloseRef.current = onClose
+  const last = step === ONBOARDING_STEPS.length - 1
+  const canFinish = last && acknowledged
+  const finishRef = useRef<(() => void) | null>(null)
+  finishRef.current = canFinish ? onStart : null
 
   useEffect(() => {
     if (!open) return
     const previous = document.activeElement as HTMLElement | null
     const overflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
-    closeRef.current?.focus()
+    headingRef.current?.focus()
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault()
-        onCloseRef.current()
+        finishRef.current?.()
         return
       }
       if (event.key !== 'Tab') return
       const dialog = dialogRef.current
       if (!dialog) return
       const focusable = Array.from(
-        dialog.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), [href], summary'),
+        dialog.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), select:not([disabled]), [href], summary'),
       ).filter((node) => node.getClientRects().length > 0)
       const first = focusable[0]
       const last = focusable.at(-1)
       if (!first || !last) return
-      if (event.shiftKey && document.activeElement === first) {
+      if (event.shiftKey && (document.activeElement === first || !focusable.includes(document.activeElement as HTMLElement))) {
         event.preventDefault()
         last.focus()
       } else if (!event.shiftKey && document.activeElement === last) {
@@ -76,12 +74,11 @@ export function Onboarding({
       (document.activeElement instanceof HTMLButtonElement && document.activeElement.disabled))) {
       headingRef.current?.focus()
     }
-  }, [open, step])
+  }, [open, step, canFinish])
 
   if (!open) return null
 
   const current = ONBOARDING_STEPS[step] ?? ONBOARDING_STEPS[0]
-  const last = step === ONBOARDING_STEPS.length - 1
   const Icon = current.icon
 
   return (
@@ -93,9 +90,14 @@ export function Onboarding({
             <p className="eyebrow">{t('onboarding.title')}</p>
             <h2 id="onboarding-title" ref={headingRef} tabIndex={-1}>{t(current.titleKey)}</h2>
           </div>
-          <button ref={closeRef} type="button" className="icon-btn" aria-label={t('onboarding.close')} onClick={onClose}>
-            <X size={18} aria-hidden />
-          </button>
+          <div className="onboarding__tools">
+            <select aria-label={t('common.language')} value={locale} onChange={(event) => setLocale(event.target.value as LocaleCode)}>
+              {locales.map((code) => <option key={code} value={code}>{localeLabels[code]}</option>)}
+            </select>
+            <button type="button" className="icon-btn onboarding__close" aria-label={t('onboarding.close')} title={canFinish ? t('onboarding.close') : t('onboarding.required')} disabled={!canFinish} onClick={onStart}>
+              <X size={18} aria-hidden />
+            </button>
+          </div>
         </header>
 
         <div className="onboarding__progress" aria-label={t('onboarding.progress', { current: step + 1, total: ONBOARDING_STEPS.length })}>
@@ -117,7 +119,7 @@ export function Onboarding({
             {current.pointKeys.map((key) => (
               <li key={key}>
                 <Check size={15} aria-hidden />
-                {t(key)}
+                <span>{t(key)}</span>
               </li>
             ))}
           </ul>
@@ -131,9 +133,7 @@ export function Onboarding({
         ) : null}
 
         <footer className="onboarding__actions">
-          <button type="button" className="ghost-button" onClick={onSkip}>
-            {t('onboarding.skip')}
-          </button>
+          {!canFinish && <span className="onboarding__hint"><LockKeyhole size={14} aria-hidden />{t('onboarding.required')}</span>}
           <div className="onboarding__nav">
             {step > 0 ? (
               <button type="button" className="btn btn--secondary" onClick={onBack}>
@@ -142,7 +142,7 @@ export function Onboarding({
               </button>
             ) : null}
             {last ? (
-              <button type="button" className="btn btn--primary" disabled={!acknowledged} onClick={onStart}>
+              <button type="button" className="btn btn--primary" disabled={!canFinish} onClick={onStart}>
                 {t('onboarding.start')}
               </button>
             ) : (
@@ -154,10 +154,6 @@ export function Onboarding({
           </div>
         </footer>
 
-        <p className="onboarding__hint">
-          <CircleHelp size={14} aria-hidden />
-          {t('nav.help')}
-        </p>
       </section>
     </div>
   )
@@ -165,60 +161,21 @@ export function Onboarding({
 
 function StepPreview({ stepId }: { stepId: string }) {
   const { t } = useI18n()
-  if (stepId === 'diagnosis') {
-    return (
-      <div className="onboarding-preview onboarding-preview--statuses">
-        <span className="badge badge--normal">{t('verdict.normal.title')}</span>
-        <span className="badge badge--attention">{t('verdict.anomaly.title')}</span>
-        <span className="badge badge--attention">{t('verdict.failed.title')}</span>
-      </div>
-    )
-  }
-  if (stepId === 'chat') {
-    return (
-      <div className="onboarding-preview onboarding-preview--chat">
-        <span>{t('chat.status.anomaly')}</span>
-        <strong>{t('verdict.action.searchManual')}</strong>
-      </div>
-    )
-  }
-  if (stepId === 'manuals') {
-    return (
-      <div className="onboarding-preview onboarding-preview--pdf">
-        <FileBadge />
-        <span>PDF 34</span>
-        <span>{t('source.fit')}</span>
-      </div>
-    )
-  }
-  if (stepId === 'tickets') {
-    return (
-      <div className="onboarding-preview onboarding-preview--ticket">
-        <span className="badge badge--normal">{t('tickets.statusCreated')}</span>
-        <strong>TKT</strong>
-      </div>
-    )
-  }
-  if (stepId === 'fleet') {
-    return (
-      <div className="onboarding-preview onboarding-preview--fleet">
-        <strong>50</strong>
-        <span>{t('chief.tab.queue')}</span>
-      </div>
-    )
-  }
-  if (stepId === 'ready') {
-    return (
-      <div className="onboarding-preview onboarding-preview--settings">
-        <span>Русский</span>
-        <span>O‘zbekcha</span>
-        <span>हिन्दी</span>
-      </div>
-    )
-  }
-  return <div className="onboarding-preview onboarding-preview--welcome">{t('diag.workflow')}</div>
-}
-
-function FileBadge() {
-  return <span className="onboarding-preview__file" aria-hidden>PDF</span>
+  if (stepId === 'diagnosis') return (
+    <div className="onboarding-preview onboarding-preview--statuses">
+      <span className="badge badge--normal">{t('verdict.normal.title')}</span>
+      <span className="badge badge--attention">{t('verdict.anomaly.title')}</span>
+      <span className="badge badge--attention">{t('verdict.failed.title')}</span>
+    </div>
+  )
+  const topics = {
+    welcome: ['nav.diagnosis', 'nav.manuals', 'nav.tickets'],
+    chat: ['chat.suggest1', 'verdict.action.searchManual'],
+    manuals: ['ticket.pdfPage', 'source.fit'],
+    tickets: ['tickets.statusCreated', 'ticket.confirmedId'],
+    fleet: ['nav.fleet', 'nav.chief'],
+    ready: ['common.language', 'theme.light', 'theme.dark', 'theme.system'],
+  } as const
+  const labels = topics[stepId as keyof typeof topics] ?? topics.welcome
+  return <div className="onboarding-preview">{labels.map((key) => <span className="onboarding-preview__tag" key={key}>{t(key)}</span>)}</div>
 }

@@ -119,3 +119,31 @@ test('model Markdown with an empty heading renders safely without hanging', asyn
   await expect(page.locator('.chat-bubble__text strong').filter({ hasText: 'Проверка завершена' })).toBeVisible()
   await expect(page.locator('.chat-bubble__text img')).toHaveCount(0)
 })
+
+test('verified citation opens the exact PDF and provider errors stay human-readable', async ({ page }) => {
+  let fail = true
+  await page.route('**/api/conversations/*/messages', route => route.fulfill({
+    status: fail ? 429 : 200,
+    contentType: 'application/json',
+    body: JSON.stringify(fail ? { detail: 'Internal provider traceback and quota metadata' } : {
+      reply: '**Что проверить**\n- Сверьте зазоры с руководством [y236-re:p0034].',
+      sources: [{ evidence_id: 'y236-re:p0034', doc_id: 'y236-re', manual_title: '236-3902150-Б РЭ', pdf_page: 34, quote: 'Руководство' }],
+      tool_trace: [], draft: null,
+    }),
+  }))
+  await page.goto('/')
+  await selectVehicleSession(page, 'B418HK98', 'S-0009')
+  await runDiagnosis(page)
+  await expect(page.locator('.verdict-card--anomaly')).toBeVisible()
+  await page.locator('.verdict-actions').getByRole('button', { name: 'Объяснить результат' }).click()
+  await expect(page.getByText(/временно перегружен/)).toBeVisible()
+  await expect(page.getByText(/Internal provider traceback/)).toHaveCount(0)
+  fail = false
+  await page.locator('.chat-compose').getByRole('button', { name: 'Отправить' }).click()
+  const citation = page.locator('.chat-citation')
+  await expect(citation).toHaveText('PDF стр. 34')
+  await citation.click()
+  const viewer = page.getByRole('dialog', { name: /236-3902150/ })
+  await expect(viewer.getByRole('textbox', { name: 'Страница PDF' })).toHaveValue('34')
+  await expect(viewer.locator('canvas')).toBeVisible()
+})

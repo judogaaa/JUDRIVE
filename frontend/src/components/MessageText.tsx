@@ -1,24 +1,51 @@
 import { Fragment, type ReactNode } from 'react'
+import type { SourceHit } from '../api/chat'
+import { useI18n } from '../i18n/I18nContext'
 
 /**
  * Small, safe renderer for the lightweight Markdown used by the agent:
  * paragraphs, bullet/numbered lists, bold runs and headings. It never injects
  * HTML, so text coming from the model stays plain data.
  */
-export function MessageText({ text }: { text: string }) {
-  return <div className="chat-bubble__text">{renderBlocks(text)}</div>
+type MessageTextProps = {
+  text: string
+  sources?: SourceHit[]
+  onOpenSource?: (source: SourceHit) => void
+  loadingSourceId?: string | null
 }
 
-function renderInline(line: string): ReactNode[] {
-  return line.split(/(\*\*[^*]+\*\*)/g).map((part, index) => {
-    if (part.startsWith('**') && part.endsWith('**') && part.length > 4) {
-      return <strong key={index}>{part.slice(2, -2)}</strong>
-    }
-    return <Fragment key={index}>{part}</Fragment>
+const citationPattern = /\[([a-z][a-z0-9-]*:p\d{1,6})\]/gi
+
+export function readableAnswer(text: string, sources: SourceHit[], pageLabel: string): string {
+  const known = new Map(sources.map((source) => [source.evidence_id, source]))
+  return text.replace(citationPattern, (original, id: string) => {
+    const source = known.get(id)
+    return source ? `(${source.manual_title}, ${pageLabel} ${source.pdf_page})` : original
   })
 }
 
-function renderBlocks(text: string): ReactNode[] {
+export function MessageText({ text, sources = [], onOpenSource, loadingSourceId }: MessageTextProps) {
+  const { t } = useI18n()
+  const known = new Map(sources.map((source) => [source.evidence_id, source]))
+  function renderInline(line: string): ReactNode[] {
+    return line.split(/(\*\*[^*]+\*\*|\[[a-z][a-z0-9-]*:p\d{1,6}\])/gi).map((part, index) => {
+      if (part.startsWith('**') && part.endsWith('**') && part.length > 4) {
+        return <strong key={index}>{renderInline(part.slice(2, -2))}</strong>
+      }
+      const source = known.get(part.slice(1, -1))
+      if (source && onOpenSource) {
+        const label = `${source.manual_title}, ${t('ticket.pdfPage')} ${source.pdf_page}`
+        return <button key={index} type="button" className="chat-citation"
+          title={label} aria-label={label} disabled={loadingSourceId === source.evidence_id}
+          onClick={() => onOpenSource(source)}>{t('ticket.pdfPage')} {source.pdf_page}</button>
+      }
+      return <Fragment key={index}>{part}</Fragment>
+    })
+  }
+  return <div className="chat-bubble__text">{renderBlocks(text, renderInline)}</div>
+}
+
+function renderBlocks(text: string, renderInline: (line: string) => ReactNode[]): ReactNode[] {
   const lines = text.replace(/\r\n/g, '\n').split('\n')
   const blocks: ReactNode[] = []
   let index = 0

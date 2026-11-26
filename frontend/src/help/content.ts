@@ -185,8 +185,8 @@ export const HELP_CARDS: HelpCard[] = [
     id: 'settings',
     icon: Languages,
     titleKey: 'help.card.settings.title',
-    bodyKey: 'onboarding.step.7.body',
-    stepKeys: ['onboarding.step.7.point.1', 'onboarding.step.7.point.2', 'onboarding.step.7.point.3'],
+    bodyKey: 'help.card.settings.body',
+    stepKeys: ['onboarding.step.7.point.1', 'onboarding.step.7.point.2'],
     target: 'settings',
   },
 ]

@@ -49,19 +49,35 @@ export interface ChatReply {
   usage?: { total_tokens?: number }
 }
 
+// Do not expose provider errors, stack traces or request metadata to the user.
+async function chatFetch<T>(url: string, options: RequestInit): Promise<T> {
+  let response: Response
+  try {
+    response = await fetch(url, options)
+  } catch {
+    if (options.signal?.aborted && options.signal.reason?.name === 'AbortError') throw options.signal.reason
+    throw i18nError('error.agentUnavailable')
+  }
+  if (!response.ok) {
+    throw i18nError(response.status === 429 ? 'error.agentBusy'
+      : response.status >= 500 ? 'error.agentUnavailable' : 'error.agent')
+  }
+  try { return await response.json() as T } catch { throw i18nError('error.agentUnavailable') }
+}
+
 export async function createConversation(
   vehicleId: string,
   sessionId: string,
   signal?: AbortSignal,
 ): Promise<Conversation> {
-  const response = await fetch('/api/conversations', {
+  const response = await chatFetch<Conversation>('/api/conversations', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ vehicle_id: vehicleId, session_id: sessionId }),
-    signal,
+    signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(180000)]) : AbortSignal.timeout(180000),
   })
-  if (!response.ok) throw new Error(await readError(response))
-  return (await response.json()) as Conversation
+  if (!response || typeof response.conversation_id !== 'string') throw i18nError('error.agentUnavailable')
+  return response
 }
 
 export async function sendChatMessage(
@@ -71,14 +87,14 @@ export async function sendChatMessage(
   analysisOnly = false,
   signal?: AbortSignal,
 ): Promise<ChatReply> {
-  const response = await fetch(`/api/conversations/${conversationId}/messages`, {
+  const response = await chatFetch<ChatReply>(`/api/conversations/${conversationId}/messages`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ message, locale, analysis_only: analysisOnly }),
-    signal,
+    signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(180000)]) : AbortSignal.timeout(180000),
   })
-  if (!response.ok) throw new Error(await readError(response))
-  return (await response.json()) as ChatReply
+  if (!response || typeof response.reply !== 'string' || !Array.isArray(response.sources)) throw i18nError('error.agentUnavailable')
+  return response
 }
 
 export async function confirmTicketDraft(

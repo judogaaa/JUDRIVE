@@ -460,3 +460,9 @@
   и формулы шаблона сохранены. README и документация актуализированы.
 - Ограничения: live Groq/HTTPS/Docker production build не подтверждены этой
   независимой средой; видео и форма требуют реального выполнения.
+
+### UI polish: mandatory onboarding and readable agent replies
+- Replaced narrow onboarding illustrations with uniform, full-width previews, shortened Russian explanations, added language selection in the modal, and aligned help cards in a responsive 3/2/1-column grid.
+- All exit paths require explicit acknowledgement on step 7; skipped legacy states cannot bypass training. Completed onboarding remains persisted and repeatable.
+- Agent prompt and output normalization distinguish hypotheses from facts, validate citation IDs against actual tool evidence, remove generated URLs, and reject unsupported numerical claims. Inline sources and ticket review open the exact PDF page; provider/network errors are localized and retryable.
+- Tests use isolated services and an LLM stub; this does not establish that every live LLM answer is correct.

@@ -179,11 +179,9 @@ export default function App() {
         acknowledged={onboarding.state.acknowledged}
         onNext={onboarding.next}
         onBack={onboarding.back}
-        onSkip={onboarding.skip}
-        onClose={onboarding.close}
         onAcknowledge={onboarding.setAcknowledged}
         onStart={() => {
-          if (!onboarding.state.acknowledged) return
+          if (onboarding.state.step !== onboarding.lastStep || !onboarding.state.acknowledged) return
           onboarding.complete()
           setView('diagnosis')
         }}

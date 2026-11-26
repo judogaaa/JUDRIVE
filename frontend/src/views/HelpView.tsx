@@ -45,7 +45,6 @@ export function HelpView({ onNavigate, onRestartOnboarding, themeMode, onThemeCh
     <div className="help-page">
       <header className="page-header page-header--compact help-header">
         <div>
-          <p className="eyebrow">{t('nav.help')}</p>
           <h1>{t('help.title')}</h1>
           <p>{t('help.subtitle')}</p>
         </div>
@@ -69,7 +68,7 @@ export function HelpView({ onNavigate, onRestartOnboarding, themeMode, onThemeCh
         {cards.map((card) => {
           const Icon = card.icon
           return (
-            <details key={card.id} className="help-card">
+            <details key={card.id} name="help-topic" className="help-card">
               <summary className="help-card__summary">
                 <span className="help-card__icon" aria-hidden>
                   <Icon size={20} />
@@ -85,7 +84,7 @@ export function HelpView({ onNavigate, onRestartOnboarding, themeMode, onThemeCh
                   {card.stepKeys.map((key) => (
                     <li key={key}>
                       <Check size={15} aria-hidden />
-                      {t(key)}
+                      <span>{t(key)}</span>
                     </li>
                   ))}
                 </ol>

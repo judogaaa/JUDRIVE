@@ -16,7 +16,7 @@ import { SourceDrawer } from './SourceDrawer'
 import { TicketDraftCard } from './TicketDraftCard'
 import { VoiceCapture } from './VoiceCapture'
 import { CopyButton } from './CopyButton'
-import { MessageText } from './MessageText'
+import { MessageText, readableAnswer } from './MessageText'
 import { manualTopic, usableStatus, type ChatIntent } from '../lib/workflow'
 
 interface AgentChatProps {
@@ -246,7 +246,7 @@ export function AgentChat({
       setEvidenceHit({ ...row, score: 'score' in row ? Number(row.score) || 0 : 0 })
     } catch (err: unknown) {
       if (contextRef.current !== key) return
-      setSourceError(resolveErrorMessage(tRef.current, err, 'error.source'))
+      setSourceError(tRef.current('error.source'))
     } finally {
       if (contextRef.current === key) setSourceLoadingId(null)
     }
@@ -290,10 +290,10 @@ export function AgentChat({
         {messages.map((message) => (
           <article key={message.id} className={`chat-bubble chat-bubble--${message.role}`}>
             <p className="chat-bubble__role">{message.role === 'user' ? t('chat.roleUser') : t('chat.roleAgent')}</p>
-            <MessageText text={message.content} />
+            <MessageText text={message.content} sources={message.sources} onOpenSource={(source) => void openEvidence(source)} loadingSourceId={sourceLoadingId} />
             {message.sources?.length ? (
               <details className="evidence-panel" open>
-                <summary>{t('source.eyebrow')}</summary>
+                <summary>{t('chat.sourcesTitle')} ({message.sources.length})</summary>
                 <ul className="chat-sources">
                   {message.sources.map((source) => (
                     <li key={source.evidence_id}>
@@ -315,7 +315,7 @@ export function AgentChat({
               <div className="message-actions">
                 <CopyButton
                   text={[
-                    message.content,
+                    readableAnswer(message.content, message.sources ?? [], t('ticket.pdfPage')),
                     ...(message.sources ?? []).map(
                       (source) => `${source.manual_title}, ${t('ticket.pdfPage')} ${source.pdf_page}`,
                     ),

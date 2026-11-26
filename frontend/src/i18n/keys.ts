@@ -396,3 +396,8 @@ export type TranslationKey =
   | 'help.card.ticket.title'
   | 'help.card.fleet.title'
   | 'help.card.settings.title'
+  | 'help.card.settings.body'
+  | 'onboarding.required'
+  | 'error.agentBusy'
+  | 'error.agentUnavailable'
+  | 'chat.sourcesTitle'

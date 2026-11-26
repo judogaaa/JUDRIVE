@@ -20,11 +20,11 @@
 | B1 | Память по машине и заявкам | get_vehicle_history: проверки и последние созданные заявки; выполнение ремонта не подтверждается |
 | B2 | График последних валидных записей | реальные точки из истории, failed не превращается в ноль |
 | B3 | Кабинет главного механика | 50 ТС, кликабельные категории, приоритеты, история; отдельная запись рекомендации chief с основанием. `quarantine_recommended` — рекомендация, `quarantine_confirmed` всегда `false`, пока нет фактического workflow карантина |
-| UX1 | 7 языков UI/агента | 397 ключей × 7; kk/tg/ky/hi/bn без uz-fallback и mojibake, даты локализованы; onboarding/help/FAQ переведены; качество live-агента ограничено квотой Groq |
+| UX1 | 7 языков UI/агента | 402 ключа × 7; kk/tg/ky/hi/bn без uz-fallback и mojibake, даты локализованы; onboarding/help/FAQ переведены; качество live-агента ограничено квотой Groq |
 | UX2 | Голос STT | `POST /api/voice/transcribe`; live smoke 26.11.2026 — HTTP 200 (`whisper-large-v3-turbo`) |
 | UX3 | Мобильный UI, темы, переходы, PDF | Playwright 48/48: 1920/1440/1280/768/390, light/dark/system, lazy PDF viewer, локализованные ошибки/retry, Hindi fallback |
 | UX4 | Источники и действия диагностики | автоматический поиск после anomaly, related sources, реальные PDF, без лишних токенов LLM |
-| UX5 | Обязательное обучение первого входа | 7 шагов, progress, skip/close/complete, версия в localStorage, focus trap, Escape, ARIA, mobile, `prefers-reduced-motion`; `e2e/onboarding-help.spec.ts` |
+| UX5 | Обязательное обучение первого входа | 7 шагов, подтверждение обязательно, крестик и Escape заблокированы до галочки, состояние в localStorage, focus trap, ARIA, mobile, `prefers-reduced-motion`; `e2e/onboarding-help.spec.ts` |
 | UX6 | Центр «Помощь и обучение» | 12 карточек с общим контентом обучения, поиск, 8 FAQ, переходы к функциям, повторный запуск, язык/тема; `e2e/onboarding-help.spec.ts` |
 | UX7 | Контекстные подсказки | единый `HelpTip`: confidence, anomaly_score, failed, запрет заявки, рекомендация карантина vs фактический карантин, отсутствие источника, другая сессия |
 

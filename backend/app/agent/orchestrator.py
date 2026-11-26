@@ -5,8 +5,10 @@ import json
 import logging
 
 from fastapi import HTTPException
+import httpx
 
-from app.agent.groq_client import GroqClient
+from app.agent.groq_client import GroqClient, GroqRateLimitError
+from app.agent.presentation import format_answer
 from app.agent.locale import agent_language_instruction, normalize_locale, failed_recording_reply, insufficient_evidence_reply
 from app.agent.evidence import quantities_supported
 from app.agent.guardrails import sanitize_user_message, ml_facts_for_agent
@@ -147,9 +149,12 @@ class AgentOrchestrator:
                 runtime.execute,
                 max_steps=self._settings.agent_max_tool_steps,
             )
-        except RuntimeError as exc:
-            logger.warning("Groq rate limit or runtime error: %s", exc)
+        except GroqRateLimitError as exc:
+            logger.warning("Groq rate limit: %s", exc)
             raise HTTPException(status_code=429, detail="Лимит запросов Groq. Повторите позже.") from exc
+        except httpx.TimeoutException as exc:
+            logger.warning("Agent timeout")
+            raise HTTPException(status_code=504, detail="Не удалось дождаться ответа помощника. Повторите позже.") from exc
         except Exception as exc:  # noqa: BLE001
             logger.warning("Agent call failed (%s): %s", type(exc).__name__, exc)
             raise HTTPException(status_code=502, detail="Не удалось получить ответ агента. Повторите позже.") from exc
@@ -162,13 +167,15 @@ class AgentOrchestrator:
             usage.get("latency_ms", 0),
         )
 
-        if runtime.sources and not quantities_supported(self._rag, runtime.sources, reply):
+        reply, sources = format_answer(reply, runtime.sources)
+        # A numerical technical claim without any supporting page is unsafe too.
+        if not reply or not quantities_supported(self._rag, sources, reply):
             reply = insufficient_evidence_reply(loc)
         if not analysis_only and _is_manual_question(content):
-            if not runtime.sources and not runtime.draft:
+            if not sources and not runtime.draft:
                 reply = insufficient_evidence_reply(loc)
-            elif runtime.sources and not runtime.draft and not any(
-                str(hit["evidence_id"]) in reply for hit in runtime.sources
+            elif sources and not runtime.draft and not any(
+                f'[{hit["evidence_id"]}]' in reply for hit in sources
             ):
                 # An unreferenced synthesis is not presented as a verified manual answer.
                 reply = insufficient_evidence_reply(loc)
@@ -178,14 +185,14 @@ class AgentOrchestrator:
             "assistant",
             reply,
             tool_trace=tool_trace,
-            sources=runtime.sources,
+            sources=sources,
             draft_id=draft_id,
         )
 
         return {
             "reply": reply,
             "tool_trace": tool_trace,
-            "sources": runtime.sources,
+            "sources": sources,
             "draft": runtime.draft,
             "usage": usage,
         }
