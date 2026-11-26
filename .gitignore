@@ -1,0 +1,44 @@
+# Credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+# JS
+node_modules/
+dist/
+build/
+.vite/
+coverage/
+# Local state, file indexes and source materials
+*.sqlite
+*.sqlite3
+*.sqlite-wal
+*.sqlite-shm
+*.db
+*.db-wal
+*.db-shm
+*.log
+/materials/
+/local-data/
+/local-pdfs/
+/data/index/
+/output/
+/tmp/
+*.pdf
+*.zip
+*.mp4
+*.wav
+*.mp3
+# Editors / OS
+.DS_Store
+Thumbs.db
+.idea/
