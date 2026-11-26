@@ -8,5 +8,6 @@ class ConversationCreate(BaseModel):
 
 
 class ChatMessageRequest(BaseModel):
-    message: str = Field(min_length=1, max_length=2000)
+    message: str = Field(min_length=1, max_length=8000)
     locale: str = Field(default="ru", max_length=8)
+    analysis_only: bool = False

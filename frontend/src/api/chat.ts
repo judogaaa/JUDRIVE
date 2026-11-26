@@ -63,11 +63,12 @@ export async function sendChatMessage(
   conversationId: string,
   message: string,
   locale = 'ru',
+  analysisOnly = false,
 ): Promise<ChatReply> {
   const response = await fetch(`/api/conversations/${conversationId}/messages`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message, locale }),
+    body: JSON.stringify({ message, locale, analysis_only: analysisOnly }),
   })
   if (!response.ok) throw new Error(await readError(response))
   return (await response.json()) as ChatReply

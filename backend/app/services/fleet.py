@@ -56,6 +56,27 @@ class FleetService:
     def validate_pair(self, vehicle_id: str, session_id: str) -> bool:
         return (vehicle_id, session_id) in self._session_index
 
+    def vehicle_known(self, vehicle_id: str) -> bool:
+        return vehicle_id in self._vehicle_sessions
+
+    def diagnosis_trend(self, vehicle_id: str) -> list[dict]:
+        sessions = self._vehicle_sessions.get(vehicle_id, [])
+        ordered = sorted(sessions, key=lambda s: s["checked_at"])
+        trend: list[dict] = []
+        for item in ordered[-12:]:
+            failed = item.get("status") == "check_failed"
+            trend.append(
+                {
+                    "session_id": item["session_id"],
+                    "checked_at": item["checked_at"],
+                    "status": item["status"],
+                    "anomaly_score": item.get("anomaly_score"),
+                    "anomaly_type": item.get("anomaly_type"),
+                    "skipped": failed,
+                }
+            )
+        return trend
+
     def vehicle_history(self, vehicle_id: str) -> list[dict]:
         sessions = self._vehicle_sessions.get(vehicle_id, [])
         history: list[dict] = []

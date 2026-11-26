@@ -79,6 +79,7 @@ class ToolRuntime:
     session_id: str
     engine_model: str
     conversation_id: str
+    analysis_only: bool = False
     diagnosis: Any | None = None
     sources: list[dict] = field(default_factory=list)
     draft: dict | None = None
@@ -118,6 +119,11 @@ class ToolRuntime:
         return result
 
     async def _prepare_ticket(self, args: dict[str, Any]) -> dict[str, Any]:
+        if self.analysis_only:
+            return {
+                "status": "refused",
+                "message": "Режим разбора заявки: создание черновика запрещено",
+            }
         if self.diagnosis is None:
             await self._get_diagnosis()
         assert self.diagnosis is not None

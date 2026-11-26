@@ -14,6 +14,7 @@ from app.rag.catalog import SPECS_BY_ID
 from app.rag.service import ManualRagService
 from app.schemas.chat import ChatMessageRequest, ConversationCreate
 from app.schemas.diagnose import DiagnoseRequest, DiagnoseResponse
+from app.schemas.fleet import VehicleDiagnosisHistory
 from app.schemas.health import HealthResponse
 from app.schemas.manuals import ManualSearchRequest, ManualSearchResponse, ManualSearchHit
 from app.schemas.tickets import TicketConfirmRequest
@@ -93,6 +94,16 @@ async def health() -> HealthResponse:
 @app.get(f"{settings.api_prefix}/vehicles")
 async def list_vehicles():
     return {"vehicles": fleet.list_vehicles()}
+
+
+@app.get(f"{settings.api_prefix}/vehicles/{{vehicle_id}}/diagnosis-history", response_model=VehicleDiagnosisHistory)
+async def vehicle_diagnosis_history(vehicle_id: str):
+    if not fleet.vehicle_known(vehicle_id):
+        raise HTTPException(status_code=404, detail="Транспорт не найден")
+    return VehicleDiagnosisHistory(
+        vehicle_id=vehicle_id,
+        trend_points=fleet.diagnosis_trend(vehicle_id),
+    )
 
 
 @app.post(f"{settings.api_prefix}/diagnose", response_model=DiagnoseResponse)
@@ -207,7 +218,12 @@ async def conversation_messages(conversation_id: str):
 
 @app.post(f"{settings.api_prefix}/conversations/{{conversation_id}}/messages")
 async def conversation_send(conversation_id: str, body: ChatMessageRequest):
-    return await agent.send_message(conversation_id, body.message, locale=body.locale)
+    return await agent.send_message(
+        conversation_id,
+        body.message,
+        locale=body.locale,
+        analysis_only=body.analysis_only,
+    )
 
 
 @app.post(f"{settings.api_prefix}/voice/transcribe")

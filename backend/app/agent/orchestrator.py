@@ -56,7 +56,13 @@ class AgentOrchestrator:
             "engine_model": engine,
         }
 
-    async def send_message(self, conversation_id: str, user_message: str, locale: str = "ru") -> dict:
+    async def send_message(
+        self,
+        conversation_id: str,
+        user_message: str,
+        locale: str = "ru",
+        analysis_only: bool = False,
+    ) -> dict:
         conv = self._repo.get_conversation(conversation_id)
         if not conv:
             raise HTTPException(status_code=404, detail="Диалог не найден")
@@ -67,7 +73,7 @@ class AgentOrchestrator:
 
         self._repo.add_message(conversation_id, "user", content)
 
-        if not _is_manual_question(content):
+        if not analysis_only and not _is_manual_question(content):
             diag = await self._mock_ml.diagnose(conv["vehicle_id"], conv["session_id"])
             blocked = diag.status == "check_failed" or diag.signal_quality == "bad"
             if blocked:
@@ -88,6 +94,7 @@ class AgentOrchestrator:
             session_id=conv["session_id"],
             engine_model=conv["engine_model"],
             conversation_id=conversation_id,
+            analysis_only=analysis_only,
         )
 
         history_rows = self._repo.list_messages(conversation_id)
@@ -108,6 +115,16 @@ class AgentOrchestrator:
             }
         )
         llm_messages.append({"role": "system", "content": agent_language_instruction(loc)})
+        if analysis_only:
+            llm_messages.append(
+                {
+                    "role": "system",
+                    "content": (
+                        "Режим разбора уже отправленной заявки. Используй факты из сообщения пользователя. "
+                        "Не вызывай prepare_defect_ticket и не предлагай отправку новой заявки."
+                    ),
+                }
+            )
 
         groq = self._groq()
         try:

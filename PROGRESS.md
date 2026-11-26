@@ -221,6 +221,14 @@
 - Интеграционный guardrail-тест пишет во временную SQLite, не в стендовую БД.
 - Заявка high не переводит машину в карантин автоматически.
 
+## Точечные UX-исправления (после 8152081)
+
+- `SourceDrawer`: PDF грузится один раз на `doc_id`; масштаб и листание страниц без повторной загрузки.
+- Диагностика: `GET /api/vehicles/{id}/diagnosis-history` (без chief) + график `AnomalyTrendChart`.
+- Заявки: разбор с полным `payload_snapshot`, references и `analysis_only` (запрет `prepare_defect_ticket`).
+
+Проверено: `npm run build`, `pytest tests/test_stage01_api.py tests/test_stage03_guardrails.py`.
+
 ## Следующий шаг (07)
 
 Деплой HTTPS, финальный регресс, README, демо ≤3 мин, форма сдачи.

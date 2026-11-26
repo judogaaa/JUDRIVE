@@ -1,3 +1,4 @@
+import type { TrendPoint } from './fleet'
 import type { ApiErrorBody, DiagnoseResponse, VehicleSummary } from './types'
 import { i18nError } from '../lib/i18nError'
 
@@ -22,6 +23,15 @@ export async function fetchVehicles(): Promise<VehicleSummary[]> {
   }
   const data = (await response.json()) as { vehicles: VehicleSummary[] }
   return data.vehicles
+}
+
+export async function fetchVehicleDiagnosisHistory(vehicleId: string): Promise<TrendPoint[]> {
+  const response = await fetch(`/api/vehicles/${encodeURIComponent(vehicleId)}/diagnosis-history`)
+  if (!response.ok) {
+    throw new Error(await parseError(response))
+  }
+  const data = (await response.json()) as { trend_points: TrendPoint[] }
+  return data.trend_points ?? []
 }
 
 export async function fetchDiagnosis(

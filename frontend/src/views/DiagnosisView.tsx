@@ -1,8 +1,10 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Play } from 'lucide-react'
-import { fetchDiagnosis } from '../api/client'
+import { fetchDiagnosis, fetchVehicleDiagnosisHistory } from '../api/client'
+import type { TrendPoint } from '../api/fleet'
 import type { DiagnoseResponse, SessionSummary, VehicleSummary } from '../api/types'
 import { AgentChat } from '../components/AgentChat'
+import { AnomalyTrendChart } from '../components/AnomalyTrendChart'
 import { VehicleHistoryPanel } from '../components/VehicleHistoryPanel'
 import { VerdictCard } from '../components/VerdictCard'
 import { useI18n } from '../i18n/I18nContext'
@@ -30,6 +32,8 @@ export function DiagnosisView({
   const [result, setResult] = useState<DiagnoseResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [trendPoints, setTrendPoints] = useState<TrendPoint[]>([])
+  const [trendError, setTrendError] = useState<string | null>(null)
 
   const selectedVehicle = useMemo(
     () => vehicles.find((v) => v.vehicle_id === vehicleId) ?? null,
@@ -55,6 +59,29 @@ export function DiagnosisView({
     setError(null)
     setLoading(false)
   }, [requestGen])
+
+  useEffect(() => {
+    if (!vehicleId) {
+      setTrendPoints([])
+      setTrendError(null)
+      return
+    }
+    let cancelled = false
+    setTrendError(null)
+    fetchVehicleDiagnosisHistory(vehicleId)
+      .then((points) => {
+        if (!cancelled) setTrendPoints(points)
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setTrendPoints([])
+          setTrendError(err instanceof Error ? err.message : t('error.unknown'))
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [vehicleId, t])
 
   const onVehicleSelect = (nextId: string) => {
     onVehicleChange(nextId)
@@ -163,6 +190,20 @@ export function DiagnosisView({
               {loading ? t('diag.running') : t('diag.run')}
             </button>
             <VerdictCard result={result} loading={loading} error={error} vehicleId={vehicleId} />
+            <section className="panel" aria-labelledby="diag-trend-title">
+              <h2 id="diag-trend-title" className="panel__title">
+                {t('diag.history')}
+              </h2>
+              {trendError ? (
+                <p className="panel__error" role="alert">
+                  {trendError}
+                </p>
+              ) : (
+                <AnomalyTrendChart
+                  points={trendPoints.filter((p) => !p.skipped && typeof p.anomaly_score === 'number')}
+                />
+              )}
+            </section>
             <VehicleHistoryPanel
               sessions={sortedSessions.slice(0, 6)}
               activeSessionId={sessionId}

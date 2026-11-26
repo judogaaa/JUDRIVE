@@ -29,6 +29,9 @@ function parsePayload(snapshot: string | null): {
   operations?: string[]
   spare_parts?: string[]
   references?: { manual?: string; pdf_page?: number }[]
+  vehicle_id?: string
+  session_id?: string
+  anomaly_type?: string
 } | null {
   if (!snapshot) return null
   try {
@@ -79,16 +82,38 @@ export function TicketsView({ filterVehicleId }: TicketsViewProps) {
     )
   }, [query, tickets])
 
+  const buildTicketReviewMessage = (row: TicketSubmission): string => {
+    const snapshot = row.payload_snapshot?.trim() || '{}'
+    let parsed: ReturnType<typeof parsePayload> = null
+    try {
+      parsed = JSON.parse(snapshot) as ReturnType<typeof parsePayload>
+    } catch {
+      parsed = null
+    }
+    const refs = parsed?.references ?? []
+    const sourcesBlock =
+      refs.length > 0
+        ? `Источники заявки (references из snapshot):\n${JSON.stringify(refs, null, 2)}`
+        : 'Источники в snapshot не указаны — при необходимости используй search_manuals.'
+    return [
+      'Разбор уже отправленной заявки (только анализ, без нового черновика).',
+      `ticket_id: ${row.ticket_id ?? '—'}`,
+      `local_id: ${row.local_id}`,
+      `vehicle_id: ${row.vehicle_id}`,
+      `session_id: ${row.session_id}`,
+      'payload_snapshot (фактические данные заявки):',
+      snapshot,
+      sourcesBlock,
+      'Задача: разобрать работы и порядок проверок по руководству двигателя этой машины, опираясь на snapshot и references. Не придумывай статус ремонта и факт выполнения работ.',
+    ].join('\n')
+  }
+
   const explain = async (row: TicketSubmission) => {
     setReviewing(true)
     setReview(null)
     try {
       const conv = await createConversation(row.vehicle_id, row.session_id)
-      const reply = await sendChatMessage(
-        conv.conversation_id,
-        'Разбери эту заявку: какие работы и в каком порядке проверить по руководству этого двигателя. Не придумывай статус ремонта.',
-        locale,
-      )
+      const reply = await sendChatMessage(conv.conversation_id, buildTicketReviewMessage(row), locale, true)
       setReview(reply.reply)
     } catch (err: unknown) {
       setReview(err instanceof Error ? err.message : t('error.agent'))

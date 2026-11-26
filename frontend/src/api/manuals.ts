@@ -38,6 +38,10 @@ export function pdfSourceUrl(docId: string, page: number): string {
   return `/api/sources/pdf/${encodeURIComponent(docId)}#page=${page}`
 }
 
+export function pdfDocUrl(docId: string): string {
+  return `/api/sources/pdf/${encodeURIComponent(docId)}`
+}
+
 export type EvidenceRecord = ManualSearchHit
 
 export async function fetchEvidence(evidenceId: string): Promise<EvidenceRecord> {

@@ -15,3 +15,17 @@ class VehicleSummary(BaseModel):
     engine_model: str
     fuel: str
     sessions: list[SessionSummary] = Field(default_factory=list)
+
+
+class DiagnosisHistoryPoint(BaseModel):
+    session_id: str
+    checked_at: str
+    status: str
+    anomaly_score: float | None = None
+    anomaly_type: str | None = None
+    skipped: bool = False
+
+
+class VehicleDiagnosisHistory(BaseModel):
+    vehicle_id: str
+    trend_points: list[DiagnosisHistoryPoint] = Field(default_factory=list)
