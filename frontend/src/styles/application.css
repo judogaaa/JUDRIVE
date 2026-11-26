@@ -872,6 +872,16 @@ a:focus-visible {
   background: var(--surface-elevated);
 }
 
+.sort-btn {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+}
+
 .fleet-table .btn {
   min-height: 36px;
   font-size: 0.82rem;
@@ -1179,6 +1189,25 @@ a:focus-visible {
   color: var(--text-muted);
   font-size: 0.85rem;
   font-weight: 500;
+}
+
+.diag-split {
+  display: grid;
+  grid-template-columns: minmax(280px, 38%) minmax(0, 62%);
+  gap: var(--space-4);
+  align-items: start;
+  min-height: 0;
+}
+
+.diag-col {
+  display: grid;
+  gap: var(--space-3);
+  align-content: start;
+  min-width: 0;
+}
+
+.diag-col--chat .chat-panel {
+  max-height: calc(100vh - var(--header-h) - 3rem);
 }
 
 .diag-work {
@@ -1575,6 +1604,7 @@ a:focus-visible {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
 
+  .diag-split,
   .diag-work {
     grid-template-columns: minmax(0, 1fr);
   }

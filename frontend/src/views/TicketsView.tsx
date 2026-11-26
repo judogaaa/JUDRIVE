@@ -1,5 +1,8 @@
 import { useMemo, useState, useEffect } from 'react'
+import { ChevronRight, Copy, X } from 'lucide-react'
 import { createConversation, sendChatMessage } from '../api/chat'
+import type { ManualSearchHit } from '../api/manuals'
+import { SourceDrawer } from '../components/SourceDrawer'
 import { fetchTickets, type TicketSubmission } from '../api/tickets'
 import { useI18n } from '../i18n/I18nContext'
 import { formatSessionDateTime } from '../lib/formatLocale'
@@ -8,11 +11,28 @@ interface TicketsViewProps {
   filterVehicleId?: string
 }
 
-function parseConclusion(snapshot: string | null): string | null {
+function docIdFromTitle(title: string): string {
+  const map: [string, string][] = [
+    ['236-3902150', 'y236-re'],
+    ['236.01.01', 'y236-rk'],
+    ['536.3902150', 'y536-re'],
+    ['536.01.02', 'y536-rk'],
+    ['5234', 'z5234-rk'],
+    ['409', 'z409-rk'],
+  ]
+  return map.find(([needle]) => title.includes(needle))?.[1] ?? ''
+}
+
+function parsePayload(snapshot: string | null): {
+  conclusion?: string
+  urgency?: string
+  operations?: string[]
+  spare_parts?: string[]
+  references?: { manual?: string; pdf_page?: number }[]
+} | null {
   if (!snapshot) return null
   try {
-    const data = JSON.parse(snapshot) as { conclusion?: string }
-    return typeof data.conclusion === 'string' ? data.conclusion : null
+    return JSON.parse(snapshot) as ReturnType<typeof parsePayload>
   } catch {
     return null
   }
@@ -27,6 +47,7 @@ export function TicketsView({ filterVehicleId }: TicketsViewProps) {
   const [openId, setOpenId] = useState<string | null>(null)
   const [review, setReview] = useState<string | null>(null)
   const [reviewing, setReviewing] = useState(false)
+  const [source, setSource] = useState<ManualSearchHit | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -51,7 +72,7 @@ export function TicketsView({ filterVehicleId }: TicketsViewProps) {
     const q = query.trim().toLowerCase()
     if (!q) return tickets
     return tickets.filter((row) =>
-      [row.ticket_id, row.vehicle_id, row.session_id, row.submit_status, parseConclusion(row.payload_snapshot)]
+      [row.ticket_id, row.vehicle_id, row.session_id, row.submit_status, parsePayload(row.payload_snapshot)?.conclusion]
         .join(' ')
         .toLowerCase()
         .includes(q),
@@ -76,6 +97,9 @@ export function TicketsView({ filterVehicleId }: TicketsViewProps) {
     }
   }
 
+  const open = tickets.find((row) => row.local_id === openId) ?? null
+  const payload = parsePayload(open?.payload_snapshot ?? null)
+
   return (
     <>
       <header className="page-header">
@@ -93,10 +117,10 @@ export function TicketsView({ filterVehicleId }: TicketsViewProps) {
       {!loading && !error ? (
         <section className="panel">
           <div className="ticket-toolbar">
-            <label className="field">
-              <span>{t('fleet.searchLabel')}</span>
-              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t('fleet.searchPlaceholder')} />
-            </label>
+          <label className="field">
+            <span>{t('tickets.find')}</span>
+            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t('tickets.find')} />
+          </label>
           </div>
           <p className="toolbar-meta">{t('fleet.count', { shown: visible.length, total: tickets.length })}</p>
           {visible.length === 0 ? (
@@ -112,34 +136,59 @@ export function TicketsView({ filterVehicleId }: TicketsViewProps) {
                   <p className="ticket-row__meta">
                     {row.vehicle_id} · {row.session_id}{' '}
                     <span className={`badge badge--${row.submit_status === 'created' ? 'normal' : 'attention'}`}>
-                      {row.submit_status}
+                      {row.submit_status === 'created' ? t('tickets.statusCreated') : row.submit_status}
                     </span>
+                    <ChevronRight size={18} aria-hidden />
                   </p>
-                  {parseConclusion(row.payload_snapshot) ? (
-                    <p>{parseConclusion(row.payload_snapshot)}</p>
-                  ) : null}
-                  {row.error_detail ? <p className="panel__error">{row.error_detail}</p> : null}
-                  {openId === row.local_id ? (
-                    <div className="ticket-detail">
-                      <button
-                        type="button"
-                        className="btn btn--secondary"
-                        onClick={() => void navigator.clipboard.writeText(row.ticket_id ?? row.local_id)}
-                      >
-                        {row.ticket_id ?? row.local_id}
-                      </button>
-                      <button type="button" className="btn btn--secondary" disabled={reviewing} onClick={() => void explain(row)}>
-                        {reviewing ? t('chat.processing') : t('tickets.review')}
-                      </button>
-                      {review ? <div className="ticket-review">{review}</div> : null}
-                    </div>
-                  ) : null}
                 </article>
               ))}
             </div>
           )}
         </section>
       ) : null}
+      {open ? (
+        <div className="drawer-scrim" role="presentation" onClick={() => setOpenId(null)}>
+          <aside className="history-drawer" role="dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="history-drawer__head">
+              <h2>{open.ticket_id ?? '—'}</h2>
+              <button type="button" className="icon-btn" aria-label={t('common.close')} onClick={() => setOpenId(null)}><X size={18} /></button>
+            </div>
+            <p>{open.vehicle_id} · {open.session_id} · {open.submit_status === 'created' ? t('tickets.statusCreated') : open.submit_status}</p>
+            {payload?.urgency ? <p>{payload.urgency}</p> : null}
+            {payload?.conclusion ? <p>{payload.conclusion}</p> : null}
+            {payload?.operations?.length ? <ul>{payload.operations.map((item) => <li key={item}>{item}</li>)}</ul> : null}
+            {payload?.spare_parts?.length ? <p>{payload.spare_parts.join(', ')}</p> : null}
+            {payload?.references?.map((ref) => (
+              <button
+                key={`${ref.manual}-${ref.pdf_page}`}
+                type="button"
+                className="chat-source-link"
+                onClick={() => {
+                  setSource({
+                    evidence_id: `${ref.manual}-${ref.pdf_page}`,
+                    doc_id: docIdFromTitle(ref.manual ?? ''),
+                    manual_title: ref.manual ?? '',
+                    pdf_page: ref.pdf_page ?? 1,
+                    quote: '',
+                    score: 0,
+                    extraction: 'text',
+                  })
+                }}
+              >
+                {ref.manual}, {t('ticket.pdfPage')} {ref.pdf_page}
+              </button>
+            ))}
+            <button type="button" className="btn btn--secondary" onClick={() => void navigator.clipboard.writeText(open.ticket_id ?? open.local_id)}>
+              <Copy size={18} aria-hidden /> {open.ticket_id ?? open.local_id}
+            </button>
+            <button type="button" className="btn btn--secondary" disabled={reviewing} onClick={() => void explain(open)}>
+              {reviewing ? t('chat.processing') : t('tickets.review')}
+            </button>
+            {review ? <div className="ticket-review">{review}</div> : null}
+          </aside>
+        </div>
+      ) : null}
+      <SourceDrawer hit={source} onClose={() => setSource(null)} />
     </>
   )
 }

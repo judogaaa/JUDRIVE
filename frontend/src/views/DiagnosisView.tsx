@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { History, Play, X } from 'lucide-react'
+import { useCallback, useMemo, useState } from 'react'
+import { Play } from 'lucide-react'
 import { fetchDiagnosis } from '../api/client'
 import type { DiagnoseResponse, SessionSummary, VehicleSummary } from '../api/types'
 import { AgentChat } from '../components/AgentChat'
@@ -30,7 +30,6 @@ export function DiagnosisView({
   const [result, setResult] = useState<DiagnoseResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [historyOpen, setHistoryOpen] = useState(false)
 
   const selectedVehicle = useMemo(
     () => vehicles.find((v) => v.vehicle_id === vehicleId) ?? null,
@@ -92,136 +91,96 @@ export function DiagnosisView({
     }
   }, [requestGen, sessionId, t, vehicleId])
 
-  useEffect(() => {
-    if (!historyOpen) return
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setHistoryOpen(false)
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [historyOpen])
-
   const sortedSessions: SessionSummary[] = [...sessions].sort((a, b) => b.checked_at.localeCompare(a.checked_at))
+
+  const plateValue = selectedVehicle
+    ? `${selectedVehicle.vehicle_id} · ${selectedVehicle.make}${selectedVehicle.model ? ` ${selectedVehicle.model}` : ''}`
+    : ''
 
   return (
     <div className="diag-page">
-      <header className="page-header page-header--compact">
-        <h1>{t('diag.title')}</h1>
-      </header>
-
       {fleetError ? (
         <p className="panel__error" role="alert">
           {fleetError}
         </p>
       ) : (
-        <section className="diag-toolbar" aria-label={t('diag.title')}>
-          <div className="field vehicle-combo">
-            <span>{t('diag.vehicle')}</span>
-            <input
-              value={vehicleQuery}
-              onChange={(e) => setVehicleQuery(e.target.value)}
-              placeholder={selectedVehicle ? `${vehicleId} · ${selectedVehicle.engine_model}` : t('diag.filterPlaceholder')}
-              aria-label={t('diag.search')}
-              role="combobox"
-              aria-expanded={vehicleQuery.trim().length > 0}
-            />
-            {vehicleQuery.trim() ? (
-              <ul className="vehicle-combo__list" role="listbox">
-                {vehicleOptions.slice(0, 8).map((v) => (
-                  <li key={v.vehicle_id}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onVehicleSelect(v.vehicle_id)
-                        setVehicleQuery('')
-                      }}
-                    >
-                      {v.vehicle_id} · {v.garage_no} · {v.make} {v.model ?? ''} · {v.engine_model}
-                    </button>
-                  </li>
+        <div className="diag-split">
+          <section className="diag-col" aria-label={t('diag.title')}>
+            <div className="field vehicle-combo">
+              <span>{t('diag.vehicle')}</span>
+              <input
+                value={vehicleQuery || plateValue}
+                onChange={(e) => setVehicleQuery(e.target.value)}
+                onFocus={() => {
+                  if (!vehicleQuery && plateValue) setVehicleQuery('')
+                }}
+                placeholder={t('diag.filterPlaceholder')}
+                aria-label={t('diag.search')}
+                role="combobox"
+                aria-expanded={vehicleQuery.trim().length > 0}
+              />
+              {vehicleQuery.trim() ? (
+                <ul className="vehicle-combo__list" role="listbox">
+                  {vehicleOptions.slice(0, 8).map((v) => (
+                    <li key={v.vehicle_id}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onVehicleSelect(v.vehicle_id)
+                          setVehicleQuery('')
+                        }}
+                      >
+                        {v.vehicle_id} · {v.garage_no} · {v.make} {v.model ?? ''} · {v.engine_model}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              {selectedVehicle ? (
+                <p className="diag-toolbar__hint">
+                  {selectedVehicle.make}
+                  {selectedVehicle.model ? ` ${selectedVehicle.model}` : ''} · {t('diag.garage')} {selectedVehicle.garage_no} · {selectedVehicle.engine_model}
+                </p>
+              ) : null}
+            </div>
+            <label className="field">
+              <span>{t('diag.check')}</span>
+              <select value={sessionId} onChange={(e) => onSessionSelect(e.target.value)}>
+                {sessions.map((s) => (
+                  <option key={s.session_id} value={s.session_id}>
+                    {formatSessionDateTime(locale, s.checked_at)} · {s.session_id}
+                  </option>
                 ))}
-              </ul>
-            ) : null}
-            {selectedVehicle ? (
-              <p className="diag-toolbar__hint">
-                {t('diag.engine')}: {selectedVehicle.engine_model} · {t('diag.garage')} {selectedVehicle.garage_no}
-              </p>
-            ) : null}
-          </div>
-          <label className="field">
-            <span>{t('diag.check')}</span>
-            <select value={sessionId} onChange={(e) => onSessionSelect(e.target.value)}>
-              {sessions.map((s) => (
-                <option key={s.session_id} value={s.session_id}>
-                  {s.session_id} · {formatSessionDateTime(locale, s.checked_at)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="diag-toolbar__actions">
+              </select>
+            </label>
             <button
               type="button"
-              className="btn btn--primary"
+              className="btn btn--primary btn--block"
               disabled={loading || !vehicleId || !sessionId}
               onClick={() => void runDiagnosis()}
             >
-              <Play size={16} aria-hidden />
+              <Play size={18} aria-hidden />
               {loading ? t('diag.running') : t('diag.run')}
             </button>
-            <button
-              type="button"
-              className="btn btn--secondary"
-              disabled={!vehicleId}
-              onClick={() => setHistoryOpen(true)}
-            >
-              <History size={16} aria-hidden />
-              {t('diag.history')}
-            </button>
-          </div>
-        </section>
-      )}
-
-      <div className="diag-work">
-        <div className="diag-work__verdict">
-          <VerdictCard result={result} loading={loading} error={error} vehicleId={vehicleId} />
-        </div>
-        {vehicleId && sessionId ? (
-          <div className="diag-work__chat">
-            <AgentChat
-              vehicleId={vehicleId}
-              sessionId={sessionId}
-              diagnoseResult={result}
-              onDiagnoseCommand={() => void runDiagnosis()}
-            />
-          </div>
-        ) : null}
-      </div>
-
-      {historyOpen ? (
-        <div className="drawer-scrim" role="presentation" onClick={() => setHistoryOpen(false)}>
-          <aside
-            className="history-drawer"
-            role="dialog"
-            aria-label={t('history.title')}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="history-drawer__head">
-              <h2>{t('history.title')}</h2>
-              <button type="button" className="icon-btn" onClick={() => setHistoryOpen(false)} aria-label={t('common.close')}>
-                <X size={18} aria-hidden />
-              </button>
-            </div>
+            <VerdictCard result={result} loading={loading} error={error} vehicleId={vehicleId} />
             <VehicleHistoryPanel
-              sessions={sortedSessions}
+              sessions={sortedSessions.slice(0, 6)}
               activeSessionId={sessionId}
-              onSelectSession={(id) => {
-                onSessionSelect(id)
-                setHistoryOpen(false)
-              }}
+              onSelectSession={onSessionSelect}
             />
-          </aside>
+          </section>
+          <section className="diag-col diag-col--chat">
+            {vehicleId && sessionId ? (
+              <AgentChat
+                vehicleId={vehicleId}
+                sessionId={sessionId}
+                diagnoseResult={result}
+                onDiagnoseCommand={() => void runDiagnosis()}
+              />
+            ) : null}
+          </section>
         </div>
-      ) : null}
+      )}
     </div>
   )
 }

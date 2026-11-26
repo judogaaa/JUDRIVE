@@ -190,6 +190,7 @@ async def get_source_pdf(doc_id: str):
         path,
         media_type="application/pdf",
         filename=path.name,
+        content_disposition_type="inline",
         headers={"Accept-Ranges": "bytes"},
     )
 
