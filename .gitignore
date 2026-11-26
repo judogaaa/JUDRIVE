@@ -23,6 +23,10 @@ coverage/
 # Local state, file indexes and source materials
 *.sqlite
 *.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+*.hocr
+*.alto.xml
 *.sqlite-wal
 *.sqlite-shm
 *.db

@@ -104,7 +104,7 @@ export function ManualSearchPanel({ engineModel, isVisible = true, chatTargetLab
     onSearchIntentConsumed?.()
   }, [onSearchIntentConsumed, runSearch, searchIntent])
 
-  const refusal = payload && payload.status !== 'ok'
+  const refusal = payload && !['ok', 'conflict'].includes(payload.status)
   const canOfferGeneral = refusal && payload?.status === 'not_found' && query.trim() !== GENERAL_INSPECTION_QUERY
 
   return (
@@ -191,9 +191,13 @@ export function ManualSearchPanel({ engineModel, isVisible = true, chatTargetLab
         </div>
       ) : null}
 
-      {payload?.results?.length ? (
+      {payload?.status === 'conflict' && (
+        <p className="manual-refusal" role="status">{payload.message}</p>
+      )}
+      {payload && (payload.results.length || payload.conflicting_sources?.length) ? (
         <ul className="manual-results">
-          {payload.results.map((hit) => (
+          {[...new Map([...(payload.conflicting_sources ?? []), ...payload.results]
+            .reverse().map((hit) => [hit.evidence_id, hit])).values()].reverse().map((hit) => (
             <li key={hit.evidence_id} className="manual-result">
               <div className="manual-result__head">
                 <span className="manual-result__doc">{hit.manual_title}</span>

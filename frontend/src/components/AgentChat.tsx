@@ -94,6 +94,7 @@ export function AgentChat({
       : null
 
   const status = activeResult ? usableStatus(activeResult) : null
+  const ticketEligible = status === 'anomaly' && (activeResult?.confidence ?? 0) >= 0.50
 
   const prefill = (text: string) => {
     setInput((prev) => (prev.includes(text) ? prev : prev.trim() ? `${prev}\n\n${text}` : text))
@@ -280,7 +281,7 @@ export function AgentChat({
       </div>
 
       <div className="chip-row chat-suggestions">
-        {SUGGESTIONS.filter(({ action }) => action !== 'prepare_ticket' || status === 'anomaly').map(({ label, action }) => (
+        {SUGGESTIONS.filter(({ action }) => action !== 'prepare_ticket' || ticketEligible).map(({ label, action }) => (
           <button
             key={action}
             type="button"
@@ -361,7 +362,7 @@ export function AgentChat({
                     {t('verdict.action.chooseOther')}
                   </button>
                 )}
-                {status === 'anomaly' && !draft && !ticketId && (
+                {ticketEligible && !draft && !ticketId && (
                   <button type="button" className="btn btn--secondary" disabled={loading || !conversationId}
                     onClick={() => void send(t('chat.suggest3'), 'prepare_ticket')}>
                     {t('chat.suggest3')}
@@ -382,7 +383,7 @@ export function AgentChat({
           </article>
         ))}
         <TicketDraftCard
-          onReplace={status === 'anomaly' && !loading && conversationId
+          onReplace={ticketEligible && !loading && conversationId
             ? () => void send(t('chat.suggest3'), 'prepare_ticket') : undefined}
           draft={status === 'check_failed' ? null : draft} onConfirmed={(id) => setTicketId(id)} />
         {ticketId ? (

@@ -20,4 +20,5 @@ class DiagnoseResponse(BaseModel):
     description: str
     model_version: str
     engine_model: str | None = None
+    diagnostic_issue: Literal["engine_mismatch"] | None = None
     review_priority: Literal["low", "medium", "high"] | None = None

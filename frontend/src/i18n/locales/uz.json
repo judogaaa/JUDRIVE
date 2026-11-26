@@ -402,5 +402,10 @@
   "chat.sourcesTitle": "Javob manbalari",
   "help.card.settings.body": "Interfeys tili va mavzusini tanlang. Sozlamalar shu brauzerda saqlanadi.",
   "manuals.operationGuide": "Foydalanish qo‘llanmasi",
-  "manuals.repairGuide": "Ta’mirlash qo‘llanmasi"
+  "manuals.repairGuide": "Ta’mirlash qo‘llanmasi",
+  "ticket.warningAck": "Yozuvdagi shovqinni hisobga oldim va ishlarni tasdiqlayman.",
+  "ticket.lowConfidence": "Ariza uchun ishonch kamida 0,50 bo‘lishi kerak. Qayta yozing.",
+  "ticket.priorityAction.low": "Keyingi tekshiruvda tekshiring.",
+  "ticket.priorityAction.medium": "Yaqin texnik xizmatda tekshiring, kuzatuv ostida ishlating.",
+  "ticket.priorityAction.high": "Yo‘lga chiqishdan oldin tekshiring."
 }

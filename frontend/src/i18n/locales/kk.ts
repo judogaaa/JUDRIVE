@@ -405,4 +405,9 @@ export const kk: Record<TranslationKey, string> = {
   'help.card.settings.body': 'Интерфейс тілін және тақырыбын таңдаңыз. Баптаулар осы браузерде сақталады.',
   'manuals.operationGuide': 'Пайдалану нұсқаулығы',
   'manuals.repairGuide': 'Жөндеу нұсқаулығы',
+  'ticket.warningAck': 'Жазбадағы шуды ескердім және жұмыстарды растаймын.',
+  'ticket.lowConfidence': 'Өтінімге кемінде 0,50 сенімділік қажет. Қайта жазыңыз.',
+  'ticket.priorityAction.low': 'Келесі тексеруде қараңыз.',
+  'ticket.priorityAction.medium': 'Жақын техникалық қызметте тексеріңіз, бақылауда ұстаңыз.',
+  'ticket.priorityAction.high': 'Рейске шығар алдында тексеріңіз.',
 }

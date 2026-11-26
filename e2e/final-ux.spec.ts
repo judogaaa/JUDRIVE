@@ -170,24 +170,16 @@ test.describe('Final UX audit — diagnosis workspace', () => {
     await expect(answer).not.toContainText('**')
   })
 
-  test('manual transition for P854BT78 stays inside its own engine and offers general inspection', async ({ page }) => {
+  test('P854BT78 rejects an incompatible F14 result without replacing its code', async ({ page }) => {
     await page.goto('/')
     await selectVehicleSession(page, 'P854BT78', 'S-0021')
     await runDiagnosis(page)
-    await expect(page.locator('.verdict-card--anomaly')).toBeVisible({ timeout: 30_000 })
-    await page.getByRole('button', { name: 'Найти в руководстве' }).click()
-
-    const engineSelect = page.locator('.manual-toolbar select')
-    await expect(engineSelect).toHaveValue('ЯМЗ-236М2')
-    await expect(page.locator('.manual-query-field input')).toHaveValue(/цепь газораспределительного механизма/)
-    await expect(page.locator('.manual-refusal')).toBeVisible({ timeout: 20_000 })
-    await expect(page.locator('.manual-results li')).toHaveCount(0)
-
-    await page.getByRole('button', { name: 'Искать общий осмотр' }).click()
-    await expect(page.locator('.manual-results li').first()).toBeVisible({ timeout: 20_000 })
-    const docs = await page.locator('.manual-result__doc').allTextContents()
-    expect(docs.length).toBeGreaterThan(0)
-    expect(docs.every((title) => title.includes('236'))).toBeTruthy()
+    const verdict = page.locator('.verdict-card--check_failed')
+    await expect(verdict).toBeVisible({ timeout: 30_000 })
+    await expect(verdict).toContainText('F14')
+    await expect(verdict).toContainText('ЯМЗ-236М2')
+    await expect(verdict.getByRole('button', { name: 'Подготовить заявку' })).toHaveCount(0)
+    await expect(verdict.locator('.verdict-card__meta')).toHaveCount(0)
   })
 
   test('repeated diagnosis refreshes the same pair and blocks double submit', async ({ page }) => {

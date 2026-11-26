@@ -184,11 +184,21 @@ class AppRepository:
         vehicle_id: str,
         session_id: str,
         payload_snapshot: dict,
+        *,
+        confirm_nonce: str | None = None,
     ) -> str | None:
         """Одна активная отправка на пару ТС/сессия до ответа ТОиР."""
         local_id = str(uuid.uuid4())
         try:
             with self._connection() as conn:
+                if confirm_nonce is not None:
+                    claimed = conn.execute(
+                        """UPDATE ticket_drafts SET status = 'sending', updated_at = ?
+                           WHERE draft_id = ? AND confirm_nonce = ? AND status = 'draft'""",
+                        (_now(), draft_id, confirm_nonce),
+                    )
+                    if claimed.rowcount != 1:
+                        return None
                 conn.execute(
                     """
                     INSERT INTO ticket_submissions
@@ -217,6 +227,7 @@ class AppRepository:
         submit_status: str,
         ticket_id: str | None = None,
         error_detail: str | None = None,
+        draft_status: str | None = None,
     ) -> None:
         with self._connection() as conn:
             conn.execute(
@@ -227,7 +238,12 @@ class AppRepository:
                 """,
                 (submit_status, ticket_id, error_detail, local_id),
             )
-            conn.commit()
+            if draft_status:
+                conn.execute(
+                    """UPDATE ticket_drafts SET status = ?, updated_at = ?
+                       WHERE draft_id = (SELECT draft_id FROM ticket_submissions WHERE local_id = ?)""",
+                    (draft_status, _now(), local_id),
+                )
 
     def has_blocking_submission(self, vehicle_id: str, session_id: str) -> sqlite3.Row | None:
         with self._connection() as conn:
@@ -290,6 +306,16 @@ class AppRepository:
         except sqlite3.IntegrityError:
             raise
         return local_id
+
+    def log_usage_step(self, conversation_id: str, stage: str, usage: dict) -> None:
+        with self._connection() as conn:
+            conn.execute(
+                """INSERT INTO groq_usage_steps
+                   (conversation_id, stage, prompt_tokens, completion_tokens, total_tokens, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (conversation_id, stage, usage.get("prompt_tokens", 0), usage.get("completion_tokens", 0),
+                 usage.get("total_tokens", 0), _now()),
+            )
 
     def log_usage(
         self,

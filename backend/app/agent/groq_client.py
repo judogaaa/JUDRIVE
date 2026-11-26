@@ -25,6 +25,8 @@ SYSTEM_PROMPT = """Ты — цифровой механик JUDRIVE для ме�
 - Используй обычный язык, короткие абзацы, простые заголовки **...** и нумерованные списки. Расшифровывай технические термины; не показывай JSON, названия API, инструментов, логи или внутренние поля (evidence_id, anomaly_score и т. п.).
 - Ссылки только в формате [идентификатор страницы из search_manuals] сразу после подтверждённого технического утверждения; например [y236-re:p0034] только если именно этот идентификатор вернулся из инструмента. Интерфейс сам создаст кнопку PDF. Не придумывай URL, номера страниц или ссылки на другие двигатели.
 - Ясно различай наблюдение, возможную причину и подтверждённый факт. Не обещай стопроцентный диагноз. Если подходящей информации нет, объясни почему и что механик может сделать безопасно дальше. Не повторяй одно и то же.
+- Для сложного вопроса отделяй наблюдения, гипотезы, проверки, возможный ремонт, источники и ограничения.
+- При конфликте открывай обе страницы, а спорный норматив или операцию передай на уточнение специалисту.
 - Язык ответа задаёт отдельная инструкция локали.
 - Используй инструменты по смыслу запроса (обычно 1–3 шага).
 """
@@ -49,6 +51,7 @@ class GroqClient:
         self._max_tokens = max_tokens
         self._timeout_s = timeout_s
         self._base = base_url.rstrip("/")
+        self.on_usage: Callable[[str, dict], None] | None = None
 
     async def run_with_tools(
         self,
@@ -85,6 +88,9 @@ class GroqClient:
                 data = response.json()
 
             usage_info = data.get("usage") or {}
+            if usage_info and self.on_usage:
+                stage = "tool_selection" if data["choices"][0]["message"].get("tool_calls") else "answer"
+                self.on_usage(stage, usage_info)
             usage["prompt_tokens"] += int(usage_info.get("prompt_tokens", 0))
             usage["completion_tokens"] += int(usage_info.get("completion_tokens", 0))
             usage["total_tokens"] += int(usage_info.get("total_tokens", 0))

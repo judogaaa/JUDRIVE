@@ -19,6 +19,7 @@ APP_TABLES = (
     "ticket_drafts",
     "ticket_submissions",
     "groq_usage",
+    "groq_usage_steps",
     "chief_quarantine_events",
 )
 

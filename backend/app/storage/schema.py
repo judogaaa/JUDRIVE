@@ -56,6 +56,23 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_ticket_pair_inflight
 ON ticket_submissions(vehicle_id, session_id)
 WHERE submit_status IN ('sending', 'created', 'unknown');
 
+CREATE TABLE IF NOT EXISTS groq_usage_steps (
+    id INTEGER PRIMARY KEY,
+    conversation_id TEXT NOT NULL,
+    stage TEXT NOT NULL,
+    prompt_tokens INTEGER NOT NULL,
+    completion_tokens INTEGER NOT NULL,
+    total_tokens INTEGER NOT NULL,
+    created_at TEXT NOT NULL
+);
+
+CREATE VIEW IF NOT EXISTS groq_usage_by_check AS
+SELECT c.vehicle_id, c.session_id, u.stage, COUNT(*) AS calls,
+       SUM(u.prompt_tokens) AS prompt_tokens, SUM(u.completion_tokens) AS completion_tokens,
+       SUM(u.total_tokens) AS total_tokens
+FROM groq_usage_steps u JOIN chat_conversations c ON c.id = u.conversation_id
+GROUP BY c.vehicle_id, c.session_id, u.stage;
+
 CREATE TABLE IF NOT EXISTS groq_usage (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     conversation_id TEXT,

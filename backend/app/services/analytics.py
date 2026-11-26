@@ -12,7 +12,7 @@ from app.schemas.analytics import (
     VehicleFleetRow,
     VehicleInsightResponse,
 )
-from app.services.fleet import FleetService
+from app.services.fleet import FleetService, safe_history_session
 from app.storage.repository import AppRepository
 
 # Типы отклонений, для которых допустима high-рекомендация без LLM (названия из fault_types).
@@ -266,7 +266,10 @@ class FleetAnalyticsService:
         self._repo = repo
         with raw_path.open(encoding="utf-8") as f:
             payload = json.load(f)
-        self._raw_vehicles: list[dict] = payload["vehicles"]
+        self._raw_vehicles = [
+            {**vehicle, "sessions": [safe_history_session(s, vehicle["engine_model"]) for s in vehicle["sessions"]]}
+            for vehicle in payload["vehicles"]
+        ]
         self._synthetic = bool(payload.get("synthetic", True))
 
     def build_rows(self) -> list[VehicleFleetRow]:

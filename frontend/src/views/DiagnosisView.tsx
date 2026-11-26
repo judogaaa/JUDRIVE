@@ -247,7 +247,7 @@ export function DiagnosisView({
               })
             },
       onPrepareTicket:
-        effective === 'anomaly'
+        effective === 'anomaly' && (activeResult.confidence ?? 0) >= 0.50
           ? () =>
               onChatIntent({
                 id: Date.now(),

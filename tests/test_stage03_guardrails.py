@@ -55,6 +55,7 @@ def test_can_create_ticket_matrix():
         status="anomaly",
         anomaly_type="F01",
         anomaly_title="Клапанный механизм",
+        engine_model="ЯМЗ-236М2",
         anomaly_score=0.7,
         confidence=0.8,
         signal_quality="good",
@@ -133,7 +134,9 @@ async def _pipeline_b418():
     assert diag["anomaly_type"] == "F01"
 
     search = await runtime.execute("search_manuals", {"query": "тепловые зазоры клапанного механизма"})
-    assert search["status"] == "ok"
+    assert search["status"] in {"ok", "conflict"}
+    if search["status"] == "conflict":
+        assert len({row["doc_id"] for row in search["conflicting_sources"]}) >= 2
     evidence_ids = [h["evidence_id"] for h in search["results"][:2]]
     assert evidence_ids
 
@@ -151,7 +154,7 @@ async def _pipeline_b418():
     draft_id = prep["draft_id"]
     nonce = prep["confirm_nonce"]
 
-    tickets = TicketService(repo, fleet, MockMlClient(settings.mock_ml_url), MockToirClient(settings.mock_toir_url))
+    tickets = TicketService(repo, fleet, MockMlClient(settings.mock_ml_url), MockToirClient(settings.mock_toir_url), rag)
     result = await tickets.confirm(draft_id, nonce)
     assert result["status"] == "created"
     assert str(result.get("ticket_id", "")).startswith("TKT-")

@@ -402,5 +402,10 @@
   "chat.sourcesTitle": "উত্তরের উৎস",
   "help.card.settings.body": "ইন্টারফেসের ভাষা ও থিম বেছে নিন। সেটিংস এই ব্রাউজারে সংরক্ষিত থাকে।",
   "manuals.operationGuide": "পরিচালনা নির্দেশিকা",
-  "manuals.repairGuide": "মেরামত নির্দেশিকা"
+  "manuals.repairGuide": "মেরামত নির্দেশিকা",
+  "ticket.warningAck": "রেকর্ডিংয়ের শব্দ বিবেচনা করেছি এবং কাজগুলো নিশ্চিত করছি।",
+  "ticket.lowConfidence": "অনুরোধের জন্য অন্তত ০.৫০ আস্থা প্রয়োজন। আবার রেকর্ড করুন।",
+  "ticket.priorityAction.low": "পরের পরীক্ষায় অংশটি দেখুন।",
+  "ticket.priorityAction.medium": "পরের রক্ষণাবেক্ষণে পরীক্ষা করুন এবং নজর রাখুন।",
+  "ticket.priorityAction.high": "যাত্রার আগে পরীক্ষা করুন।"
 }

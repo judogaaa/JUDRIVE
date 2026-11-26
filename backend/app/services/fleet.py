@@ -1,7 +1,16 @@
 import json
 from pathlib import Path
 
+from app.agent.guardrails import FAULT_ENGINES
 from app.schemas.fleet import SessionSummary, VehicleSummary
+
+
+def safe_history_session(item: dict, engine: str) -> dict:
+    mismatch = item.get("status") == "anomaly" and engine not in FAULT_ENGINES.get(item.get("anomaly_type"), ())
+    if mismatch or item.get("signal_quality") == "bad" or item.get("status") == "check_failed":
+        return {**item, "status": "check_failed", "anomaly_type": None, "anomaly_title": None,
+                "anomaly_score": None, "confidence": None}
+    return item
 
 
 class FleetService:
@@ -25,7 +34,8 @@ class FleetService:
                 )
                 for s in item["sessions"]
             ]
-            ordered_sessions = sorted(item["sessions"], key=lambda s: s["checked_at"])
+            safe_sessions = [safe_history_session(s, item["engine_model"]) for s in item["sessions"]]
+            ordered_sessions = sorted(safe_sessions, key=lambda s: s["checked_at"])
             vehicles.append(
                 VehicleSummary(
                     vehicle_id=item["vehicle_id"],
@@ -45,7 +55,7 @@ class FleetService:
                 index[(item["vehicle_id"], session["session_id"])] = item["engine_model"]
         session_by_vehicle: dict[str, list[dict]] = {}
         for item in payload["vehicles"]:
-            session_by_vehicle[item["vehicle_id"]] = list(item["sessions"])
+            session_by_vehicle[item["vehicle_id"]] = [safe_history_session(s, item["engine_model"]) for s in item["sessions"]]
 
         self._vehicles = vehicles
         self._session_index = index

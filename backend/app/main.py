@@ -14,7 +14,7 @@ from app.rag.catalog import SPECS_BY_ID
 from app.rag.service import ManualRagService
 from app.schemas.analytics import QuarantineRecommendationRequest
 from app.schemas.chat import ChatMessageRequest, ConversationCreate
-from app.agent.guardrails import sanitize_ml_observation
+from app.agent.guardrails import apply_engine_context, sanitize_ml_observation
 from app.schemas.diagnose import DiagnoseRequest, DiagnoseResponse
 from app.schemas.fleet import VehicleDiagnosisHistory
 from app.schemas.health import HealthResponse
@@ -129,7 +129,7 @@ async def diagnose(body: DiagnoseRequest) -> DiagnoseResponse:
     except (httpx.HTTPError, MockMlResponseError) as exc:
         raise HTTPException(status_code=502, detail="Не удалось получить результат проверки. Повторите запрос.") from exc
 
-    result.engine_model = fleet.session_engine(body.vehicle_id, body.session_id)
+    apply_engine_context(result, fleet.session_engine(body.vehicle_id, body.session_id))
     result.description = sanitize_ml_observation(result.description)
     result.review_priority = diagnosis_review_priority(fleet, result)
     return result
@@ -175,12 +175,17 @@ async def manuals_catalog():
 
 @app.get(f"{settings.api_prefix}/manuals/status")
 async def manuals_status():
-    return rag_service.status()
+    status = rag_service.status()
+    return {key: status[key] for key in ("index_current", "documents", "pages", "missing_files")}
 
 
 @app.post(f"{settings.api_prefix}/manuals/search", response_model=ManualSearchResponse)
-async def manuals_search(body: ManualSearchRequest) -> ManualSearchResponse:
-    payload = rag_service.search(body.engine_model, body.query, limit=body.limit)
+async def manuals_search(body: ManualSearchRequest, response: Response) -> ManualSearchResponse:
+    import asyncio
+
+    response.headers["Cache-Control"] = "private, no-store"
+    response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
+    payload = await asyncio.to_thread(rag_service.search, body.engine_model, body.query, limit=body.limit)
     hits = [ManualSearchHit.model_validate(item) for item in payload.get("results", [])]
     return ManualSearchResponse(
         status=payload["status"],
@@ -190,14 +195,17 @@ async def manuals_search(body: ManualSearchRequest) -> ManualSearchResponse:
         manuals=payload.get("manuals"),
         missing_files=payload.get("missing_files"),
         results=hits,
+        conflicting_sources=payload.get("conflicting_sources", []),
     )
 
 
 @app.get(f"{settings.api_prefix}/sources/evidence/{{evidence_id}}")
-async def get_source_evidence(evidence_id: str):
+async def get_source_evidence(evidence_id: str, response: Response):
     evidence = rag_service.get_evidence(evidence_id)
-    if not evidence:
-        raise HTTPException(status_code=404, detail="Источник не найден в индексе")
+    if not evidence or not rag_service.resolve_pdf_path(evidence["doc_id"]):
+        raise HTTPException(status_code=404, detail="Источник недоступен")
+    response.headers["Cache-Control"] = "private, no-store"
+    response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
     return evidence
 
 
@@ -213,7 +221,8 @@ async def get_source_pdf(doc_id: str):
         media_type="application/pdf",
         filename=path.name,
         content_disposition_type="inline",
-        headers={"Accept-Ranges": "bytes"},
+        headers={"Accept-Ranges": "bytes", "Cache-Control": "private, no-store",
+                 "Cross-Origin-Resource-Policy": "same-origin"},
     )
 
 
@@ -266,7 +275,7 @@ async def get_ticket_draft(draft_id: str):
 async def confirm_ticket_draft(draft_id: str, body: TicketConfirmRequest):
     if not body.acknowledge:
         raise HTTPException(status_code=400, detail="Требуется явное подтверждение")
-    return await ticket_service.confirm(draft_id, body.confirm_nonce)
+    return await ticket_service.confirm(draft_id, body.confirm_nonce, warning_acknowledged=body.warning_acknowledged, urgency=body.urgency)
 
 
 @app.get(f"{settings.api_prefix}/tickets")

@@ -54,8 +54,8 @@ def test_dashboard_counts_sum_to_fifty():
     assert data.session_stats.total_sessions == 195
     assert data.session_stats.latest_by_status == {
         "normal": 25,
-        "anomaly": 23,
-        "check_failed": 2,
+        "anomaly": 21,
+        "check_failed": 4,
     }
     quarantine = data.summary["quarantine"]
     assert quarantine <= 23

@@ -33,6 +33,12 @@ function TicketDraftBody({
   const [phase, setPhase] = useState<'idle' | 'sending' | 'created' | 'duplicate' | 'unknown' | 'blocked' | 'stale'>('idle')
   const [error, setError] = useState<string | null>(null)
   const [ticketId, setTicketId] = useState<string | null>(null)
+  const [warningAcknowledged, setWarningAcknowledged] = useState(false)
+  const suggested = draft.payload?.urgency
+  const [urgency, setUrgency] = useState<'low' | 'medium' | 'high'>(
+    suggested === 'low' || suggested === 'high' ? suggested : 'medium',
+  )
+  const warning = draft.signal_quality === 'warning'
   const [acknowledged, setAcknowledged] = useState(false)
   const [source, setSource] = useState<ManualSearchHit | null>(null)
 
@@ -47,12 +53,12 @@ function TicketDraftBody({
   }
 
   const onConfirm = async () => {
-    if (confirming.current || locked || !acknowledged || !draft.confirm_nonce) return
+    if (confirming.current || locked || !acknowledged || (warning && !warningAcknowledged) || !draft.confirm_nonce) return
     confirming.current = true
     setPhase('sending')
     setError(null)
     try {
-      const result = await confirmTicketDraft(draft.draft_id, draft.confirm_nonce)
+      const result = await confirmTicketDraft(draft.draft_id, draft.confirm_nonce, warningAcknowledged, urgency)
       if (result.status === 'created' && result.ticket_id) {
         setPhase('created')
         setTicketId(result.ticket_id)
@@ -116,10 +122,6 @@ function TicketDraftBody({
           <div>
             <dt>{t('ticket.draft.diagnosis')}</dt>
             <dd>{payload.conclusion}</dd>
-          </div>
-          <div>
-            <dt>{t('ticket.draft.priority')}</dt>
-            <dd>{urgencyLabel(payload.urgency)}</dd>
           </div>
           <div>
             <dt>{t('ticket.draft.code')}</dt>
@@ -198,6 +200,18 @@ function TicketDraftBody({
         </p>
       ) : null}
 
+      <label className="field">
+        <span>{t('ticket.draft.priority')}</span>
+        <select value={urgency} disabled={locked} onChange={(event) => setUrgency(event.target.value as typeof urgency)}>
+          {(['low', 'medium', 'high'] as const).map((value) => <option key={value} value={value}>{urgencyLabel(value)}</option>)}
+        </select>
+        <small>{t(`ticket.priorityAction.${urgency}`)}</small>
+      </label>
+      {warning && <label className="ticket-ack">
+        <input type="checkbox" checked={warningAcknowledged} disabled={locked}
+          onChange={(event) => setWarningAcknowledged(event.target.checked)} />
+        <span>{t('ticket.warningAck')}</span>
+      </label>}
       <label className={locked ? 'ticket-ack ticket-ack--locked' : 'ticket-ack'}>
         <input
           type="checkbox"
@@ -211,7 +225,7 @@ function TicketDraftBody({
       <button
         type="button"
         className="btn btn--primary btn--block"
-        disabled={locked || !acknowledged}
+        disabled={locked || !acknowledged || (warning && !warningAcknowledged)}
         onClick={() => void onConfirm()}
       >
         {phase === 'sending' ? t('ticket.draft.sending') : t('ticket.confirmBtn')}

@@ -19,6 +19,7 @@ export interface SourceHit {
 export interface DraftPayload {
   draft_id: string
   confirm_nonce: string
+  signal_quality?: "good" | "warning"
   version: number
   status: string
   payload?: {
@@ -105,11 +106,13 @@ export async function sendChatMessage(
 export async function confirmTicketDraft(
   draftId: string,
   confirmNonce: string,
+  warningAcknowledged = false,
+  urgency?: "low" | "medium" | "high",
 ): Promise<{ status: string; ticket_id?: string; message?: string }> {
   const response = await fetch(`/api/tickets/drafts/${draftId}/confirm`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ confirm_nonce: confirmNonce, acknowledge: true }),
+    body: JSON.stringify({ confirm_nonce: confirmNonce, acknowledge: true, warning_acknowledged: warningAcknowledged, urgency }),
   })
   if (!response.ok) throw new Error(await readError(response))
   return (await response.json()) as { status: string; ticket_id?: string; message?: string }

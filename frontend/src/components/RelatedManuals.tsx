@@ -25,7 +25,8 @@ export function RelatedManuals({ engineModel, query }: { engineModel: string; qu
       <h3 className="panel__title"><BookOpen size={17} aria-hidden /> {t('verdict.related.title')}</h3>
       <p className="panel__subtitle">{t('verdict.related.hint')}</p>
       {!data && !error && <p className="panel__subtitle">{t('manual.searching')}</p>}
-      {error || (data && !['ok', 'not_found'].includes(data.status)) ? (
+      {data?.status === 'conflict' && <p className="manual-refusal">{data.message}</p>}
+      {error || (data && !['ok', 'conflict', 'not_found'].includes(data.status)) ? (
         <>
           {locale === 'ru' && data?.message ? <p className="panel__subtitle">{data.message}</p> : null}
           <button type="button" className="btn btn--secondary" onClick={() => setRetry((n) => n + 1)}>
@@ -36,7 +37,7 @@ export function RelatedManuals({ engineModel, query }: { engineModel: string; qu
         <p className="panel__subtitle">{locale === 'ru' ? data.message || t('manual.refusalTitle') : t('manual.refusalTitle')}</p>
       ) : (
         <ul className="history-list" style={{ marginTop: '0.75rem' }}>
-          {data?.results.slice(0, 3).map((hit) => (
+          {(data?.status === "conflict" ? data.conflicting_sources : data?.results.slice(0, 3))?.map((hit) => (
             <li key={hit.evidence_id}>
               <button type="button" className="history-item" onClick={() => setOpened(hit)}>
                 <span className="history-item__id">{hit.manual_title}</span>

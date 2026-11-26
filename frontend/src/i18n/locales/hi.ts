@@ -405,4 +405,9 @@ export const hi: Record<TranslationKey, string> = {
   'help.card.settings.body': 'इंटरफ़ेस की भाषा और थीम चुनें। सेटिंग इस ब्राउज़र में सहेजी जाती हैं।',
   'manuals.operationGuide': 'संचालन निर्देशिका',
   'manuals.repairGuide': 'मरम्मत निर्देशिका',
+  'ticket.warningAck': 'मैंने रिकॉर्डिंग का शोर ध्यान में रखा है और काम की पुष्टि करता हूँ।',
+  'ticket.lowConfidence': 'अनुरोध के लिए कम से कम 0.50 का विश्वास चाहिए। फिर से रिकॉर्ड करें।',
+  'ticket.priorityAction.low': 'अगली जाँच में देखें।',
+  'ticket.priorityAction.medium': 'अगले रखरखाव में जाँचें और निगरानी रखें।',
+  'ticket.priorityAction.high': 'यात्रा से पहले जाँचें।',
 }

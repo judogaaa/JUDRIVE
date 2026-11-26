@@ -31,6 +31,7 @@ export interface DiagnoseResponse {
   signal_quality: SignalQuality
   description: string
   model_version: string
+  diagnostic_issue?: 'engine_mismatch' | null
   review_priority?: 'low' | 'medium' | 'high' | null
   engine_model?: string | null
 }

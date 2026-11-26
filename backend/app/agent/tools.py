@@ -4,8 +4,9 @@ import json
 from dataclasses import dataclass, field
 from typing import Any
 
-from app.agent.evidence import references_allowed_for_engine, resolve_evidence_ids, to_ticket_references, unsupported_claims
-from app.agent.guardrails import can_create_ticket, diagnosis_hash, ml_facts_for_agent, urgency_allowed
+from app.agent.evidence import has_node_procedure, references_allowed_for_engine, resolve_evidence_ids, to_ticket_references, unsupported_claims
+from app.agent.guardrails import apply_engine_context, can_create_ticket, diagnosis_hash, ml_facts_for_agent, urgency_allowed
+from app.rag.conflicts import inspection_only
 from app.rag.service import AGENT_SEARCH_LIMIT, ManualRagService
 from app.services.analytics import diagnosis_review_priority
 from app.services.fleet import FleetService
@@ -85,6 +86,7 @@ class ToolRuntime:
     diagnosis: Any | None = None
     sources: list[dict] = field(default_factory=list)
     draft: dict | None = None
+    conflict: dict | None = None
 
     async def execute(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         if name == "get_diagnosis":
@@ -100,6 +102,7 @@ class ToolRuntime:
     async def _get_diagnosis(self) -> dict[str, Any]:
         if self.diagnosis is None:
             self.diagnosis = await self.mock_ml.diagnose(self.vehicle_id, self.session_id)
+            apply_engine_context(self.diagnosis, self.engine_model)
             self.diagnosis.review_priority = diagnosis_review_priority(self.fleet, self.diagnosis)
         return ml_facts_for_agent(self.diagnosis, self.engine_model)
 
@@ -126,6 +129,8 @@ class ToolRuntime:
         if not isinstance(query, str) or not query.strip() or len(query) > 500:
             return {"status": "invalid_query", "message": "Пустой запрос"}
         result = self.rag.search(self.engine_model, query.strip(), limit=AGENT_SEARCH_LIMIT)
+        if result["status"] == "conflict":
+            self.conflict = result
         if result.get("results"):
             for hit in result["results"]:
                 self.sources.append(hit)
@@ -168,7 +173,14 @@ class ToolRuntime:
         if not references_allowed_for_engine(resolved, self.engine_model):
             return {"status": "refused", "message": "Источник не относится к двигателю машины"}
 
+        if not has_node_procedure(self.rag, resolved, self.diagnosis.anomaly_type):
+            return {"status": "refused", "message": "В источниках нет процедуры для этого узла. Нужна дефектовка."}
+
         spare_parts = [str(x).strip() for x in args.get("spare_parts", []) if str(x).strip()]
+        if self.diagnosis.anomaly_type == "F01" and not self.conflict:
+            await self.execute("search_manuals", {"query": "тепловые зазоры клапанов"})
+        if self.conflict and not inspection_only(operations, spare_parts):
+            return {"status": "refused", "message": "Источники расходятся. Допустим только осмотр без спорных нормативов."}
         missing = unsupported_claims(self.rag, resolved, operations + spare_parts)
         if missing:
             return {"status": "refused", "message": "Работы или запчасти не подтверждены указанными страницами. Уточните формулировку по тексту источника.", "unsupported": missing}
@@ -178,7 +190,7 @@ class ToolRuntime:
             "session_id": self.session_id,
             "anomaly_type": self.diagnosis.anomaly_type,
             "conclusion": f"Возможное отклонение {self.diagnosis.anomaly_type}: {self.diagnosis.anomaly_title or 'требуется проверка'}. Требуется подтверждение специалистом.",
-            "urgency": args["urgency"],
+            "urgency": diagnosis_review_priority(self.fleet, self.diagnosis) or "medium",
             "operations": operations,
             "spare_parts": spare_parts,
             "references": references,
@@ -192,6 +204,7 @@ class ToolRuntime:
             payload,
         )
         draft["resolved_evidence"] = resolved
+        draft["signal_quality"] = self.diagnosis.signal_quality
         self.draft = draft
         return {
             "status": "draft_ready",

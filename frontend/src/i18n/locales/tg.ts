@@ -405,4 +405,9 @@ export const tg: Record<TranslationKey, string> = {
   'help.card.settings.body': 'Забони интерфейс ва мавзӯъро интихоб кунед. Танзимот дар ҳамин браузер нигоҳ дошта мешавад.',
   'manuals.operationGuide': 'Дастури истифода',
   'manuals.repairGuide': 'Дастури таъмир',
+  'ticket.warningAck': 'Халали сабтро ба назар гирифтам ва корҳоро тасдиқ мекунам.',
+  'ticket.lowConfidence': 'Барои дархост эътимоди ҳадди ақал 0,50 лозим аст. Сабтро такрор кунед.',
+  'ticket.priorityAction.low': 'Дар санҷиши навбатӣ тафтиш кунед.',
+  'ticket.priorityAction.medium': 'Дар наздиктарин хизматрасонӣ тафтиш кунед ва зери назорат нигоҳ доред.',
+  'ticket.priorityAction.high': 'Пеш аз сафар тафтиш кунед.',
 }

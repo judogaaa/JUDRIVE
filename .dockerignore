@@ -12,6 +12,11 @@ local-data
 local-pdfs
 output
 *.sqlite*
+*.db
+*.db-*
+*.hocr
+*.alto.xml
+**/data/index
 *.pdf
 *.zip
 *.key

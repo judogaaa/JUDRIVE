@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import re
 
 from fastapi import HTTPException
 import httpx
@@ -10,8 +11,8 @@ import httpx
 from app.agent.groq_client import GroqClient, GroqRateLimitError
 from app.agent.presentation import format_answer
 from app.agent.locale import agent_language_instruction, normalize_locale, failed_recording_reply, insufficient_evidence_reply
-from app.agent.evidence import quantities_supported
-from app.agent.guardrails import sanitize_user_message, ml_facts_for_agent
+from app.agent.evidence import operating_prohibition, quantities_supported
+from app.agent.guardrails import apply_engine_context, sanitize_user_message, ml_facts_for_agent
 from app.agent.tools import TOOL_DEFINITIONS, ToolRuntime
 from app.config import Settings
 from app.rag.catalog import allowed_doc_ids
@@ -24,6 +25,13 @@ from app.storage.repository import AppRepository
 
 
 logger = logging.getLogger(__name__)
+
+_UNVERIFIED_CLEARANCE = re.compile(
+    r"можно (?:ехать|ездить|перегнать|эксплуатировать)|"
+    r"допускается (?:эксплуатация|перегон)|(?:эксплуатация|перегон) (?:разрешен|запрещен)|"
+    r"safe to drive|can be driven|can drive|do not drive|must not drive",
+    re.IGNORECASE,
+)
 
 _ACTION_INSTRUCTIONS: dict[DiagnosisAction, str] = {
     "explain": "Кратко объясни результат текущей проверки по структурированным данным.",
@@ -100,8 +108,12 @@ class AgentOrchestrator:
         # A request for clearance receives a conservative refusal even in ticket-review mode.
         if _is_drive_permission_question(content):
             reply = insufficient_evidence_reply(loc)
-            self._repo.add_chat_turn(conversation_id, content, reply)
-            return {"reply": reply, "tool_trace": [], "sources": [], "draft": None, "usage": {}}
+            sources = []
+            if attached and (prohibition := operating_prohibition(attached)):
+                sources = [attached]
+                reply = f'«{prohibition}» [{attached["evidence_id"]}]\n\n{reply}'
+            self._repo.add_chat_turn(conversation_id, content, reply, sources=sources)
+            return {"reply": reply, "tool_trace": [], "sources": sources, "draft": None, "usage": {}}
         if not analysis_only:
             try:
                 diag = await self._mock_ml.diagnose(conv["vehicle_id"], conv["session_id"])
@@ -109,10 +121,13 @@ class AgentOrchestrator:
                 raise HTTPException(status_code=504, detail="Проверка не ответила вовремя.") from exc
             except (httpx.HTTPError, MockMlResponseError) as exc:
                 raise HTTPException(status_code=502, detail="Не удалось получить результат проверки.") from exc
+            apply_engine_context(diag, conv["engine_model"])
             diag.review_priority = diagnosis_review_priority(self._fleet, diag)
             failed = diag.status == "check_failed" or diag.signal_quality == "bad"
             if failed and (action is not None or (not attached and not _is_manual_question(content))):
                 reply = failed_recording_reply(loc)
+                if diag.diagnostic_issue == "engine_mismatch" and loc == "ru":
+                    reply = diag.description
                 self._repo.add_chat_turn(conversation_id, content, reply)
                 return {"reply": reply, "tool_trace": [], "sources": [], "draft": None, "usage": {}}
 
@@ -174,6 +189,8 @@ class AgentOrchestrator:
             )
 
         groq = self._groq()
+        if isinstance(groq, GroqClient):
+            groq.on_usage = lambda stage, usage: self._repo.log_usage_step(conversation_id, stage, usage)
         try:
             reply, tool_trace, usage = await groq.run_with_tools(
                 llm_messages,
@@ -201,9 +218,14 @@ class AgentOrchestrator:
 
         reply, sources = format_answer(reply, runtime.sources)
         # A numerical technical claim without any supporting page is unsafe too.
-        if not reply or not quantities_supported(self._rag, sources, reply):
+        cited_sources = [source for source in sources if f'[{source["evidence_id"]}]' in reply]
+        if not reply or _UNVERIFIED_CLEARANCE.search(reply) or not quantities_supported(self._rag, cited_sources, reply):
             reply = insufficient_evidence_reply(loc)
-        if not analysis_only and (attached or action in {"next_checks", "prepare_ticket"} or _is_manual_question(content)):
+        if action == "prepare_ticket" and not attached and not analysis_only and not runtime.draft and loc == "ru":
+            reply = "Черновик недоступен без подтверждённой процедуры для этого узла. Передайте машину на дефектовку."
+            if diag and (diag.confidence is None or diag.confidence < 0.50):
+                reply = "Для заявки нужна уверенность от 0,50. Повторите запись."
+        if not analysis_only and (attached or action == "next_checks" or (action != "prepare_ticket" and _is_manual_question(content))):
             if not sources and not runtime.draft:
                 reply = insufficient_evidence_reply(loc)
             elif sources and not runtime.draft and not any(
@@ -211,6 +233,10 @@ class AgentOrchestrator:
             ):
                 # An unreferenced synthesis is not presented as a verified manual answer.
                 reply = insufficient_evidence_reply(loc)
+        if runtime.conflict:
+            sources = runtime.conflict["conflicting_sources"]
+            excerpts = [f'«{hit["quote"]}» [{hit["evidence_id"]}]' for hit in sources]
+            reply = "\n\n".join([runtime.conflict["message"], *excerpts])
         draft_id = runtime.draft["draft_id"] if runtime.draft else None
         self._repo.add_chat_turn(
             conversation_id,

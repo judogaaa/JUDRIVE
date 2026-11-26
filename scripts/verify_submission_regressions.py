@@ -168,7 +168,7 @@ async def ticket_checks(backend):
     class MalformedToir:
         async def create_ticket(self, _):
             return {"status": "created"}
-    unknown = await TicketService(repo, fleet, ml_client, MalformedToir()).confirm(d["draft_id"], d["confirm_nonce"])
+    unknown = await TicketService(repo, fleet, ml_client, MalformedToir(), rag).confirm(d["draft_id"], d["confirm_nonce"])
     check("missing ticket id => unknown, no retry", unknown["status"] == "unknown" and (await service.confirm(d["draft_id"], d["confirm_nonce"]))["status"] == "unknown")
     # Crash on a fresh draft after claim: replay is forbidden on restart.
     fresh = runtime("B418HK98", "S-0008")

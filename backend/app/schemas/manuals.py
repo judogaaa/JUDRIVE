@@ -24,4 +24,5 @@ class ManualSearchResponse(BaseModel):
     message: str | None = None
     manuals: list[str] | None = None
     missing_files: list[str] | None = None
+    conflicting_sources: list[ManualSearchHit] = Field(default_factory=list)
     results: list[ManualSearchHit] = Field(default_factory=list)

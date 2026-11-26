@@ -36,7 +36,7 @@ def _diag(**overrides) -> DiagnoseResponse:
         "signal_quality": "good",
         "description": "",
         "model_version": "mock-v1",
-        "engine_model": "ЯМЗ-53622-10",
+        "engine_model": "ЯМЗ-236М2",
     }
     base.update(overrides)
     return DiagnoseResponse.model_validate(base)

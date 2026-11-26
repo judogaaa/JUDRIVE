@@ -16,6 +16,7 @@ export interface ManualSearchResponse {
   query?: string
   message?: string
   results: ManualSearchHit[]
+  conflicting_sources?: ManualSearchHit[]
 }
 
 export async function searchManuals(

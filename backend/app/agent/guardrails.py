@@ -20,6 +20,34 @@ INJECTION_PATTERNS = (
 )
 
 MAX_USER_MESSAGE_LEN = 2000
+MIN_TICKET_CONFIDENCE = 0.50
+
+# Engine families and applicable manuals are enumerated in app.rag.catalog.
+_DIESEL = frozenset({"ЯМЗ-236М2", "ЯМЗ-536"})
+_PETROL = frozenset({"ЗМЗ-5234.10", "ЗМЗ-40904.10", "ЗМЗ-40905.10"})
+_CHAIN = frozenset({"ЗМЗ-40904.10", "ЗМЗ-40905.10"})
+_COMMON = _DIESEL | _PETROL
+FAULT_ENGINES = {
+    **dict.fromkeys(("F01", "F02", "F03", "F04", "F05", "F06", "F07"), _COMMON),
+    "F08": _DIESEL, "F09": _DIESEL - {"ЯМЗ-236М2"},
+    "F12": _PETROL, "F13": _PETROL, "F14": _CHAIN,
+}
+
+
+def apply_engine_context(diag: DiagnoseResponse, engine: str | None) -> DiagnoseResponse:
+    diag.engine_model = engine
+    if diag.status == "anomaly" and engine not in FAULT_ENGINES.get(diag.anomaly_type, ()):
+        code = diag.anomaly_type or "—"
+        diag.status = "check_failed"
+        diag.diagnostic_issue = "engine_mismatch"
+        diag.anomaly_type = diag.anomaly_title = None
+        diag.anomaly_score = diag.confidence = None
+        diag.review_priority = None
+        diag.description = (
+            f"Применимость кода {code} к двигателю {engine or 'этой машины'} не подтверждена. "
+            "Повторите проверку или передайте машину на дефектовку."
+        )
+    return diag
 
 
 def sanitize_user_message(text: str) -> str:
@@ -43,6 +71,10 @@ def diagnosis_hash(diag: DiagnoseResponse) -> str:
         "status": diag.status,
         "anomaly_type": diag.anomaly_type,
         "signal_quality": diag.signal_quality,
+        "confidence": diag.confidence,
+        "anomaly_score": diag.anomaly_score,
+        "engine_model": diag.engine_model,
+        "model_version": diag.model_version,
     }
     return hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()
 
@@ -56,6 +88,10 @@ def can_create_ticket(diag: DiagnoseResponse) -> tuple[bool, str]:
         return False, "Недостаточный статус ML для заявки."
     if not diag.anomaly_type:
         return False, "Не указан код отклонения anomaly_type."
+    if diag.confidence is None or diag.confidence < MIN_TICKET_CONFIDENCE:
+        return False, "Уверенность ниже 0,50 или неизвестна. Повторите запись."
+    if diag.engine_model not in FAULT_ENGINES.get(diag.anomaly_type, ()):
+        return False, "Код отклонения не подтверждён для двигателя этой машины."
     return True, ""
 
 
@@ -79,5 +115,5 @@ def ml_facts_for_agent(diag: DiagnoseResponse, engine_model: str | None) -> dict
     }
 
 
-def urgency_allowed(urgency: str) -> bool:
-    return urgency in {"low", "medium", "high"}
+def urgency_allowed(urgency: object) -> bool:
+    return isinstance(urgency, str) and urgency in {"low", "medium", "high"}

@@ -121,15 +121,15 @@ export function VerdictCard({ result, loading, error, vehicleId, actions, onRetr
         </div>
       </header>
 
-      <h2 className="verdict-card__title">{t(titleKey)}</h2>
-      <p className="verdict-card__lead">{t(leadKey)}</p>
+      <h2 className="verdict-card__title">{t(result.diagnostic_issue === 'engine_mismatch' ? 'verdict.error.title' : titleKey)}</h2>
+      {result.diagnostic_issue !== 'engine_mismatch' && <p className="verdict-card__lead">{t(leadKey)}</p>}
 
       {effective === 'check_failed' ? (
         <>
           {result.description ? (
             <dl className="verdict-card__reason">
               <dt>
-                {t('verdict.failed.reason')} <HelpTip text={t('help.tip.failed')} />
+                {t('verdict.failed.reason')} {result.diagnostic_issue !== 'engine_mismatch' && <HelpTip text={t('help.tip.failed')} />}
               </dt>
               <dd>{result.description}</dd>
             </dl>
@@ -151,6 +151,9 @@ export function VerdictCard({ result, loading, error, vehicleId, actions, onRetr
         </>
       )}
 
+      {effective === 'anomaly' && (result.confidence ?? 0) < 0.50 && (
+        <p className="verdict-card__quality">{t('ticket.lowConfidence')}</p>
+      )}
       {actions ? (
         <VerdictActions
           result={result}

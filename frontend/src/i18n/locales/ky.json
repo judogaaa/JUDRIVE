@@ -402,5 +402,10 @@
   "chat.sourcesTitle": "Жооп булактары",
   "help.card.settings.body": "Интерфейстин тилин жана темасын тандаңыз. Жөндөөлөр ушул браузерде сакталат.",
   "manuals.operationGuide": "Пайдалануу боюнча колдонмо",
-  "manuals.repairGuide": "Оңдоо боюнча колдонмо"
+  "manuals.repairGuide": "Оңдоо боюнча колдонмо",
+  "ticket.warningAck": "Жазуудагы ызы-чууну эске алдым жана иштерди ырастайм.",
+  "ticket.lowConfidence": "Өтүнмө үчүн ишеним кеминде 0,50 болушу керек. Кайра жазыңыз.",
+  "ticket.priorityAction.low": "Кийинки текшерүүдө караңыз.",
+  "ticket.priorityAction.medium": "Жакынкы тейлөөдө текшериңиз жана көзөмөлдөңүз.",
+  "ticket.priorityAction.high": "Каттамга чыгардан мурда текшериңиз."
 }

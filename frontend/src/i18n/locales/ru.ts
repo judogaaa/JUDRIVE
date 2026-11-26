@@ -405,4 +405,9 @@ export const ru: Record<TranslationKey, string> = {
   'help.card.settings.body': 'Выберите язык интерфейса и тему. Настройки сохраняются в этом браузере.',
   'manuals.operationGuide': 'Руководство по эксплуатации',
   'manuals.repairGuide': 'Руководство по ремонту',
+  'ticket.warningAck': 'Учитываю помехи в записи и подтверждаю подготовленные работы.',
+  'ticket.lowConfidence': 'Заявка недоступна: для неё нужна уверенность от 0,50. Повторите запись.',
+  'ticket.priorityAction.low': 'Проверить узел при следующей проверке.',
+  'ticket.priorityAction.medium': 'Дефектовка на ближайшем ТО, работа под наблюдением.',
+  'ticket.priorityAction.high': 'Дефектовка до выпуска в рейс.',
 }

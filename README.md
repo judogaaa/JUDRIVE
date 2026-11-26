@@ -162,3 +162,7 @@ Playwright поднимает полностью изолированный те
   `python scripts/verify_submission_regressions.py` (6 PDF в PDF_DIR, без Groq/сети).
 - Live-проверка: `python scripts/verify_agent_scenarios.py`; `--only check_failed` выполняет только C3, а `--confirm` явно разрешает тестовый POST заявки.
 - [Сценарий демо](docs/DEMO_SCRIPT.md), [матрица требований](docs/REQUIREMENTS_MATRIX.md), [пакет сдачи](docs/SUBMISSION.md), [Excel usage](submission/USAGE_EVIDENCE.md).
+
+## Инженерное уточнение
+
+Заявка требует уверенности от 0,50. При помехах нужна отдельная отметка. Приоритет можно изменить до отправки. Документальный сценарий требует оригиналов, подключённых локально. [Матрица](docs/REQUIREMENTS_MATRIX.md)
