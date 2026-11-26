@@ -11,7 +11,7 @@ test.describe('Ticket draft → confirm → journal', () => {
 
     await page.goto('/')
     await openNav(page, 'Заявки')
-    const row = page.locator('.ticket-row').first()
+    const row = page.locator('.ticket-row').filter({ hasText: /B418HK98/ }).first()
     await expect(row.getByText(/TKT-/)).toBeVisible()
     await row.locator('.ticket-row__head').click()
     await expect(page.getByRole('dialog')).toBeVisible()
@@ -53,6 +53,7 @@ test.describe('Ticket draft → confirm → journal', () => {
     await page.locator('.verdict-actions').getByRole('button', { name: 'Подготовить заявку' }).click()
 
     await expect(page.getByRole('heading', { name: 'Черновик заявки ТОиР' })).toBeVisible({ timeout: 120_000 })
+    await page.getByLabel('Я проверил факты, источники и работы').check()
     await page.getByRole('button', { name: 'Подтвердить и отправить заявку' }).click()
     await expect(page.getByText(/TKT-/)).toBeVisible({ timeout: 30_000 })
 

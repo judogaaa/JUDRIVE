@@ -4,17 +4,20 @@ import { fetchDiagnosis, fetchVehicleDiagnosisHistory } from '../api/client'
 import type { TrendPoint } from '../api/fleet'
 import type { DiagnoseResponse, SessionSummary, VehicleSummary } from '../api/types'
 import { AgentChat } from '../components/AgentChat'
+import { SessionChooser } from '../components/SessionChooser'
 import { VehicleHistoryPanel } from '../components/VehicleHistoryPanel'
+import { VehiclePicker } from '../components/VehiclePicker'
 import { VerdictCard } from '../components/VerdictCard'
 import { useI18n } from '../i18n/I18nContext'
 import { formatSessionDateTime } from '../lib/formatLocale'
-import { vehicleModelLabel } from '../lib/vehicleLabel'
+import { latestSessionId } from '../lib/vehicle'
 import type { ChatIntent, ManualSearchIntent } from '../lib/workflow'
 import {
   buildExplainDiagnosisMessage,
   buildPrepareTicketMessage,
   buildWhatToCheckMessage,
   manualQueryFromDiagnosis,
+  usableStatus,
 } from '../lib/workflow'
 
 interface DiagnosisViewProps {
@@ -44,38 +47,39 @@ export function DiagnosisView({
 }: DiagnosisViewProps) {
   const { t, locale } = useI18n()
   const sessionRef = useRef<HTMLSelectElement | null>(null)
-  const [vehicleQuery, setVehicleQuery] = useState('')
   const [copyHint, setCopyHint] = useState(false)
   const [result, setResult] = useState<DiagnoseResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [trendPoints, setTrendPoints] = useState<TrendPoint[]>([])
   const [trendError, setTrendError] = useState<string | null>(null)
+  const [sessionChooserOpen, setSessionChooserOpen] = useState(false)
+  const requestGen = useRef(0)
+  const tRef = useRef(t)
+  tRef.current = t
 
   const selectedVehicle = useMemo(
-    () => vehicles.find((v) => v.vehicle_id === vehicleId) ?? null,
+    () => vehicles.find((vehicle) => vehicle.vehicle_id === vehicleId) ?? null,
     [vehicleId, vehicles],
   )
-
   const sessions = selectedVehicle?.sessions ?? []
-
-  const vehicleOptions = useMemo(() => {
-    const q = vehicleQuery.trim().toLowerCase()
-    if (!q) return vehicles
-    return vehicles.filter((v) => {
-      const hay = [v.vehicle_id, v.garage_no, v.make, v.model ?? '', v.engine_model].join(' ').toLowerCase()
-      return hay.includes(q)
-    })
-  }, [vehicleQuery, vehicles])
-
-  const requestGen = useMemo(() => ({ current: 0 }), [])
+  const contextKey = `${vehicleId}:${sessionId}`
+  // Guard the render itself: an effect-based reset still leaves one paint with old state.
+  const activeResult =
+    result && result.vehicle_id === vehicleId && result.session_id === sessionId ? result : null
 
   const resetVerdict = useCallback(() => {
     requestGen.current += 1
     setResult(null)
     setError(null)
     setLoading(false)
-  }, [requestGen])
+  }, [])
+
+  // A different vehicle/session must never show the previous verdict, chart or error.
+  useEffect(() => {
+    resetVerdict()
+    setSessionChooserOpen(false)
+  }, [contextKey, resetVerdict])
 
   useEffect(() => {
     if (!vehicleId) {
@@ -92,20 +96,28 @@ export function DiagnosisView({
       .catch((err: unknown) => {
         if (!cancelled) {
           setTrendPoints([])
-          setTrendError(err instanceof Error ? err.message : t('error.unknown'))
+          setTrendError(err instanceof Error ? err.message : tRef.current('error.unknown'))
         }
       })
     return () => {
       cancelled = true
     }
-  }, [vehicleId, t])
+  }, [vehicleId])
+
+  // Keep the pair valid if the fleet data arrives after the initial render.
+  useEffect(() => {
+    if (!selectedVehicle) return
+    if (selectedVehicle.sessions.some((session) => session.session_id === sessionId)) return
+    const latest = latestSessionId(selectedVehicle)
+    if (latest) onSessionChange(latest)
+  }, [onSessionChange, selectedVehicle, sessionId])
 
   const onVehicleSelect = (nextId: string) => {
     onVehicleChange(nextId)
-    const vehicle = vehicles.find((v) => v.vehicle_id === nextId)
+    const vehicle = vehicles.find((row) => row.vehicle_id === nextId)
     if (vehicle) {
-      const latest = [...vehicle.sessions].sort((a, b) => b.checked_at.localeCompare(a.checked_at))[0]
-      if (latest) onSessionChange(latest.session_id)
+      const latest = latestSessionId(vehicle)
+      if (latest) onSessionChange(latest)
     }
     resetVerdict()
   }
@@ -129,39 +141,43 @@ export function DiagnosisView({
       setResult(response)
     } catch (err: unknown) {
       if (gen !== requestGen.current) return
-      setError(err instanceof Error ? err.message : t('error.unknown'))
+      setError(err instanceof Error ? err.message : tRef.current('error.unknown'))
     } finally {
       if (gen === requestGen.current) setLoading(false)
     }
-  }, [requestGen, sessionId, t, vehicleId])
+  }, [sessionId, vehicleId])
 
-  const sortedSessions: SessionSummary[] = [...sessions].sort((a, b) => b.checked_at.localeCompare(a.checked_at))
-
-  const modelLabel = selectedVehicle ? vehicleModelLabel(selectedVehicle.make, selectedVehicle.model) : ''
-  const plateValue = selectedVehicle ? `${selectedVehicle.vehicle_id} · ${modelLabel}` : ''
+  const sortedSessions: SessionSummary[] = [...sessions].sort((a, b) =>
+    b.checked_at.localeCompare(a.checked_at),
+  )
   const activeSession = sortedSessions.find((session) => session.session_id === sessionId) ?? null
-  const engineModel = selectedVehicle?.engine_model ?? result?.engine_model ?? null
+  const engineModel = selectedVehicle?.engine_model ?? activeResult?.engine_model ?? null
 
   const copyVerdictPlan = useCallback(async () => {
-    if (!result) return
+    if (!activeResult) return
+    const effective = usableStatus(activeResult)
     const stepKeys =
-      result.status === 'normal'
+      effective === 'normal'
         ? ['verdict.steps.normal.1', 'verdict.steps.normal.2']
-        : result.status === 'anomaly'
+        : effective === 'anomaly'
           ? ['verdict.steps.anomaly.1', 'verdict.steps.anomaly.2', 'verdict.steps.anomaly.3']
           : ['verdict.steps.failed.1', 'verdict.steps.failed.2']
     const body = [
       t(
-        result.status === 'normal'
+        effective === 'normal'
           ? 'verdict.normal.title'
-          : result.status === 'anomaly'
+          : effective === 'anomaly'
             ? 'verdict.anomaly.title'
             : 'verdict.failed.title',
       ),
-      result.vehicle_id,
-      result.session_id,
-      result.engine_model ? `${t('verdict.engine')}: ${result.engine_model}` : '',
-      result.anomaly_title ? `${result.anomaly_type}: ${result.anomaly_title}` : '',
+      `${activeResult.vehicle_id} · ${activeResult.session_id}`,
+      activeResult.engine_model ? `${t('verdict.engine')}: ${activeResult.engine_model}` : '',
+      effective === 'check_failed' && activeResult.description
+        ? `${t('verdict.failed.reason')}: ${activeResult.description}`
+        : '',
+      effective === 'anomaly' && activeResult.anomaly_title
+        ? `${t('verdict.type')}: ${activeResult.anomaly_type} — ${activeResult.anomaly_title}`
+        : '',
       ...stepKeys.map((key) => t(key as 'verdict.steps.normal.1')),
     ]
       .filter(Boolean)
@@ -173,17 +189,18 @@ export function DiagnosisView({
     } catch {
       /* clipboard blocked */
     }
-  }, [result, t])
+  }, [activeResult, t])
 
   const verdictActions = useMemo(() => {
-    if (!result) return null
+    if (!activeResult) return null
+    const effective = usableStatus(activeResult)
     return {
       onExplain: () =>
         onChatIntent({
           id: Date.now(),
           vehicleId,
           sessionId,
-          message: buildExplainDiagnosisMessage(result),
+          message: buildExplainDiagnosisMessage(activeResult),
           autoSend: true,
         }),
       onWhatToCheck: () =>
@@ -191,123 +208,122 @@ export function DiagnosisView({
           id: Date.now(),
           vehicleId,
           sessionId,
-          message: buildWhatToCheckMessage(result),
+          message: buildWhatToCheckMessage(activeResult),
           autoSend: true,
         }),
-      onSearchManual: () => {
-        if (!engineModel) return
-        onOpenManuals({
-          id: Date.now(),
-          engineModel,
-          query: manualQueryFromDiagnosis(result),
-          autoOpenSingle: true,
-        })
-      },
+      onSearchManual:
+        effective === 'check_failed'
+          ? undefined
+          : () => {
+              if (!engineModel) return
+              onOpenManuals({
+                id: Date.now(),
+                engineModel,
+                query: manualQueryFromDiagnosis(activeResult),
+                autoOpenSingle: true,
+              })
+            },
       onPrepareTicket:
-        result.status === 'anomaly' && result.signal_quality !== 'bad'
+        effective === 'anomaly'
           ? () =>
               onChatIntent({
                 id: Date.now(),
                 vehicleId,
                 sessionId,
-                message: buildPrepareTicketMessage(result),
+                message: buildPrepareTicketMessage(activeResult),
                 autoSend: true,
               })
           : undefined,
       onCopyPlan: () => void copyVerdictPlan(),
-      onOtherSession:
-        result.status === 'check_failed'
-          ? () => {
-              sessionRef.current?.focus()
-              sessionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
-            }
-          : undefined,
+      onOtherSession: () => setSessionChooserOpen(true),
+      onRetry: () => void runDiagnosis(),
     }
-  }, [copyVerdictPlan, engineModel, onChatIntent, onOpenManuals, result, sessionId, vehicleId])
+  }, [activeResult, copyVerdictPlan, engineModel, onChatIntent, onOpenManuals, runDiagnosis, sessionId, vehicleId])
 
   return (
     <div className="diag-page">
+      <header className="diag-page__header">
+        <div>
+          <p className="eyebrow">{t('app.caption')}</p>
+          <h1>{t('diag.title')}</h1>
+          <p className="diag-page__lead">{t('diag.subtitle')}</p>
+        </div>
+        {activeSession ? (
+          <div className="diag-page__context" title={t('history.title')}>
+            <span>{t('history.selected')}</span>
+            <strong>{activeSession.session_id}</strong>
+            <span>{formatSessionDateTime(locale, activeSession.checked_at)}</span>
+          </div>
+        ) : null}
+      </header>
+
       {fleetError ? (
         <p className="panel__error" role="alert">
           {fleetError}
         </p>
-      ) : (
-        <div className="diag-split">
-          <section className="diag-col" aria-label={t('diag.title')}>
-            <div className="field vehicle-combo">
-              <span>{t('diag.vehicle')}</span>
-              <input
-                value={vehicleQuery || plateValue}
-                onChange={(e) => setVehicleQuery(e.target.value)}
-                onFocus={() => {
-                  if (!vehicleQuery && plateValue) setVehicleQuery('')
-                }}
-                placeholder={t('diag.filterPlaceholder')}
-                aria-label={t('diag.search')}
-                role="combobox"
-                aria-expanded={vehicleQuery.trim().length > 0}
-              />
-              {vehicleQuery.trim() ? (
-                <ul className="vehicle-combo__list" role="listbox">
-                  {vehicleOptions.slice(0, 8).map((v) => (
-                    <li key={v.vehicle_id}>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onVehicleSelect(v.vehicle_id)
-                          setVehicleQuery('')
-                        }}
-                      >
-                        {v.vehicle_id} · {v.garage_no} · {vehicleModelLabel(v.make, v.model)} · {v.engine_model}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-              {selectedVehicle ? (
-                <p className="diag-toolbar__hint">
-                  {modelLabel} · {t('diag.garage')} {selectedVehicle.garage_no} · {selectedVehicle.engine_model}
-                </p>
-              ) : null}
-            </div>
-            <label className="field">
-              <span>{t('diag.check')}</span>
-              <select
-                ref={sessionRef}
-                aria-label={t('diag.check')}
-                value={sessionId}
-                onChange={(e) => onSessionSelect(e.target.value)}
-              >
-                {sortedSessions.map((s) => (
-                  <option key={s.session_id} value={s.session_id}>
-                    {s.session_id} · {formatSessionDateTime(locale, s.checked_at)}
-                  </option>
-                ))}
-              </select>
-              {activeSession ? (
-                <p className="session-indicator">
-                  <span className="session-indicator__mark">{t('history.selected')}</span>
-                  {activeSession.session_id} · {formatSessionDateTime(locale, activeSession.checked_at)}
-                </p>
-              ) : null}
-            </label>
-            <button
-              type="button"
-              className="btn btn--primary btn--block"
-              disabled={loading || !vehicleId || !sessionId}
-              onClick={() => void runDiagnosis()}
-            >
-              <Play size={18} aria-hidden />
-              {loading ? t('diag.running') : t('diag.run')}
-            </button>
+      ) : null}
+
+      <section className="diag-controls" aria-label={t('diag.title')}>
+        <VehiclePicker vehicles={vehicles} selectedId={vehicleId} onSelect={onVehicleSelect} />
+
+        <label className="field diag-session-field">
+          <span>{t('diag.check')}</span>
+          <select
+            ref={sessionRef}
+            aria-label={t('diag.check')}
+            value={sessionId}
+            onChange={(event) => onSessionSelect(event.target.value)}
+            disabled={!selectedVehicle}
+          >
+            {sortedSessions.map((session) => (
+              <option key={session.session_id} value={session.session_id}>
+                {session.session_id}
+              </option>
+            ))}
+          </select>
+          <span className="field__hint">
+            {activeSession
+              ? `${activeSession.session_id} · ${formatSessionDateTime(locale, activeSession.checked_at)}`
+              : t('history.subtitle')}
+          </span>
+        </label>
+
+        <div className="diag-run">
+          <span className="field__label" aria-hidden>
+            &nbsp;
+          </span>
+          <button
+            type="button"
+            className="btn btn--primary btn--block diag-run__button"
+            disabled={loading || !vehicleId || !sessionId}
+            onClick={() => void runDiagnosis()}
+          >
+            <Play size={18} aria-hidden />
+            {loading ? t('diag.running') : t('diag.run')}
+          </button>
+          <span className="field__hint">{loading ? '' : t('diag.runHint')}</span>
+        </div>
+      </section>
+
+      <div className="diag-main">
+        <div className="diag-primary">
+          <section className="diag-result" aria-live="polite">
             <VerdictCard
-              result={result}
+              result={activeResult}
               loading={loading}
               error={error}
               vehicleId={vehicleId}
               actions={verdictActions}
+              onRetry={() => void runDiagnosis()}
             />
-            {copyHint ? <p className="panel__subtitle diag-copy-hint">{t('common.copied')}</p> : null}
+            {copyHint ? (
+              <p className="diag-copy-hint" role="status">
+                {t('common.copied')}
+              </p>
+            ) : null}
+          </section>
+
+          <section className="diag-history">
             <VehicleHistoryPanel
               sessions={sortedSessions}
               activeSessionId={sessionId}
@@ -316,29 +332,67 @@ export function DiagnosisView({
               trendError={trendError}
             />
           </section>
-          <section className="diag-col diag-col--chat">
-            {vehicleId && sessionId ? (
-              <AgentChat
-                vehicleId={vehicleId}
-                sessionId={sessionId}
-                diagnoseResult={result}
-                onDiagnoseCommand={() => void runDiagnosis()}
-                chatIntent={chatIntent}
-                onChatIntentConsumed={onChatIntentConsumed}
-                onOpenManuals={(query) => {
-                  if (!engineModel) return
-                  onOpenManuals({
-                    id: Date.now(),
-                    engineModel,
-                    query,
-                    autoOpenSingle: false,
-                  })
-                }}
-              />
-            ) : null}
-          </section>
+
+          {!activeResult && !loading && !error ? (
+            <section className="diag-steps" aria-label={t('diag.workflow')}>
+              <p className="diag-steps__title">{t('diag.workflow')}</p>
+              <ol>
+                <li>
+                  <span>1</span>
+                  {t('diag.step.select')}
+                </li>
+                <li>
+                  <span>2</span>
+                  {t('diag.step.run')}
+                </li>
+                <li>
+                  <span>3</span>
+                  {t('diag.step.review')}
+                </li>
+                <li>
+                  <span>4</span>
+                  {t('diag.step.act')}
+                </li>
+              </ol>
+            </section>
+          ) : null}
         </div>
-      )}
+
+        <section className="diag-chat">
+          {vehicleId && sessionId ? (
+            <AgentChat
+              key={contextKey}
+              vehicleId={vehicleId}
+              sessionId={sessionId}
+              diagnoseResult={activeResult}
+              onDiagnoseCommand={() => void runDiagnosis()}
+              chatIntent={chatIntent}
+              onChatIntentConsumed={onChatIntentConsumed}
+              onOpenManuals={(query) => {
+                if (!engineModel) return
+                onOpenManuals({
+                  id: Date.now(),
+                  engineModel,
+                  query,
+                  autoOpenSingle: false,
+                })
+              }}
+            />
+          ) : (
+            <div className="panel empty-state">
+              <p className="empty-state__title">{t('diag.selectPrompt')}</p>
+            </div>
+          )}
+        </section>
+      </div>
+
+      <SessionChooser
+        open={sessionChooserOpen}
+        sessions={sortedSessions}
+        activeSessionId={sessionId}
+        onSelect={onSessionSelect}
+        onClose={() => setSessionChooserOpen(false)}
+      />
     </div>
   )
 }

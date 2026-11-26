@@ -49,11 +49,16 @@ export interface ChatReply {
   usage?: { total_tokens?: number }
 }
 
-export async function createConversation(vehicleId: string, sessionId: string): Promise<Conversation> {
+export async function createConversation(
+  vehicleId: string,
+  sessionId: string,
+  signal?: AbortSignal,
+): Promise<Conversation> {
   const response = await fetch('/api/conversations', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ vehicle_id: vehicleId, session_id: sessionId }),
+    signal,
   })
   if (!response.ok) throw new Error(await readError(response))
   return (await response.json()) as Conversation
@@ -64,11 +69,13 @@ export async function sendChatMessage(
   message: string,
   locale = 'ru',
   analysisOnly = false,
+  signal?: AbortSignal,
 ): Promise<ChatReply> {
   const response = await fetch(`/api/conversations/${conversationId}/messages`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ message, locale, analysis_only: analysisOnly }),
+    signal,
   })
   if (!response.ok) throw new Error(await readError(response))
   return (await response.json()) as ChatReply

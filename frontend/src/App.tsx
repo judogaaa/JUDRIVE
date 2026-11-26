@@ -10,11 +10,7 @@ import { FleetView } from './views/FleetView'
 import { ManualsView } from './views/ManualsView'
 import { TicketsView } from './views/TicketsView'
 import type { ChatIntent, ManualSearchIntent } from './lib/workflow'
-
-function latestSessionId(vehicle: VehicleSummary): string {
-  const sessions = [...vehicle.sessions].sort((a, b) => b.checked_at.localeCompare(a.checked_at))
-  return sessions[0]?.session_id ?? ''
-}
+import { latestSessionId } from './lib/vehicle'
 
 export default function App() {
   const { t } = useI18n()
@@ -28,6 +24,10 @@ export default function App() {
   const [chatIntent, setChatIntent] = useState<ChatIntent | null>(null)
   const [ticketsVehicleFilter, setTicketsVehicleFilter] = useState<string | undefined>(undefined)
   const sequence = useRef(0)
+  const selectionRef = useRef({ vehicleId: '', sessionId: '' })
+  selectionRef.current = { vehicleId, sessionId }
+  const tRef = useRef(t)
+  tRef.current = t
 
   const currentEngine = vehicles.find((v) => v.vehicle_id === vehicleId)?.engine_model ?? null
 
@@ -66,7 +66,8 @@ export default function App() {
       .then((list) => {
         if (cancelled) return
         setVehicles(list)
-        if (list.length > 0) {
+        // Initial selection only. Changing language must not reset the mechanic's context.
+        if (!selectionRef.current.vehicleId && list.length > 0) {
           const first = list[0]
           setVehicleId(first.vehicle_id)
           setSessionId(latestSessionId(first))
@@ -74,12 +75,12 @@ export default function App() {
       })
       .catch((err: unknown) => {
         if (cancelled) return
-        setFleetError(err instanceof Error ? err.message : t('error.fleet'))
+        setFleetError(err instanceof Error ? err.message : tRef.current('error.fleet'))
       })
     return () => {
       cancelled = true
     }
-  }, [t])
+  }, [])
 
   const openDiagnosisForVehicle = (id: string, sessionOverride?: string) => {
     setVehicleId(id)

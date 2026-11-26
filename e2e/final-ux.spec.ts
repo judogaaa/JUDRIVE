@@ -1,0 +1,343 @@
+import { createHmac } from 'node:crypto'
+import { expect, test } from '@playwright/test'
+import { loadDotEnv, openNav, runDiagnosis, selectVehicleSession } from './helpers/common'
+
+test.beforeAll(() => loadDotEnv())
+
+test.describe('Final UX audit — diagnosis workspace', () => {
+  test('vehicle picker opens all 50 without a query, searches layouts and clears', async ({ page }) => {
+    await page.goto('/')
+    await expect(page.locator('.vehicle-picker__trigger')).toBeVisible()
+
+    await page.locator('.vehicle-picker__trigger').click()
+    const list = page.getByRole('listbox', { name: 'Машина' })
+    await expect(list).toBeVisible()
+    await expect(list.getByRole('option')).toHaveCount(50)
+    await expect(page.getByText('Показано 50 из 50')).toBeVisible()
+
+    const combo = page.getByRole('combobox', { name: 'Поиск' })
+    await combo.fill('MAZ') // Latin layout for МАЗ
+    await expect(list.getByRole('option').first()).toBeVisible()
+    await expect(list.getByRole('option', { name: /P456AT178/ })).toBeVisible()
+
+    await combo.fill('в418нк98') // Cyrillic layout for B418HK98
+    await expect(list.getByRole('option', { name: /B418HK98/ })).toBeVisible()
+
+    await page.getByRole('button', { name: 'Очистить поиск' }).click()
+    await expect(combo).toHaveValue('')
+    await expect(list.getByRole('option')).toHaveCount(50)
+
+    await combo.fill('нет-такой-машины')
+    await expect(list.getByRole('option')).toHaveCount(0)
+    await expect(list.getByText(/Ничего не найдено/)).toBeVisible()
+
+    await combo.fill('M333YK47')
+    await list.getByRole('option', { name: /M333YK47/ }).click()
+    await expect(page.locator('.vehicle-picker__trigger')).toContainText('M333YK47')
+    await expect(page.getByLabel('Проверка')).toHaveValue('S-0006')
+  })
+
+  test('vehicle picker supports keyboard-only selection', async ({ page }) => {
+    await page.goto('/')
+    const trigger = page.locator('.vehicle-picker__trigger')
+    await trigger.focus()
+    await page.keyboard.press('Enter')
+    const combo = page.getByRole('combobox', { name: 'Поиск' })
+    await expect(combo).toBeFocused()
+    await page.keyboard.press('ArrowDown')
+    await page.keyboard.press('Enter')
+    await expect(trigger).toContainText('M333YK47')
+  })
+
+  test('all sessions of the selected vehicle are selectable', async ({ page }) => {
+    await page.goto('/')
+    await selectVehicleSession(page, 'P456AT178', 'S-0003')
+    const select = page.getByLabel('Проверка')
+    const values = await select.locator('option').evaluateAll((options) =>
+      options.map((option) => (option as HTMLOptionElement).value),
+    )
+    expect(values).toEqual(['S-0003', 'S-0002', 'S-0001'])
+    await select.selectOption('S-0001')
+    await expect(select).toHaveValue('S-0001')
+  })
+
+  test('switching vehicle during an in-flight diagnosis drops the stale verdict', async ({ page }) => {
+    await page.route('**/api/diagnose', async (route) => {
+      const body = route.request().postDataJSON() as { vehicle_id?: string }
+      if (body.vehicle_id === 'B418HK98') {
+        await new Promise((resolve) => setTimeout(resolve, 1500))
+      }
+      await route.continue()
+    })
+
+    await page.goto('/')
+    await selectVehicleSession(page, 'B418HK98', 'S-0009')
+    await runDiagnosis(page)
+
+    await page.locator('.vehicle-picker__trigger').click()
+    await page.getByRole('combobox', { name: 'Поиск' }).fill('M333YK47')
+    await page.getByRole('listbox').getByRole('option', { name: /M333YK47/ }).click()
+    await expect(page.getByLabel('Проверка')).toHaveValue('S-0006')
+
+    await page.waitForTimeout(2000)
+    await expect(page.locator('.verdict-card--anomaly')).toHaveCount(0)
+    await expect(page.locator('.verdict-card--empty')).toBeVisible()
+    await expect(page.locator('.chat-panel')).toContainText('Сначала получите результат диагностики')
+
+    await runDiagnosis(page)
+    await expect(page.locator('.verdict-card--normal')).toBeVisible({ timeout: 30_000 })
+  })
+
+  test('language switch keeps the selected vehicle and does not rerun the first car', async ({ page }) => {
+    await page.goto('/')
+    await selectVehicleSession(page, 'B418HK98', 'S-0009')
+    await runDiagnosis(page)
+    await expect(page.locator('.verdict-card--anomaly')).toBeVisible({ timeout: 30_000 })
+
+    await page.getByRole('button', { name: 'Русский' }).click()
+    await page.getByRole('option', { name: "O'zbekcha" }).click()
+    await expect(page.getByRole('button', { name: 'Diagnostika', exact: true })).toBeVisible()
+
+    await expect(page.locator('.vehicle-picker__trigger')).toContainText('B418HK98')
+    await expect(page.locator('.diag-session-field select')).toHaveValue('S-0009')
+    await expect(page.locator('.verdict-card--anomaly')).toBeVisible()
+  })
+
+  test('failed recording offers a real session chooser and no ticket or fake metrics', async ({ page }) => {
+    await page.goto('/')
+    await selectVehicleSession(page, 'P456AT178', 'S-0003')
+    await runDiagnosis(page)
+    const card = page.locator('.verdict-card--check_failed')
+    await expect(card).toBeVisible({ timeout: 30_000 })
+    await expect(card).toContainText('перегрузка микрофона')
+    await expect(card.locator('.verdict-card__meta')).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Подготовить заявку' })).toHaveCount(0)
+
+    await page.getByRole('button', { name: 'Выбрать другую проверку' }).click()
+    const dialog = page.getByRole('dialog', { name: /Выберите другую проверку/ })
+    await expect(dialog).toBeVisible()
+    await expect(dialog.getByRole('button', { name: /S-0002/ })).toBeVisible()
+    await dialog.getByRole('button', { name: /S-0002/ }).click()
+    await expect(page.getByLabel('Проверка')).toHaveValue('S-0002')
+    await expect(page.locator('.verdict-card--empty')).toBeVisible()
+  })
+
+  test('warning quality is shown honestly and is not treated as low risk', async ({ page }) => {
+    await page.goto('/')
+    await selectVehicleSession(page, 'C991PH47', 'S-0148')
+    await runDiagnosis(page)
+    const card = page.locator('.verdict-card--anomaly')
+    await expect(card).toBeVisible({ timeout: 30_000 })
+    await expect(card.locator('.verdict-card__quality')).toContainText('Запись с помехами')
+    await expect(card).toContainText('0.56')
+    await expect(card).toContainText('F12')
+  })
+
+  test('chat keeps the typed text when Groq is unavailable and retries', async ({ page }) => {
+    await page.goto('/')
+    await selectVehicleSession(page, 'M333YK47', 'S-0006')
+    const input = page.getByPlaceholder('Вопрос или команда механика…')
+    await expect(input).toBeEnabled({ timeout: 30_000 })
+
+    await page.route('**/api/conversations/*/messages', (route) => route.abort('failed'))
+    await input.fill('Проверь запись и источники')
+    await page.getByRole('button', { name: 'Отправить' }).click()
+
+    await expect(page.locator('.chat-error')).toBeVisible({ timeout: 20_000 })
+    await expect(input).toHaveValue('Проверь запись и источники')
+    await expect(page.getByRole('button', { name: 'Повторить отправку' })).toBeVisible()
+
+    await page.unroute('**/api/conversations/*/messages')
+    await page.getByRole('button', { name: 'Повторить отправку' }).click()
+    await expect(page.locator('.chat-bubble--user').filter({ hasText: 'Проверь запись и источники' })).toBeVisible()
+  })
+
+  test('manual transition for P854BT78 stays inside its own engine and offers general inspection', async ({ page }) => {
+    await page.goto('/')
+    await selectVehicleSession(page, 'P854BT78', 'S-0021')
+    await runDiagnosis(page)
+    await expect(page.locator('.verdict-card--anomaly')).toBeVisible({ timeout: 30_000 })
+    await page.getByRole('button', { name: 'Найти в руководстве' }).click()
+
+    const engineSelect = page.locator('.manual-toolbar select')
+    await expect(engineSelect).toHaveValue('ЯМЗ-236М2')
+    await expect(page.locator('.manual-query-field input')).toHaveValue(/цепь газораспределительного механизма/)
+    await expect(page.locator('.manual-refusal')).toBeVisible({ timeout: 20_000 })
+    await expect(page.locator('.manual-results li')).toHaveCount(0)
+
+    await page.getByRole('button', { name: 'Искать общий осмотр' }).click()
+    await expect(page.locator('.manual-results li').first()).toBeVisible({ timeout: 20_000 })
+    const docs = await page.locator('.manual-result__doc').allTextContents()
+    expect(docs.length).toBeGreaterThan(0)
+    expect(docs.every((title) => title.includes('236'))).toBeTruthy()
+  })
+
+  test('ticket draft is prepared from sources, confirmed and protected from duplicates', async ({ page, request }) => {
+    test.setTimeout(180_000)
+    const health = (await (await request.get('/api/health')).json()) as { groq_agent?: string }
+    test.skip(health.groq_agent !== 'configured', 'Groq not configured')
+
+    const existing = (await (await request.get('/api/tickets?vehicle_id=E549YT198')).json()) as {
+      tickets: { session_id: string }[]
+    }
+    test.skip(existing.tickets.some((ticket) => ticket.session_id === 'S-0011'), 'S-0011 already has a ticket')
+
+    let draftId = ''
+    let confirmNonce = ''
+    page.on('response', async (response) => {
+      if (response.request().method() !== 'POST' || !response.url().includes('/messages')) return
+      try {
+        const body = (await response.json()) as { draft?: { draft_id?: string; confirm_nonce?: string } }
+        if (body.draft?.draft_id && body.draft.confirm_nonce) {
+          draftId = body.draft.draft_id
+          confirmNonce = body.draft.confirm_nonce
+        }
+      } catch {
+        /* no draft in reply */
+      }
+    })
+
+    await page.goto('/')
+    await selectVehicleSession(page, 'E549YT198', 'S-0011')
+    await runDiagnosis(page)
+    await expect(page.locator('.verdict-card--anomaly')).toBeVisible({ timeout: 30_000 })
+    await page.locator('.verdict-actions').getByRole('button', { name: 'Подготовить заявку' }).click()
+
+    const draft = page.locator('.ticket-draft')
+    await expect(draft.getByRole('heading', { name: 'Черновик заявки ТОиР' })).toBeVisible({ timeout: 120_000 })
+    await expect(draft.getByText(/236/).first()).toBeVisible()
+    const confirmButton = draft.getByRole('button', { name: 'Подтвердить и отправить заявку' })
+    await expect(confirmButton).toBeDisabled()
+    await draft.getByLabel('Я проверил факты, источники и работы').check()
+    await confirmButton.click()
+    await expect(page.getByText(/TKT-/)).toBeVisible({ timeout: 30_000 })
+
+    expect(draftId).toBeTruthy()
+    expect(confirmNonce).toBeTruthy()
+    const duplicate = await request.post(`/api/tickets/drafts/${draftId}/confirm`, {
+      data: { acknowledge: true, confirm_nonce: confirmNonce },
+    })
+    expect(duplicate.ok()).toBeTruthy()
+    expect((await duplicate.json()).status).toMatch(/duplicate|error/)
+  })
+
+  test('repeated diagnosis refreshes the same pair and blocks double submit', async ({ page }) => {
+    let calls = 0
+    page.on('request', (request) => {
+      if (request.method() === 'POST' && request.url().endsWith('/api/diagnose')) calls += 1
+    })
+    await page.goto('/')
+    await selectVehicleSession(page, 'M333YK47', 'S-0006')
+    const run = page.getByRole('button', { name: /Получить результат диагностики/ })
+    await run.click()
+    await expect(page.locator('.verdict-card--normal')).toBeVisible({ timeout: 30_000 })
+    await expect(run).toBeEnabled()
+    await run.click()
+    await expect(page.locator('.verdict-card--normal')).toBeVisible({ timeout: 30_000 })
+    expect(calls).toBeGreaterThanOrEqual(2)
+  })
+
+  test('viewport sweep has no horizontal overflow in diagnosis', async ({ page }) => {
+    for (const viewport of [
+      { width: 1920, height: 1080 },
+      { width: 1440, height: 900 },
+      { width: 1280, height: 720 },
+      { width: 768, height: 1024 },
+      { width: 390, height: 844 },
+    ]) {
+      await page.setViewportSize(viewport)
+      await page.goto('/')
+      await page.getByLabel('Проверка').waitFor()
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
+      expect(overflow, `overflow at ${viewport.width}px`).toBeLessThanOrEqual(1)
+    }
+  })
+})
+
+test.describe('Final UX audit — fleet, tickets and chief', () => {
+  test('fleet card opens diagnosis and tickets with the same vehicle', async ({ page }) => {
+    await page.goto('/')
+    await openNav(page, 'Автопарк')
+    await page.locator('.fleet-table tbody tr').filter({ hasText: 'B418HK98' }).click()
+    const drawer = page.getByRole('dialog', { name: /B418HK98/ })
+    await expect(drawer).toBeVisible()
+    await drawer.getByRole('button', { name: /S-0009/ }).click()
+    await expect(page.locator('.vehicle-picker__trigger')).toContainText('B418HK98')
+    await expect(page.getByLabel('Проверка')).toHaveValue('S-0009')
+
+    await openNav(page, 'Заявки')
+    await expect(page.locator('.ticket-row').first()).toBeVisible()
+  })
+
+  test('ticket detail keeps the vehicle filter and opens source context', async ({ page }) => {
+    await page.goto('/')
+    await openNav(page, 'Автопарк')
+    await page.locator('.fleet-table tbody tr').filter({ hasText: 'B418HK98' }).click()
+    await page.getByRole('dialog').getByRole('button', { name: 'Заявки' }).click()
+    await expect(page.locator('.filter-chip')).toContainText('B418HK98')
+
+    const row = page.locator('.ticket-row').first()
+    await expect(row).toBeVisible()
+    await row.locator('.ticket-row__head').click()
+    const dialog = page.getByRole('dialog')
+    await expect(dialog).toBeVisible()
+    await expect(dialog.getByRole('button', { name: 'Закрыть' })).toBeVisible()
+    await expect(dialog.getByText('F01')).toBeVisible()
+    const source = dialog.getByRole('button', { name: /236-3902150/ }).first()
+    await expect(source).toBeVisible()
+    await source.click()
+    await expect(page.getByRole('dialog', { name: /236-3902150/ })).toBeVisible()
+  })
+
+  test('ticket detail opens the original diagnosis pair', async ({ page }) => {
+    await page.goto('/')
+    await openNav(page, 'Заявки')
+    const row = page
+      .locator('.ticket-row')
+      .filter({ hasText: /B418HK98/ })
+      .filter({ hasText: /S-0009/ })
+      .first()
+    await expect(row).toBeVisible()
+    await row.locator('.ticket-row__head').click()
+    const dialog = page.getByRole('dialog')
+    await dialog.getByRole('button', { name: /B418HK98/ }).click()
+    await expect(page.locator('.vehicle-picker__trigger')).toContainText('B418HK98')
+    await expect(page.getByLabel('Проверка')).toHaveValue('S-0009')
+    await expect(page.locator('.verdict-card--empty')).toBeVisible()
+  })
+
+  test('chief dashboard works with a signed server session and paginates the fleet', async ({ page, context, baseURL }) => {
+    const secret = process.env.SESSION_SECRET
+    test.skip(!secret, 'SESSION_SECRET is required for signed-session check')
+    const exp = Math.floor(Date.now() / 1000) + 3600
+    const payload = `chief:${exp}`
+    const signature = createHmac('sha256', secret).update(payload).digest('hex')
+    await context.addCookies([
+      {
+        name: 'judrive_chief',
+        value: `${payload}.${signature}`,
+        url: baseURL ?? 'http://127.0.0.1:5173',
+        httpOnly: true,
+        sameSite: 'Lax',
+      },
+    ])
+
+    await page.goto('/')
+    await openNav(page, /Главный механик/)
+    await expect(page.getByRole('heading', { name: 'Главный механик' })).toBeVisible({ timeout: 15_000 })
+    await expect(page.locator('.summary-card')).toHaveCount(3)
+
+    await page.locator('.summary-card--warn').click()
+    const category = page.locator('.chief-filters select').first()
+    await expect(category).toHaveValue('attention')
+
+    await page.getByRole('button', { name: 'Предупреждения' }).click()
+    await expect(page.getByRole('heading', { name: 'Ранние предупреждения' })).toBeVisible()
+
+    await page.getByRole('button', { name: 'Транспорт' }).click()
+    await expect(page.locator('.pagination')).toBeVisible()
+    await page.locator('.fleet-table tbody tr').first().click()
+    await expect(page.getByRole('dialog')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Открыть в диагностике' })).toBeVisible()
+  })
+})

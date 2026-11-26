@@ -31,9 +31,10 @@ export function chiefCredentials(): { user: string; password: string } | null {
 }
 
 export async function selectVehicleSession(page: Page, vehicleId: string, sessionId: string) {
+  await page.locator('.vehicle-picker__trigger').click()
   const combo = page.getByRole('combobox', { name: 'Поиск' })
   await combo.fill(vehicleId)
-  await page.getByRole('listbox').getByRole('button', { name: new RegExp(vehicleId) }).first().click()
+  await page.getByRole('listbox').getByRole('option', { name: new RegExp(vehicleId) }).first().click()
   await page.getByLabel('Проверка').selectOption(sessionId)
 }
 

@@ -11,26 +11,45 @@ export function displayVehicleModel(make: string, model: string | null): string 
 /** @deprecated use displayVehicleModel */
 export const vehicleModelLabel = displayVehicleModel
 
-const plateLetters: Record<string, string> = {
+/**
+ * Latin/Cyrillic lookalikes are folded to one common character so a plate typed
+ * with the wrong keyboard layout still finds its vehicle: МАЗ = MAZ, В418НК98 = B418HK98.
+ */
+const LOOKALIKES: Record<string, string> = {
   а: 'a',
   в: 'b',
+  с: 'c',
   е: 'e',
+  н: 'h',
   к: 'k',
   м: 'm',
-  н: 'h',
   о: 'o',
   р: 'p',
-  с: 'c',
   т: 't',
   у: 'y',
   х: 'x',
+  з: 'z',
+  і: 'i',
+  ї: 'i',
+  є: 'e',
+  ғ: 'g',
+  қ: 'k',
+  ң: 'n',
+  ө: 'o',
+  ұ: 'u',
+  ү: 'u',
+  һ: 'h',
+  ё: 'е',
+  й: 'и',
 }
 
-function fold(value: string): string {
+export function foldSearch(value: string): string {
   return value
     .toLowerCase()
-    .replace(/[авекмнорстух]/g, (ch) => plateLetters[ch] ?? ch)
-    .replace(/[\s-]+/g, '')
+    .split('')
+    .map((char) => LOOKALIKES[char] ?? char)
+    .join('')
+    .replace(/[\s\-_.·]+/g, '')
 }
 
 export function matchesVehicle(vehicle: VehicleSummary, query: string): boolean {
@@ -42,9 +61,14 @@ export function matchesVehicle(vehicle: VehicleSummary, query: string): boolean 
     vehicle.engine_model,
     vehicle.vehicle_type,
   ]
-  const haystack = fold(fields.join(' '))
+  const haystack = foldSearch(fields.join(' '))
   return query
     .trim()
     .split(/\s+/)
-    .every((word) => haystack.includes(fold(word)))
+    .every((word) => haystack.includes(foldSearch(word)))
+}
+
+export function latestSessionId(vehicle: VehicleSummary): string {
+  const sessions = [...vehicle.sessions].sort((a, b) => b.checked_at.localeCompare(a.checked_at))
+  return sessions[0]?.session_id ?? ''
 }

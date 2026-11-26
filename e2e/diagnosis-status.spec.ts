@@ -29,7 +29,7 @@ const SCENARIOS: Scenario[] = [
     vehicleId: 'P456AT178',
     sessionId: 'S-0003',
     statusClass: 'verdict-card--check_failed',
-    actionName: /Другая проверка/,
+    actionName: /другую проверку/i,
   },
 ]
 

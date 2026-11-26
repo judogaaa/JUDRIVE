@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { AlertOctagon, AlertTriangle, CheckCircle2, Filter, Search } from 'lucide-react'
+import { AlertOctagon, AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Filter, Search } from 'lucide-react'
 import {
   fetchFleetDashboard,
   type FleetDashboard,
@@ -30,7 +30,19 @@ export function ChiefMechanicView({ onOpenDiagnosis, onOpenTickets }: ChiefMecha
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [filters, setFilters] = useState<FleetDashboardFilters>({})
+  const [appliedFilters, setAppliedFilters] = useState<FleetDashboardFilters>({})
+  const [page, setPage] = useState(0)
   const [selectedVehicle, setSelectedVehicle] = useState<string | null>(null)
+  const PAGE_SIZE = 20
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setAppliedFilters(filters), 250)
+    return () => window.clearTimeout(timer)
+  }, [filters])
+
+  useEffect(() => {
+    setPage(0)
+  }, [appliedFilters])
 
   useEffect(() => {
     let cancelled = false
@@ -52,12 +64,17 @@ export function ChiefMechanicView({ onOpenDiagnosis, onOpenTickets }: ChiefMecha
     let cancelled = false
     setLoading(true)
     setError(null)
-    fetchFleetDashboard(filters)
+    fetchFleetDashboard(appliedFilters)
       .then((payload) => {
         if (!cancelled) setData(payload)
       })
       .catch((err: unknown) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : t('error.dashboard'))
+        if (cancelled) return
+        if (err instanceof Error && err.message.endsWith(':401')) {
+          setAuthed(false)
+          return
+        }
+        setError(err instanceof Error ? err.message : t('error.dashboard'))
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -65,7 +82,7 @@ export function ChiefMechanicView({ onOpenDiagnosis, onOpenTickets }: ChiefMecha
     return () => {
       cancelled = true
     }
-  }, [filters, authed])
+  }, [appliedFilters, authed, t])
 
   if (authed === null) {
     return <p className="panel__subtitle">{t('chief.loading')}</p>
@@ -74,6 +91,10 @@ export function ChiefMechanicView({ onOpenDiagnosis, onOpenTickets }: ChiefMecha
   if (!authed) {
     return <ChiefLogin onSuccess={() => setAuthed(true)} />
   }
+
+  const pageCount = data ? Math.max(1, Math.ceil(data.vehicles.length / PAGE_SIZE)) : 1
+  const safePage = Math.min(page, pageCount - 1)
+  const pageRows = data ? data.vehicles.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE) : []
 
   return (
     <>
@@ -156,6 +177,26 @@ export function ChiefMechanicView({ onOpenDiagnosis, onOpenTickets }: ChiefMecha
             />
           </section>
 
+          <section className="panel chief-overview-queue" hidden={tab !== 'overview'}>
+            <div className="panel-head-row">
+              <div>
+                <h2 className="panel__title">{t('chief.queueTitle')}</h2>
+                <p className="panel__subtitle">{t('chief.queueHint')}</p>
+              </div>
+              <button type="button" className="chip-button" onClick={() => setTab('queue')}>
+                {t('chief.tab.queue')}
+              </button>
+            </div>
+            <ul className="priority-queue">
+              {data.priority_queue.slice(0, 6).map((row) => (
+                <li key={row.vehicle_id}>
+                  <QueueRow row={row} label={categoryLabel(row)} onClick={() => setSelectedVehicle(row.vehicle_id)} />
+                </li>
+              ))}
+            </ul>
+            {data.priority_queue.length === 0 ? <p className="empty-state__text">{t('chief.empty')}</p> : null}
+          </section>
+
           <section className="panel" hidden={tab !== 'queue'}>
             <h2 className="panel__title">{t('chief.queueTitle')}</h2>
             <p className="panel__subtitle">{t('chief.queueHint')}</p>
@@ -166,6 +207,7 @@ export function ChiefMechanicView({ onOpenDiagnosis, onOpenTickets }: ChiefMecha
                 </li>
               ))}
             </ul>
+            {data.priority_queue.length === 0 ? <p className="empty-state__text">{t('chief.empty')}</p> : null}
           </section>
 
           <section className="panel chief-stats" hidden={tab !== 'analytics'}>
@@ -206,7 +248,12 @@ export function ChiefMechanicView({ onOpenDiagnosis, onOpenTickets }: ChiefMecha
                 ))}
               </ul>
             </section>
-          ) : null}
+          ) : (
+            <section className="panel" hidden={tab !== 'warnings'}>
+              <h2 className="panel__title">{t('chief.warningsTitle')}</h2>
+              <p className="empty-state__text">{t('chief.noWarnings')}</p>
+            </section>
+          )}
 
           <section className="panel" hidden={tab !== 'fleet'}>
             <h2 className="panel__title">
@@ -280,7 +327,7 @@ export function ChiefMechanicView({ onOpenDiagnosis, onOpenTickets }: ChiefMecha
                   </tr>
                 </thead>
                 <tbody>
-                  {data.vehicles.map((row) => (
+                  {pageRows.map((row) => (
                     <ChiefTableRow
                       key={row.vehicle_id}
                       row={row}
@@ -292,6 +339,30 @@ export function ChiefMechanicView({ onOpenDiagnosis, onOpenTickets }: ChiefMecha
                 </tbody>
               </table>
             </div>
+            {data.vehicles.length === 0 ? <p className="empty-state__text">{t('chief.empty')}</p> : null}
+            {pageCount > 1 ? (
+              <div className="pagination">
+                <button
+                  type="button"
+                  className="btn btn--secondary"
+                  disabled={safePage === 0}
+                  onClick={() => setPage(Math.max(0, safePage - 1))}
+                >
+                  <ChevronLeft size={16} aria-hidden />
+                  {t('chief.prev')}
+                </button>
+                <span>{t('chief.page', { page: safePage + 1, pages: pageCount })}</span>
+                <button
+                  type="button"
+                  className="btn btn--secondary"
+                  disabled={safePage >= pageCount - 1}
+                  onClick={() => setPage(Math.min(pageCount - 1, safePage + 1))}
+                >
+                  {t('chief.next')}
+                  <ChevronRight size={16} aria-hidden />
+                </button>
+              </div>
+            ) : null}
           </section>
         </>
       ) : null}
@@ -361,10 +432,14 @@ function ChiefLogin({ onSuccess }: { onSuccess: () => void }) {
         body: JSON.stringify({ username, password }),
       })
       if (!response.ok) {
-        setError(response.status === 503 ? t('auth.unavailable') : t('auth.error'))
+        if (response.status === 503) setError(t('auth.unavailable'))
+        else if (response.status === 429) setError(t('auth.locked'))
+        else setError(t('auth.error'))
         return
       }
       onSuccess()
+    } catch {
+      setError(t('auth.error'))
     } finally {
       setBusy(false)
     }
@@ -415,13 +490,24 @@ function StatBlock({ title, items }: { title: string; items: Record<string, numb
 }
 
 function QueueRow({ row, label, onClick }: { row: VehicleFleetRow; label: string; onClick: () => void }) {
+  const { t } = useI18n()
+  const statusDetail = row.needs_rerecord
+    ? t('chief.badge.rerecord')
+    : row.anomaly_type ??
+      (row.latest_status === 'normal'
+        ? t('verdict.normal.title')
+        : row.latest_status === 'anomaly'
+          ? t('verdict.anomaly.title')
+          : t('verdict.failed.title'))
   return (
     <button type="button" className="queue-row" onClick={onClick}>
       <span className={`badge badge--${row.category}`}>{label}</span>
       <span className="queue-row__id">
-        {row.vehicle_id} · {row.anomaly_type ?? row.latest_status}
+        {row.vehicle_id} · {statusDetail}
       </span>
-      <span className="queue-row__meta">prio {row.priority_score}</span>
+      <span className="queue-row__meta">
+        {t('chief.priority')} {row.priority_score}
+      </span>
     </button>
   )
 }
@@ -463,7 +549,10 @@ function ChiefTableRow({
         <span className="ticket-row__meta">{row.latest_status}</span>
       </td>
       <td>{row.anomaly_score != null ? row.anomaly_score.toFixed(2) : '—'}</td>
-      <td>{row.category_reason}</td>
+      <td>
+        {row.category_reason}
+        {row.ticket_id ? <span className="badge">{row.ticket_id}</span> : null}
+      </td>
     </tr>
   )
 }
