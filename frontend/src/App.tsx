@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { fetchDiagnosis, fetchVehicles } from './api/client'
 import type { DiagnoseResponse, VehicleSummary } from './api/types'
+import { AgentChat } from './components/AgentChat'
 import { ManualSearchPanel } from './components/ManualSearchPanel'
 import { VerdictCard } from './components/VerdictCard'
 import './App.css'
@@ -88,7 +89,7 @@ export default function App() {
     <div className="app-shell">
       <header className="app-header">
         <MotionBrand />
-        <p className="app-header__tag">Этапы 01–02: Mock ML + RAG</p>
+        <p className="app-header__tag">Этапы 01–03: ML + RAG + агент</p>
       </header>
 
       <main className="app-main">
@@ -147,6 +148,7 @@ export default function App() {
         </section>
 
         <VerdictCard result={result} loading={loading} error={error} />
+        {vehicleId && sessionId ? <AgentChat vehicleId={vehicleId} sessionId={sessionId} /> : null}
         <ManualSearchPanel engineModel={selectedVehicle?.engine_model ?? null} />
       </main>
     </div>

@@ -46,17 +46,35 @@
 
 ### Ограничения (этап 02)
 
-- Это поисковый слой, не LLM-агент: нет tool `search_manuals` у модели и Evidence Engine с ID-резолвом — этап 03.
+- На этапе 02 не было LLM-агента; этап 03 добавил Groq tools.
 - Качество на таблицах/битом текстовом слое ограничено; при слабой уверенности — честный `not_found`, страницу всё равно можно открыть в viewer.
 - E2E drawer в браузере не записывался; API и скрипт верификации — основной контроль.
 
+## Этап 03 (26.11.2026)
+
+- Groq `openai/gpt-oss-120b` (ключ в локальном `.env`, не в Git): оркестратор с tools `get_diagnosis`, `get_vehicle_history`, `search_manuals`, `prepare_defect_ticket` (≤4 шага, лимит токенов).
+- API чата: `/api/conversations`, сообщения, черновик `/api/tickets/drafts/{id}`, подтверждение → Mock ТОиР v6, журнал и защита от дублей по паре ТС/сессия.
+- Guardrails: `status` ML выше `description`, отказ ticket при normal/failed/bad, evidence_id только из RAG.
+- UI: `AgentChat` + `TicketDraftCard` (этапы 01–02 без переписывания).
+
+### Проверено
+
+- `pytest` 23 passed; `npm run build`.
+- Pipeline B418 (tools+RAG+TKT) при запущенных mock и PDF.
+- `scripts/verify_agent_scenarios.py` — три пары ACCEPTANCE + Groq (при ключе в `.env`).
+
+### Ограничения
+
+- Перезапуск `uvicorn` без `--reload` давал 404 на `/api/conversations` до рестарта процесса.
+- Полировка UI механика — этап 04.
+
 ## НЕ выполнено
 
-LLM-агент Groq, подтверждение и отправка заявок ТОиР, рабочий публичный HTTPS-стенд, голос, переводы, Excel, демовидео.
+Публичный HTTPS-стенд, голос, локализация, дашборд главного механика, Excel, демовидео.
 
-## Следующий шаг (03)
+## Следующий шаг (04)
 
-Groq GPT-OSS 120B, отдельные tools (`get_diagnosis`, `search_manuals`, `prepare_defect_ticket`), серверные guardrails, черновик/подтверждение заявки в Mock ТОиР.
+UI механика: цельный чат/карточка, мобильность, источники и подтверждение в одном потоке.
 
 ## Открытые технические вопросы
 

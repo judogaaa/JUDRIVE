@@ -30,3 +30,9 @@ class MockToirClient:
         async with httpx.AsyncClient(timeout=5.0) as client:
             response = await client.get(f"{self._base_url}/health")
             return response.is_success
+
+    async def create_ticket(self, payload: dict) -> dict:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(f"{self._base_url}/tickets", json=payload)
+            response.raise_for_status()
+            return response.json()

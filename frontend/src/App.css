@@ -382,6 +382,142 @@
   max-height: 50vh;
 }
 
+.chat-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 0.25rem;
+}
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.chip-button {
+  border: 1px solid var(--border);
+  background: var(--surface-elevated);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 0.45rem 0.85rem;
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.chip-button:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface-elevated));
+}
+
+.chip-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.chat-log {
+  display: grid;
+  gap: 0.65rem;
+  max-height: 360px;
+  overflow: auto;
+  margin: 1rem 0;
+  padding-right: 0.25rem;
+}
+
+.chat-empty,
+.chat-loading {
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.chat-bubble {
+  border-radius: 14px;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--border);
+}
+
+.chat-bubble--user {
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface-elevated));
+}
+
+.chat-bubble--assistant {
+  background: var(--surface-elevated);
+}
+
+.chat-bubble__role {
+  margin: 0 0 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.chat-bubble__text {
+  margin: 0;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.chat-sources {
+  margin: 0.6rem 0 0;
+  padding-left: 1rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.chat-compose {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.chat-compose textarea {
+  font: inherit;
+  padding: 0.75rem 1rem;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface-elevated);
+  resize: vertical;
+}
+
+.chat-evidence {
+  margin-top: 0.75rem;
+  font-size: 0.9rem;
+}
+
+.ticket-draft {
+  margin-top: 1rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 25%, var(--border));
+}
+
+.ticket-draft__grid {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0 0 1rem;
+}
+
+.ticket-draft__grid dt {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.ticket-draft__grid dd {
+  margin: 0.2rem 0 0;
+}
+
+.ticket-draft__grid ul {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+.ticket-draft__ok {
+  margin: 0.75rem 0;
+  font-weight: 650;
+  color: var(--ok);
+}
+
 @media (max-width: 640px) {
   .app-header {
     flex-direction: column;

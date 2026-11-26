@@ -1,24 +1,33 @@
 from contextlib import asynccontextmanager
+import json
 
 import httpx
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
+from app.agent.orchestrator import AgentOrchestrator
 from app.config import get_settings
 from app.rag.catalog import SPECS_BY_ID
 from app.rag.service import ManualRagService
+from app.schemas.chat import ChatMessageRequest, ConversationCreate
 from app.schemas.diagnose import DiagnoseRequest, DiagnoseResponse
 from app.schemas.health import HealthResponse
 from app.schemas.manuals import ManualSearchRequest, ManualSearchResponse, ManualSearchHit
+from app.schemas.tickets import TicketConfirmRequest
 from app.services.fleet import FleetService
 from app.services.mock_clients import MockMlClient, MockToirClient
+from app.services.tickets import TicketService
+from app.storage.repository import AppRepository
 
 settings = get_settings()
 fleet = FleetService(settings.fleet_data_path)
 mock_ml = MockMlClient(settings.mock_ml_url)
 mock_toir = MockToirClient(settings.mock_toir_url)
 rag_service = ManualRagService(settings.db_path, settings.pdf_dir)
+app_repo = AppRepository(settings.db_path)
+agent = AgentOrchestrator(settings, fleet, mock_ml, rag_service, app_repo)
+ticket_service = TicketService(app_repo, fleet, mock_ml, mock_toir)
 
 
 @asynccontextmanager
@@ -47,12 +56,14 @@ async def health() -> HealthResponse:
     toir_ok = await mock_toir.health()
     rag_status = rag_service.status()
     rag_ok = rag_status.get("index_current") and not rag_status.get("missing_files")
-    status = "ok" if ml_ok and toir_ok and rag_ok else "degraded"
+    groq_ready = bool(settings.groq_api_key)
+    status = "ok" if ml_ok and toir_ok and rag_ok and groq_ready else "degraded"
     return HealthResponse(
         status=status,
         mock_ml="up" if ml_ok else "down",
         mock_toir="up" if toir_ok else "down",
         manuals_index="ready" if rag_ok else "missing",
+        groq_agent="configured" if groq_ready else "missing_key",
     )
 
 
@@ -120,3 +131,44 @@ async def get_source_pdf(doc_id: str):
         filename=path.name,
         headers={"Accept-Ranges": "bytes"},
     )
+
+
+@app.post(f"{settings.api_prefix}/conversations")
+async def create_conversation(body: ConversationCreate):
+    return agent.create_conversation(body.vehicle_id, body.session_id)
+
+
+@app.get(f"{settings.api_prefix}/conversations/{{conversation_id}}/messages")
+async def conversation_messages(conversation_id: str):
+    return {"messages": agent.get_conversation_messages(conversation_id)}
+
+
+@app.post(f"{settings.api_prefix}/conversations/{{conversation_id}}/messages")
+async def conversation_send(conversation_id: str, body: ChatMessageRequest):
+    return await agent.send_message(conversation_id, body.message)
+
+
+@app.get(f"{settings.api_prefix}/tickets/drafts/{{draft_id}}")
+async def get_ticket_draft(draft_id: str):
+    draft = app_repo.get_draft(draft_id)
+    if not draft:
+        raise HTTPException(status_code=404, detail="Черновик не найден")
+    return {
+        "draft_id": draft["draft_id"],
+        "status": draft["status"],
+        "version": draft["version"],
+        "confirm_nonce": draft["confirm_nonce"],
+        "payload": json.loads(draft["payload_json"]),
+    }
+
+
+@app.post(f"{settings.api_prefix}/tickets/drafts/{{draft_id}}/confirm")
+async def confirm_ticket_draft(draft_id: str, body: TicketConfirmRequest):
+    if not body.acknowledge:
+        raise HTTPException(status_code=400, detail="Требуется явное подтверждение")
+    return await ticket_service.confirm(draft_id, body.confirm_nonce)
+
+
+@app.get(f"{settings.api_prefix}/tickets")
+async def list_submitted_tickets(vehicle_id: str | None = None):
+    return {"tickets": app_repo.list_tickets(vehicle_id)}

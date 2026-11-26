@@ -6,7 +6,7 @@ AI-powered engine diagnostics and intelligent fleet management platform.
 
 ## Статус
 
-**26.11.2026 — этапы 01–02 готовы.** Mock ML + SQLite FTS5 по шести PDF (strict engine filter, цитаты, viewer). LLM-агент и ТОиР-заявки — этап 03+.
+**26.11.2026 — этапы 01–03 готовы.** Mock ML, FTS5/RAG, Groq-агент с tools и подтверждёнными заявками ТОиР. UI-полировка — этап 04+.
 
 ## Локальный запуск (этапы 01–02)
 
@@ -55,6 +55,8 @@ npm run dev
 **RAG API (без LLM):** `POST /api/manuals/search` `{ "engine_model": "ЯМЗ-236М2", "query": "..." }`, `GET /api/sources/evidence/{id}`, `GET /api/sources/pdf/{doc_id}`.
 
 Переиндексация вручную: `backend\.venv\Scripts\python.exe scripts\build_manual_index.py` (флаг `--force` — принудительно). Контрольные запросы: `scripts\verify_rag_queries.py`.
+
+**Groq (этап 03):** добавьте `GROQ_API_KEY` в локальный `.env` (см. `.env.example`, в Git не коммитить). После смены кода перезапускайте backend с `--reload`. Чат в UI; сценарии: `backend\.venv\Scripts\python.exe scripts\verify_agent_scenarios.py`.
 
 ### Быстрые smoke-тесты
 

@@ -20,6 +20,12 @@ class Settings(BaseSettings):
     db_path: Path = PROJECT_ROOT / "local-data" / "judrive.sqlite"
     api_prefix: str = "/api"
 
+    groq_api_key: str | None = None
+    groq_model: str = "openai/gpt-oss-120b"
+    groq_max_tokens: int = 1200
+    groq_timeout_s: float = 60.0
+    agent_max_tool_steps: int = 4
+
 
 @lru_cache
 def get_settings() -> Settings:
