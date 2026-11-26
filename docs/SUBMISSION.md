@@ -81,5 +81,5 @@ PDF и переменные окружения предоставляются о
 ≈ $0,000711 / 0,0585 ₽ на сообщение, ≈ $0,0391 / 3,22 ₽ за весь замер.
 Excel: `submission/JUDRIVE_usage_cost_2026-11-26.xlsx`; исходный CSV —
 `submission/usage_cost.csv`; методика и ограничения — `submission/USAGE_EVIDENCE.md`.
-STT: Whisper Large v3 Turbo $0,04/час; live smoke 0,4 с, стоимость ниже $0,001.
+STT: Whisper Large v3 Turbo $0,04/час; live smoke 0,4 с ≈ 0,0004 ₽.
 Инфраструктура локальная, платный сервер не использовался (0 ₽).
