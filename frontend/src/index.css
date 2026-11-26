@@ -1,0 +1,52 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700&display=swap');
+
+:root {
+  font-family: 'Manrope', system-ui, -apple-system, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color-scheme: light;
+  --text: #0f172a;
+  --text-muted: #475569;
+  --surface: #ffffff;
+  --surface-elevated: #f8fafc;
+  --border: #e2e8f0;
+  --accent: #2563eb;
+  --ok: #15803d;
+  --warn: #b45309;
+  --danger: #b91c1c;
+  --shadow: 0 12px 40px rgba(15, 23, 42, 0.06);
+  color: var(--text);
+  background: #f1f5f9;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --text: #f8fafc;
+    --text-muted: #94a3b8;
+    --surface: #0f172a;
+    --surface-elevated: #1e293b;
+    --border: #334155;
+    --shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+    background: #020617;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+button,
+select {
+  font-family: inherit;
+}
