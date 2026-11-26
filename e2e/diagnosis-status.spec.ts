@@ -42,6 +42,14 @@ test.describe('Diagnosis acceptance scenarios', () => {
       await runDiagnosis(page)
       const card = page.locator(`.${scenario.statusClass}`)
       await expect(card).toBeVisible({ timeout: 30_000 })
+      const summary = page.locator('.chat-diagnosis-result')
+      await expect(summary).toHaveCount(1)
+      await expect(summary).toContainText(scenario.sessionId)
+      await expect(summary).toContainText(
+        scenario.name === 'normal' ? 'В пределах нормы' :
+          scenario.name === 'anomaly' ? 'Возможное отклонение' : 'Запись непригодна',
+      )
+      if (scenario.name === 'check_failed') await expect(summary).toContainText('повторная запись')
       if (scenario.actionName) {
         await expect(page.getByRole('button', { name: scenario.actionName }).first()).toBeVisible()
       }

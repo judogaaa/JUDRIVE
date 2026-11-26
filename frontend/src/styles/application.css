@@ -1518,6 +1518,7 @@ select {
 
 .chat-compose__bar {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-end;
   gap: 7px;
   padding: 7px;
@@ -1532,7 +1533,7 @@ select {
   box-shadow: var(--focus-ring);
 }
 
-.chat-compose__bar textarea {
+.chat-compose__bar > textarea {
   flex: 1;
   min-width: 0;
   font: inherit;
@@ -1561,14 +1562,21 @@ select {
 }
 
 .chat-compose__bar .voice-box--compact {
-  flex-shrink: 0;
+  display: contents;
+}
+
+.chat-compose__bar .voice-box--compact > .voice-editor,
+.chat-compose__bar .voice-box--compact > .panel__subtitle,
+.chat-compose__bar .voice-box--compact > .panel__error {
+  order: 1;
+  flex: 0 0 100%;
+  min-width: 0;
   margin: 0;
 }
 
-.chat-compose__bar .voice-box--compact .voice-editor,
-.chat-compose__bar .voice-box--compact .panel__subtitle,
-.chat-compose__bar .voice-box--compact .panel__error {
-  display: none;
+.chat-compose__bar .voice-box--compact .voice-editor {
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
 }
 
 .chat-compose__bar .voice-box--compact .voice-actions {
@@ -3180,7 +3188,7 @@ select {
     flex-wrap: wrap;
   }
 
-  .chat-compose__bar textarea {
+  .chat-compose__bar > textarea {
     flex-basis: 100%;
     order: -1;
   }

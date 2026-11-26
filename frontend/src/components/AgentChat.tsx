@@ -35,9 +35,11 @@ const SUGGESTIONS: { label: TranslationKey; action: DiagnosisAction }[] = [
   { label: 'chat.suggest3', action: 'prepare_ticket' },
 ]
 
-function isDiagnoseVoiceCommand(text: string): boolean {
-  const command = text.trim().toLowerCase().replace(/[.!?]+$/, '')
-  return ['запусти диагностику', 'получить результат диагностики', 'run diagnosis'].includes(command)
+function isDiagnoseVoiceCommand(text: string, localizedPhrase: string, localizedButton: string): boolean {
+  const normalize = (value: string) => value.normalize('NFC').trim().toLowerCase().replace(/[.!?।！？]+$/, '').trim().replace(/\s+/g, ' ')
+  const command = normalize(text)
+  return [localizedPhrase, localizedButton, 'запусти диагностику', 'получить результат диагностики', 'run diagnosis']
+    .some((phrase) => normalize(phrase) === command)
 }
 
 export function AgentChat({
@@ -247,8 +249,11 @@ export function AgentChat({
   }
 
   const onVoiceText = (text: string) => {
+    if (onDiagnoseCommand && isDiagnoseVoiceCommand(text, t('voice.diagnosePhrase'), t('diag.run'))) {
+      onDiagnoseCommand()
+      return
+    }
     setInput((prev) => (prev.trim() ? `${prev}\n${text}` : text))
-    if (isDiagnoseVoiceCommand(text)) onDiagnoseCommand?.()
   }
 
   const lastAssistantId = messages.filter((message) => message.role === 'assistant').at(-1)?.id
@@ -280,7 +285,21 @@ export function AgentChat({
       </div>
 
       <div className="chat-log" ref={logRef} aria-live="polite">
-        {messages.length === 0 ? <p className="panel__subtitle chat-empty">{t('chat.empty')}</p> : null}
+        {activeResult && status ? (
+          <article className="chat-bubble chat-bubble--assistant chat-diagnosis-result">
+            <p className="chat-bubble__role">{t('diag.title')} · {activeResult.session_id}</p>
+            <p className="chat-bubble__text">
+              <strong>{t(status === 'normal' ? 'verdict.normal.title' : status === 'anomaly' ? 'verdict.anomaly.title' : 'verdict.failed.title')}</strong>
+            </p>
+            {status === 'anomaly' && activeResult.anomaly_type ? (
+              <p className="chat-bubble__text">{t('verdict.type')}: {activeResult.anomaly_type}{activeResult.anomaly_title ? ` — ${activeResult.anomaly_title}` : ''}</p>
+            ) : null}
+            <p className="chat-bubble__text">
+              {t(status === 'normal' ? 'verdict.normal.footnote' : status === 'anomaly' ? 'verdict.anomaly.lead' : 'verdict.failed.lead')}
+            </p>
+          </article>
+        ) : null}
+        {messages.length === 0 && !activeResult ? <p className="panel__subtitle chat-empty">{t('chat.empty')}</p> : null}
         {messages.map((message) => (
           <article key={message.id} className={`chat-bubble chat-bubble--${message.role}`}>
             <p className="chat-bubble__role">{message.role === 'user' ? t('chat.roleUser') : t('chat.roleAgent')}</p>
