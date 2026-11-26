@@ -1,17 +1,23 @@
-import { AlertTriangle, CheckCircle2, HelpCircle, Loader2, Radio } from 'lucide-react'
+import { AlertTriangle, BookOpen, CalendarClock, CheckCircle2, HelpCircle, Loader2, MessageSquare, Radio, RotateCcw } from 'lucide-react'
 import type { DiagnoseResponse } from '../api/types'
 import { useI18n } from '../i18n/I18nContext'
 import type { TranslationKey } from '../i18n/translations'
 import { formatMetric } from '../lib/verdict'
+import { manualTopic, usableStatus } from '../lib/workflow'
+import { CopyButton } from './CopyButton'
 
 interface VerdictCardProps {
   result: DiagnoseResponse | null
   loading: boolean
   error: string | null
   vehicleId?: string
+  onChooseSession: () => void
+  onOpenManuals: (query: string) => void
+  onAskInChat: (text: string) => void
+  onRetry: () => void
 }
 
-export function VerdictCard({ result, loading, error, vehicleId }: VerdictCardProps) {
+export function VerdictCard({ result, loading, error, vehicleId, onChooseSession, onOpenManuals, onAskInChat, onRetry }: VerdictCardProps) {
   const { t } = useI18n()
 
   const signalLabel = (q: DiagnoseResponse['signal_quality']) => {
@@ -49,6 +55,7 @@ export function VerdictCard({ result, loading, error, vehicleId }: VerdictCardPr
         <p className="verdict-card__eyebrow">{t('verdict.eyebrow.error')}</p>
         <h2 className="verdict-card__title">{t('verdict.error.title')}</h2>
         <p className="verdict-card__body">{error}</p>
+        <button type="button" className="btn btn--secondary" onClick={onRetry}><RotateCcw size={16} />{t('history.retry')}</button>
       </section>
     )
   }
@@ -66,32 +73,40 @@ export function VerdictCard({ result, loading, error, vehicleId }: VerdictCardPr
     )
   }
 
+  const status = usableStatus(result)
   const StatusIcon =
-    result.status === 'normal' ? CheckCircle2 : result.status === 'anomaly' ? AlertTriangle : HelpCircle
+    status === 'normal' ? CheckCircle2 : status === 'anomaly' ? AlertTriangle : HelpCircle
 
   const titleKey: TranslationKey =
-    result.status === 'normal'
+    status === 'normal'
       ? 'verdict.normal.title'
-      : result.status === 'check_failed'
+      : status === 'check_failed'
         ? 'verdict.failed.title'
         : 'verdict.anomaly.title'
   const leadKey: TranslationKey =
-    result.status === 'normal'
+    status === 'normal'
       ? 'verdict.normal.lead'
-      : result.status === 'check_failed'
+      : status === 'check_failed'
         ? 'verdict.failed.lead'
         : 'verdict.anomaly.lead'
   const footnoteKey: TranslationKey | null =
-    result.status === 'normal'
+    status === 'normal'
       ? 'verdict.normal.footnote'
-      : result.status === 'anomaly'
+      : status === 'anomaly'
         ? 'verdict.anomaly.footnote'
         : null
 
-  const steps = stepKeys(result.status)
+  const steps = stepKeys(status)
+  const topic = manualTopic(result)
+  const checklist = [
+    `${result.vehicle_id} · ${result.session_id} · ${result.engine_model ?? ''}`,
+    t(titleKey), t(leadKey),
+    ...(status === 'check_failed' ? [t('verdict.failed.action')] : status === 'anomaly' ? [`${result.anomaly_type ?? ''} — ${result.anomaly_title ?? ''}`] : []),
+    ...steps.map((key, i) => `${i + 1}. ${t(key)}`),
+  ].join('\n')
 
   return (
-    <section className={`verdict-card verdict-card--${result.status}`} aria-live="polite">
+    <section className={`verdict-card verdict-card--${status}`} aria-live="polite">
       {vehicleId ? (
         <p className="verdict-card__context">
           {vehicleId} · {result.session_id}
@@ -104,7 +119,7 @@ export function VerdictCard({ result, loading, error, vehicleId }: VerdictCardPr
       <h2 className="verdict-card__title">{t(titleKey)}</h2>
       <p className="verdict-card__lead">{t(leadKey)}</p>
 
-      {result.status === 'check_failed' ? (
+      {status === 'check_failed' ? (
         <p className="verdict-card__action">{t('verdict.failed.action')}</p>
       ) : (
         <>
@@ -122,7 +137,7 @@ export function VerdictCard({ result, loading, error, vehicleId }: VerdictCardPr
                 <dt>{t('verdict.confidence')}</dt>
                 <dd>{formatMetric(result.confidence)}</dd>
               </div>
-              {result.status === 'anomaly' ? (
+              {status === 'anomaly' ? (
                 <>
                   <div>
                     <dt>{t('verdict.type')}</dt>
@@ -147,10 +162,17 @@ export function VerdictCard({ result, loading, error, vehicleId }: VerdictCardPr
         <div className="verdict-card__steps">
           <p className="verdict-card__steps-title">{t('verdict.steps.title')}</p>
           <ol>
-            {steps.map((key) => (
-              <li key={key}>{t(key)}</li>
-            ))}
+            {steps.map((key) => <li key={key}>{t(key)}</li>)}
           </ol>
+          <div className="workflow-actions">
+            {status === 'check_failed' ? (
+              <button type="button" className="btn btn--primary" onClick={onChooseSession}><CalendarClock size={17} />{t('action.chooseCheck')}</button>
+            ) : (
+              <button type="button" className="btn btn--primary" onClick={() => onOpenManuals(topic)}><BookOpen size={17} />{t('action.findManual')}</button>
+            )}
+            <button type="button" className="btn btn--secondary" onClick={() => onAskInChat(`${checklist}\n\n${t(status === 'check_failed' ? 'action.askFailed' : 'action.askPlan')}`)}><MessageSquare size={17} />{t('action.toChat')}</button>
+            <CopyButton key={result.session_id} text={checklist} />
+          </div>
         </div>
       ) : null}
     </section>

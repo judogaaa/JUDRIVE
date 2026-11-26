@@ -1,24 +1,31 @@
 import { useState } from 'react'
-import { confirmTicketDraft, type DraftPayload } from '../api/chat'
+import { confirmTicketDraft, type DraftPayload, type SourceHit } from '../api/chat'
 import { useI18n } from '../i18n/I18nContext'
 import { resolveErrorMessage } from '../lib/i18nError'
+import { CopyButton } from './CopyButton'
 
 interface TicketDraftCardProps {
   draft: DraftPayload | null
   onConfirmed: (ticketId: string) => void
+  sources?: SourceHit[]
+  onOpenSource?: (source: SourceHit) => void
 }
 
-export function TicketDraftCard({ draft, onConfirmed }: TicketDraftCardProps) {
+export function TicketDraftCard({ draft, onConfirmed, sources, onOpenSource }: TicketDraftCardProps) {
   if (!draft?.draft_id || !draft.confirm_nonce) return null
-  return <TicketDraftBody key={draft.draft_id} draft={draft} onConfirmed={onConfirmed} />
+  return <TicketDraftBody key={draft.draft_id} draft={draft} onConfirmed={onConfirmed} sources={sources} onOpenSource={onOpenSource} />
 }
 
 function TicketDraftBody({
   draft,
   onConfirmed,
+  sources,
+  onOpenSource,
 }: {
   draft: DraftPayload
   onConfirmed: (ticketId: string) => void
+  sources?: SourceHit[]
+  onOpenSource?: (source: SourceHit) => void
 }) {
   const { t } = useI18n()
   const [phase, setPhase] = useState<'idle' | 'sending' | 'created' | 'duplicate' | 'unknown'>('idle')
@@ -97,17 +104,18 @@ function TicketDraftBody({
             <dt>{t('ticket.draft.sources')}</dt>
             <dd>
               <ul>
-                {payload.references.map((ref) => (
-                  <li key={`${ref.manual}-${ref.pdf_page}`}>
-                    {ref.manual}, {t('ticket.pdfPage')} {ref.pdf_page}
-                  </li>
-                ))}
+                {payload.references.map((ref) => {
+                  const source = sources?.find((hit) => hit.manual_title === ref.manual && hit.pdf_page === ref.pdf_page)
+                  const label = `${ref.manual}, ${t('ticket.pdfPage')} ${ref.pdf_page}`
+                  return <li key={`${ref.manual}-${ref.pdf_page}`}>{source && onOpenSource ? <button type="button" className="chat-source-link" onClick={() => onOpenSource(source)}>{label}</button> : label}</li>
+                })}
               </ul>
             </dd>
           </div>
         </dl>
       ) : null}
 
+      {payload ? <CopyButton key={draft.draft_id} text={[`${payload.vehicle_id ?? ''} · ${payload.session_id ?? ''}`, payload.conclusion, ...payload.operations, ...payload.references.map((ref) => `${ref.manual}, PDF ${ref.pdf_page}`)].join('\n')} /> : null}
       {error ? <p className="panel__error">{error}</p> : null}
       {phase === 'created' ? <p className="ticket-draft__ok">{t('ticket.draft.created')}</p> : null}
       {ticketId && phase !== 'created' ? (

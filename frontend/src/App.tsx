@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { fetchVehicles } from './api/client'
 import type { VehicleSummary } from './api/types'
 import { WorkspaceShell, type AppView } from './components/shell/WorkspaceShell'
 import { useTheme } from './hooks/useTheme'
 import { useI18n } from './i18n/I18nContext'
+import type { ChatIntent, ManualIntent } from './lib/workflow'
 import { ChiefMechanicView } from './views/ChiefMechanicView'
 import { DiagnosisView } from './views/DiagnosisView'
 import { FleetView } from './views/FleetView'
@@ -23,6 +24,22 @@ export default function App() {
   const [fleetError, setFleetError] = useState<string | null>(null)
   const [vehicleId, setVehicleId] = useState('')
   const [sessionId, setSessionId] = useState('')
+  const [manualIntent, setManualIntent] = useState<ManualIntent | null>(null)
+  const [chatIntent, setChatIntent] = useState<ChatIntent | null>(null)
+  const sequence = useRef(0)
+  const currentEngine = vehicles.find((v) => v.vehicle_id === vehicleId)?.engine_model ?? null
+
+  const openManuals = (query: string) => {
+    if (!currentEngine) return
+    setManualIntent({ id: ++sequence.current, engine: currentEngine, query })
+    setView('manuals')
+  }
+
+  const askInChat = (text: string) => {
+    if (!vehicleId || !sessionId) return
+    setChatIntent({ id: ++sequence.current, vehicleId, sessionId, text })
+    setView('diagnosis')
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -53,7 +70,7 @@ export default function App() {
   }
 
   return (
-    <WorkspaceShell view={view} onViewChange={setView} themeMode={themeMode} onThemeChange={setThemeMode}>
+    <WorkspaceShell view={view} onViewChange={(next) => { setManualIntent(null); setView(next) }} themeMode={themeMode} onThemeChange={setThemeMode}>
       <div hidden={view !== 'diagnosis'}>
         <DiagnosisView
           key={JSON.stringify([vehicleId, sessionId])}
@@ -63,16 +80,20 @@ export default function App() {
           sessionId={sessionId}
           onVehicleChange={setVehicleId}
           onSessionChange={setSessionId}
+          onOpenManuals={openManuals}
+          onAskInChat={askInChat}
+          chatIntent={chatIntent}
+          onIntentHandled={(id) => setChatIntent((prev) => prev?.id === id ? null : prev)}
         />
       </div>
       {view === 'manuals' ? (
-        <ManualsView engineModel={vehicles.find((v) => v.vehicle_id === vehicleId)?.engine_model ?? null} />
+        <ManualsView key={manualIntent?.id ?? 'library'} engineModel={currentEngine} intent={manualIntent} onAskInChat={askInChat} onBack={() => setView('diagnosis')} />
       ) : null}
       {view === 'chief' ? <ChiefMechanicView onOpenDiagnosis={openDiagnosisForVehicle} /> : null}
       {view === 'fleet' ? (
         <FleetView vehicles={vehicles} fleetError={fleetError} onOpenDiagnosis={openDiagnosisForVehicle} />
       ) : null}
-      {view === 'tickets' ? <TicketsView /> : null}
+      {view === 'tickets' ? <TicketsView onOpenDiagnosis={openDiagnosisForVehicle} /> : null}
     </WorkspaceShell>
   )
 }

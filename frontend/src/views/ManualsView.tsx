@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import { FileText, Star } from 'lucide-react'
+import { ArrowLeft, FileText, Star } from 'lucide-react'
 import { ManualSearchPanel } from '../components/ManualSearchPanel'
 import { SourceDrawer } from '../components/SourceDrawer'
 import type { ManualSearchHit } from '../api/manuals'
 import { useI18n } from '../i18n/I18nContext'
+import type { ManualIntent } from '../lib/workflow'
 
 interface CatalogDoc {
   doc_id: string
@@ -14,30 +15,42 @@ interface CatalogDoc {
 
 interface ManualsViewProps {
   engineModel: string | null
+  intent?: ManualIntent | null
+  onAskInChat?: (text: string) => void
+  onBack?: () => void
 }
 
 const FAV_KEY = 'judrive-manual-fav'
 const RECENT_KEY = 'judrive-manual-recent'
 
-export function ManualsView({ engineModel }: ManualsViewProps) {
+export function ManualsView({ engineModel, intent, onAskInChat, onBack }: ManualsViewProps) {
   const { t } = useI18n()
   const [engines, setEngines] = useState<{ engine_model: string; documents: CatalogDoc[] }[]>([])
-  const [engine, setEngine] = useState(engineModel ?? '')
+  const [engine, setEngine] = useState(intent?.engine ?? engineModel ?? '')
+  const [catalogError, setCatalogError] = useState(false)
+  const [catalogLoading, setCatalogLoading] = useState(true)
+  const [catalogRetry, setCatalogRetry] = useState(0)
   const [tab, setTab] = useState<'all' | 'fav' | 'recent'>('all')
   const [favorites, setFavorites] = useState<string[]>(() => readList(FAV_KEY))
   const [recent, setRecent] = useState<string[]>(() => readList(RECENT_KEY))
   const [open, setOpen] = useState<ManualSearchHit | null>(null)
 
   useEffect(() => {
+    let cancelled = false
+    setCatalogError(false)
+    setCatalogLoading(true)
     void fetch('/api/manuals/catalog')
-      .then((r) => r.json())
+      .then((r) => { if (!r.ok) throw new Error(String(r.status)); return r.json() })
       .then((body: { engines?: { engine_model: string; documents: CatalogDoc[] }[] }) => {
+        if (cancelled) return
         const list = body.engines ?? []
         setEngines(list)
         setEngine((prev) => prev || engineModel || list[0]?.engine_model || '')
       })
-      .catch(() => setEngines([]))
-  }, [engineModel])
+      .catch(() => { if (!cancelled) setCatalogError(true) })
+      .finally(() => { if (!cancelled) setCatalogLoading(false) })
+    return () => { cancelled = true }
+  }, [engineModel, catalogRetry])
 
   const docs = useMemo(() => {
     const rows = engines.find((row) => row.engine_model === engine)?.documents ?? []
@@ -69,12 +82,15 @@ export function ManualsView({ engineModel }: ManualsViewProps) {
     <div className="manual-sections">
       <header className="page-header page-header--compact">
         <h1>{t('nav.manuals')}</h1>
+        {intent && onBack ? <button className="btn btn--secondary" type="button" onClick={onBack}><ArrowLeft size={16} />{t('action.backDiagnosis')}</button> : null}
       </header>
       <section className="panel">
+        {catalogLoading ? <p role="status" className="panel__subtitle">{t('insight.loading')}</p> : null}
+        {catalogError ? <div className="history-error"><p className="panel__error">{t('error.source')}</p><button type="button" className="btn btn--secondary" onClick={() => setCatalogRetry((n) => n + 1)}>{t('history.retry')}</button></div> : null}
         <div className="toolbar-bar">
           <label className="field">
             <span>{t('diag.engine')}</span>
-            <select value={engine} onChange={(e) => setEngine(e.target.value)}>
+            <select value={engine} onChange={(e) => { setEngine(e.target.value); setOpen(null) }}>
               {engines.map((row) => (
                 <option key={row.engine_model} value={row.engine_model}>{row.engine_model}</option>
               ))}
@@ -119,7 +135,9 @@ export function ManualsView({ engineModel }: ManualsViewProps) {
           ))}
         </ul>
       </section>
-      <ManualSearchPanel engineModel={engine || null} />
+      <ManualSearchPanel key={engine} engineModel={engine || null}
+        initialQuery={intent?.engine === engine ? intent.query : undefined}
+        onAskInChat={engine === engineModel ? onAskInChat : undefined} />
       <SourceDrawer hit={open} onClose={() => setOpen(null)} />
     </div>
   )

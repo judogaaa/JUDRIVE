@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronDown, Play, Search } from 'lucide-react'
 import { fetchDiagnosis } from '../api/client'
 import type { DiagnoseResponse, SessionSummary, VehicleSummary } from '../api/types'
@@ -9,6 +9,7 @@ import { useI18n } from '../i18n/I18nContext'
 import { formatSessionDateTime } from '../lib/formatLocale'
 import { displayVehicleModel, matchesVehicle } from '../lib/vehicle'
 import { resolveErrorMessage } from '../lib/i18nError'
+import type { ChatIntent } from '../lib/workflow'
 
 interface DiagnosisViewProps {
   vehicles: VehicleSummary[]
@@ -17,6 +18,10 @@ interface DiagnosisViewProps {
   sessionId: string
   onVehicleChange: (id: string) => void
   onSessionChange: (id: string) => void
+  onOpenManuals: (query: string) => void
+  onAskInChat: (text: string) => void
+  chatIntent: ChatIntent | null
+  onIntentHandled: (id: number) => void
 }
 
 export function DiagnosisView({
@@ -26,8 +31,13 @@ export function DiagnosisView({
   sessionId,
   onVehicleChange,
   onSessionChange,
+  onOpenManuals,
+  onAskInChat,
+  chatIntent,
+  onIntentHandled,
 }: DiagnosisViewProps) {
   const { t, locale } = useI18n()
+  const sessionSelectRef = useRef<HTMLSelectElement>(null)
   const [vehicleQuery, setVehicleQuery] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
   const [result, setResult] = useState<DiagnoseResponse | null>(null)
@@ -150,7 +160,7 @@ export function DiagnosisView({
             </div>
             <label className="field">
               <span>{t('diag.check')}</span>
-              <select value={sessionId} onChange={(e) => onSessionSelect(e.target.value)}>
+              <select ref={sessionSelectRef} value={sessionId} onChange={(e) => onSessionSelect(e.target.value)}>
                 {sessions.map((s) => (
                   <option key={s.session_id} value={s.session_id}>
                     {formatSessionDateTime(locale, s.checked_at)} · {s.session_id}
@@ -167,7 +177,14 @@ export function DiagnosisView({
               <Play size={18} aria-hidden />
               {loading ? t('diag.running') : t('diag.run')}
             </button>
-            <VerdictCard result={result} loading={loading} error={error} vehicleId={vehicleId} />
+            <VerdictCard result={result} loading={loading} error={error} vehicleId={vehicleId}
+              onChooseSession={() => {
+                const select = sessionSelectRef.current
+                select?.scrollIntoView({ block: 'center' })
+                select?.focus()
+                try { select?.showPicker?.() } catch { /* focus still makes the selection available */ }
+              }}
+              onOpenManuals={onOpenManuals} onAskInChat={onAskInChat} onRetry={() => void runDiagnosis()} />
             <VehicleHistoryPanel
               vehicleId={vehicleId}
               sessions={sortedSessions}
@@ -181,6 +198,9 @@ export function DiagnosisView({
                 vehicleId={vehicleId}
                 sessionId={sessionId}
                 diagnoseResult={result}
+                chatIntent={chatIntent}
+                onIntentHandled={onIntentHandled}
+                onOpenManuals={onOpenManuals}
                 onDiagnoseCommand={() => void runDiagnosis()}
               />
             ) : null}

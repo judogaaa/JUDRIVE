@@ -1,26 +1,28 @@
 import { useMemo, useState, useEffect } from 'react'
-import { ChevronRight, Copy, X } from 'lucide-react'
-import { createConversation, sendChatMessage } from '../api/chat'
+import { ArrowRight, ChevronRight, X } from 'lucide-react'
+import { createConversation, sendChatMessage, type SourceHit } from '../api/chat'
 import type { ManualSearchHit } from '../api/manuals'
 import { SourceDrawer } from '../components/SourceDrawer'
 import { fetchTickets, type TicketSubmission } from '../api/tickets'
 import { useI18n } from '../i18n/I18nContext'
 import { formatSessionDateTime } from '../lib/formatLocale'
+import { CopyButton } from '../components/CopyButton'
 
 interface TicketsViewProps {
   filterVehicleId?: string
+  onOpenDiagnosis?: (vehicleId: string, sessionId: string) => void
 }
 
 function docIdFromTitle(title: string): string {
   const map: [string, string][] = [
-    ['236-3902150', 'y236-re'],
-    ['236.01.01', 'y236-rk'],
-    ['536.3902150', 'y536-re'],
-    ['536.01.02', 'y536-rk'],
-    ['5234', 'z5234-rk'],
-    ['409', 'z409-rk'],
+    ['236-3902150-Б РЭ', 'y236-re'],
+    ['236.01.01 РК', 'y236-rk'],
+    ['536.3902150 РЭ', 'y536-re'],
+    ['536.01.02 РК', 'y536-rk'],
+    ['Двигатели ЗМЗ-5234.10 со сцеплением. Руководство по ремонту', 'z5234-rk'],
+    ['Руководство по эксплуатации, техническому обслуживанию и ремонту двигателей ЗМЗ-40904.10 и ЗМЗ-40905.10', 'z409-rk'],
   ]
-  return map.find(([needle]) => title.includes(needle))?.[1] ?? ''
+  return map.find(([needle]) => title.trim() === needle)?.[1] ?? ''
 }
 
 function parsePayload(snapshot: string | null): {
@@ -41,14 +43,14 @@ function parsePayload(snapshot: string | null): {
   }
 }
 
-export function TicketsView({ filterVehicleId }: TicketsViewProps) {
+export function TicketsView({ filterVehicleId, onOpenDiagnosis }: TicketsViewProps) {
   const { t, locale } = useI18n()
   const [tickets, setTickets] = useState<TicketSubmission[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [openId, setOpenId] = useState<string | null>(null)
-  const [review, setReview] = useState<string | null>(null)
+  const [review, setReview] = useState<{ id: string; text: string; sources?: SourceHit[] } | null>(null)
   const [reviewing, setReviewing] = useState(false)
   const [source, setSource] = useState<ManualSearchHit | null>(null)
 
@@ -114,9 +116,9 @@ export function TicketsView({ filterVehicleId }: TicketsViewProps) {
     try {
       const conv = await createConversation(row.vehicle_id, row.session_id)
       const reply = await sendChatMessage(conv.conversation_id, buildTicketReviewMessage(row), locale, true)
-      setReview(reply.reply)
+      setReview({ id: row.local_id, text: reply.reply, sources: reply.sources })
     } catch (err: unknown) {
-      setReview(err instanceof Error ? err.message : t('error.agent'))
+      setReview({ id: row.local_id, text: err instanceof Error ? err.message : t('error.agent') })
     } finally {
       setReviewing(false)
     }
@@ -154,7 +156,7 @@ export function TicketsView({ filterVehicleId }: TicketsViewProps) {
             <div className="ticket-journal">
               {visible.map((row) => (
                 <article key={row.local_id} className="ticket-row">
-                  <button type="button" className="ticket-row__head" onClick={() => setOpenId(row.local_id)}>
+                  <button type="button" className="ticket-row__head" onClick={() => { setOpenId(row.local_id); setReview(null) }}>
                     <span className="ticket-row__id">{row.ticket_id ?? '—'}</span>
                     <span className="ticket-row__meta">{formatSessionDateTime(locale, row.created_at)}</span>
                   </button>
@@ -188,6 +190,7 @@ export function TicketsView({ filterVehicleId }: TicketsViewProps) {
                 key={`${ref.manual}-${ref.pdf_page}`}
                 type="button"
                 className="chat-source-link"
+                disabled={!docIdFromTitle(ref.manual ?? '') || !ref.pdf_page || ref.pdf_page < 1}
                 onClick={() => {
                   setSource({
                     evidence_id: `${ref.manual}-${ref.pdf_page}`,
@@ -203,13 +206,21 @@ export function TicketsView({ filterVehicleId }: TicketsViewProps) {
                 {ref.manual}, {t('ticket.pdfPage')} {ref.pdf_page}
               </button>
             ))}
-            <button type="button" className="btn btn--secondary" onClick={() => void navigator.clipboard.writeText(open.ticket_id ?? open.local_id)}>
-              <Copy size={18} aria-hidden /> {open.ticket_id ?? open.local_id}
-            </button>
+            <CopyButton text={open.ticket_id ?? open.local_id} />
+            {onOpenDiagnosis ? <button type="button" className="btn btn--secondary" onClick={() => onOpenDiagnosis(open.vehicle_id, open.session_id)}>{t('insight.openDiagnosis')}<ArrowRight size={16} /></button> : null}
             <button type="button" className="btn btn--secondary" disabled={reviewing} onClick={() => void explain(open)}>
               {reviewing ? t('chat.processing') : t('tickets.review')}
             </button>
-            {review ? <div className="ticket-review">{review}</div> : null}
+            {review?.id === open.local_id ? (
+              <div className="ticket-review">
+                <p>{review.text}</p>
+                {review.sources?.length ? <ul className="chat-sources">{review.sources.map((hit) => {
+                  const docId = hit.doc_id ?? docIdFromTitle(hit.manual_title)
+                  return <li key={hit.evidence_id}><button className="chat-source-link" type="button" disabled={!docId || hit.pdf_page < 1} onClick={() => setSource({ ...hit, doc_id: docId, score: 0, extraction: 'rag' })}>{hit.manual_title}, {t('ticket.pdfPage')} {hit.pdf_page}</button></li>
+                })}</ul> : null}
+                <CopyButton text={[review.text, ...(review.sources ?? []).map((hit) => `${hit.manual_title}, PDF ${hit.pdf_page}`)].join('\n')} />
+              </div>
+            ) : null}
           </aside>
         </div>
       ) : null}
