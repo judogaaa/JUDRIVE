@@ -60,20 +60,23 @@ export function ChiefMechanicView({ onOpenDiagnosis }: ChiefMechanicViewProps) {
 
       {data ? (
         <>
-          <section className="chief-summary" aria-label="Сводка категорий">
+          <section className="chief-summary" aria-label={t('chief.summaryCategories')}>
             <SummaryCard
               tone="ok"
               icon={<CheckCircle2 size={20} />}
               label={t('chief.cat.normal')}
               value={data.summary.normal}
-              hint={`Последняя проверка без отклонений: ${data.session_stats.latest_by_status.normal ?? 0}`}
+              hint={t('chief.hint.normal', { count: data.session_stats.latest_by_status.normal ?? 0 })}
             />
             <SummaryCard
               tone="warn"
               icon={<AlertTriangle size={20} />}
               label={t('chief.cat.attention')}
               value={data.summary.attention}
-              hint={`Отклонения: ${data.session_stats.latest_by_status.anomaly ?? 0} · сбой записи: ${data.session_stats.latest_by_status.check_failed ?? 0}`}
+              hint={t('chief.hint.attention', {
+                anomaly: data.session_stats.latest_by_status.anomaly ?? 0,
+                failed: data.session_stats.latest_by_status.check_failed ?? 0,
+              })}
             />
             <SummaryCard
               tone="danger"
@@ -99,10 +102,12 @@ export function ChiefMechanicView({ onOpenDiagnosis }: ChiefMechanicViewProps) {
           <section className="panel chief-stats">
             <h2 className="panel__title">{t('chief.analyticsTitle')}</h2>
             <p className="panel__subtitle">
-              Всего проверок: {data.session_stats.total_sessions}. По последней проверке каждой машины: норма{' '}
-              {data.session_stats.latest_by_status.normal ?? 0}, отклонение{' '}
-              {data.session_stats.latest_by_status.anomaly ?? 0}, сбой записи{' '}
-              {data.session_stats.latest_by_status.check_failed ?? 0}.
+              {t('chief.analytics.intro', {
+                total: data.session_stats.total_sessions,
+                normal: data.session_stats.latest_by_status.normal ?? 0,
+                anomaly: data.session_stats.latest_by_status.anomaly ?? 0,
+                failed: data.session_stats.latest_by_status.check_failed ?? 0,
+              })}
             </p>
             <div className="stats-grid">
               <StatBlock title={t('chief.stat.status')} items={data.session_stats.by_status} />
@@ -140,30 +145,30 @@ export function ChiefMechanicView({ onOpenDiagnosis }: ChiefMechanicViewProps) {
                   <input
                     value={filters.q ?? ''}
                     onChange={(e) => setFilters((f) => ({ ...f, q: e.target.value || undefined }))}
-                    placeholder="Госномер, гараж, двигатель…"
+                    placeholder={t('chief.filter.searchPlaceholder')}
                     style={{ flex: 1 }}
                   />
                 </div>
               </label>
               <label className="field">
-                <span>Категория</span>
+                <span>{t('chief.filter.category')}</span>
                 <select
                   value={filters.category ?? ''}
                   onChange={(e) => setFilters((f) => ({ ...f, category: e.target.value || undefined }))}
                 >
-                  <option value="">Все</option>
-                  <option value="normal">Норма</option>
-                  <option value="attention">Требует внимания</option>
-                  <option value="quarantine">Карантин</option>
+                  <option value="">{t('chief.filter.all')}</option>
+                  <option value="normal">{t('chief.cat.normal')}</option>
+                  <option value="attention">{t('chief.cat.attention')}</option>
+                  <option value="quarantine">{t('chief.cat.quarantine')}</option>
                 </select>
               </label>
               <label className="field">
-                <span>Двигатель</span>
+                <span>{t('chief.filter.engine')}</span>
                 <select
                   value={filters.engine_model ?? ''}
                   onChange={(e) => setFilters((f) => ({ ...f, engine_model: e.target.value || undefined }))}
                 >
-                  <option value="">Все</option>
+                  <option value="">{t('chief.filter.all')}</option>
                   {data.engine_models.map((engine) => (
                     <option key={engine} value={engine}>
                       {engine}
@@ -172,12 +177,12 @@ export function ChiefMechanicView({ onOpenDiagnosis }: ChiefMechanicViewProps) {
                 </select>
               </label>
               <label className="field">
-                <span>Тип ТС</span>
+                <span>{t('chief.filter.vehicleType')}</span>
                 <select
                   value={filters.vehicle_type ?? ''}
                   onChange={(e) => setFilters((f) => ({ ...f, vehicle_type: e.target.value || undefined }))}
                 >
-                  <option value="">Все</option>
+                  <option value="">{t('chief.filter.all')}</option>
                   {data.vehicle_types.map((type) => (
                     <option key={type} value={type}>
                       {type}
@@ -191,11 +196,11 @@ export function ChiefMechanicView({ onOpenDiagnosis }: ChiefMechanicViewProps) {
               <table className="fleet-table">
                 <thead>
                   <tr>
-                    <th>ТС</th>
-                    <th>Категория</th>
-                    <th>Последняя</th>
-                    <th>Score</th>
-                    <th>Причина</th>
+                    <th>{t('chief.col.vehicle')}</th>
+                    <th>{t('chief.col.category')}</th>
+                    <th>{t('chief.col.latest')}</th>
+                    <th>{t('chief.col.score')}</th>
+                    <th>{t('chief.col.reason')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -204,6 +209,7 @@ export function ChiefMechanicView({ onOpenDiagnosis }: ChiefMechanicViewProps) {
                       key={row.vehicle_id}
                       row={row}
                       label={categoryLabel(row)}
+                      rerecordLabel={t('chief.badge.rerecord')}
                       onClick={() => setSelectedVehicle(row.vehicle_id)}
                     />
                   ))}
@@ -280,7 +286,17 @@ function QueueRow({ row, label, onClick }: { row: VehicleFleetRow; label: string
   )
 }
 
-function ChiefTableRow({ row, label, onClick }: { row: VehicleFleetRow; label: string; onClick: () => void }) {
+function ChiefTableRow({
+  row,
+  label,
+  rerecordLabel,
+  onClick,
+}: {
+  row: VehicleFleetRow
+  label: string
+  rerecordLabel: string
+  onClick: () => void
+}) {
   return (
     <tr
       onClick={onClick}
@@ -299,7 +315,7 @@ function ChiefTableRow({ row, label, onClick }: { row: VehicleFleetRow; label: s
       </td>
       <td>
         <span className={`badge badge--${row.category}`}>{label}</span>
-        {row.needs_rerecord ? <span className="badge badge--rerecord">Повтор записи</span> : null}
+        {row.needs_rerecord ? <span className="badge badge--rerecord">{rerecordLabel}</span> : null}
       </td>
       <td>
         {row.latest_session_id}

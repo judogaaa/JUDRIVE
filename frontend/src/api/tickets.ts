@@ -1,3 +1,5 @@
+import { i18nError } from '../lib/i18nError'
+
 export interface TicketSubmission {
   local_id: string
   draft_id: string
@@ -14,7 +16,7 @@ export async function fetchTickets(vehicleId?: string): Promise<TicketSubmission
   const query = vehicleId ? `?vehicle_id=${encodeURIComponent(vehicleId)}` : ''
   const response = await fetch(`/api/tickets${query}`)
   if (!response.ok) {
-    throw new Error(`Ошибка журнала заявок (${response.status})`)
+    throw i18nError('error.ticketsJournal', response.status)
   }
   const data = (await response.json()) as { tickets: TicketSubmission[] }
   return data.tickets ?? []

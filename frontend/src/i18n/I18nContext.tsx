@@ -1,12 +1,13 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { LOCALE_LABELS, SUPPORTED_LOCALES, translate, type LocaleCode, type TranslationKey } from './translations'
+import type { TranslationKey } from './keys'
+import { LOCALE_LABELS, SUPPORTED_LOCALES, translate, type LocaleCode } from './translations'
 
 const STORAGE_KEY = 'judrive-locale'
 
 type I18nContextValue = {
   locale: LocaleCode
   setLocale: (code: LocaleCode) => void
-  t: (key: TranslationKey) => string
+  t: (key: TranslationKey, params?: Record<string, string | number>) => string
   locales: typeof SUPPORTED_LOCALES
   localeLabels: typeof LOCALE_LABELS
 }
@@ -29,7 +30,10 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     setLocaleState(code)
   }, [])
 
-  const t = useCallback((key: TranslationKey) => translate(locale, key), [locale])
+  const t = useCallback(
+    (key: TranslationKey, params?: Record<string, string | number>) => translate(locale, key, params),
+    [locale],
+  )
 
   const value = useMemo(
     () => ({ locale, setLocale, t, locales: SUPPORTED_LOCALES, localeLabels: LOCALE_LABELS }),

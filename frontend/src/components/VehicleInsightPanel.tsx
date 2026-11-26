@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import { fetchVehicleInsight, type TrendPoint, type VehicleFleetRow, type VehicleInsight } from '../api/fleet'
+import { useI18n } from '../i18n/I18nContext'
+import { formatSessionDateTime } from '../lib/formatLocale'
+import { resolveErrorMessage } from '../lib/i18nError'
 import { AnomalyTrendChart } from './AnomalyTrendChart'
 
 interface VehicleInsightPanelProps {
@@ -9,15 +12,8 @@ interface VehicleInsightPanelProps {
   onOpenDiagnosis: (vehicleId: string, sessionId: string) => void
 }
 
-function formatWhen(value: string): string {
-  try {
-    return new Intl.DateTimeFormat('ru-RU', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
-  } catch {
-    return value
-  }
-}
-
 export function VehicleInsightPanel({ vehicleId, onClose, onOpenDiagnosis }: VehicleInsightPanelProps) {
+  const { t, locale } = useI18n()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [row, setRow] = useState<VehicleFleetRow | null>(null)
@@ -37,7 +33,7 @@ export function VehicleInsightPanel({ vehicleId, onClose, onOpenDiagnosis }: Veh
         setTrend(data.trend_points)
       })
       .catch((err: unknown) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Ошибка загрузки')
+        if (!cancelled) setError(resolveErrorMessage(t, err, 'error.insight'))
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -45,7 +41,7 @@ export function VehicleInsightPanel({ vehicleId, onClose, onOpenDiagnosis }: Veh
     return () => {
       cancelled = true
     }
-  }, [vehicleId])
+  }, [vehicleId, t])
 
   if (!vehicleId) return null
 
@@ -55,7 +51,7 @@ export function VehicleInsightPanel({ vehicleId, onClose, onOpenDiagnosis }: Veh
       <div className="source-drawer__panel">
         <header className="source-drawer__header">
           <div>
-            <p className="source-drawer__eyebrow">История ТС</p>
+            <p className="source-drawer__eyebrow">{t('insight.title')}</p>
             <h3>{vehicleId}</h3>
             {row ? (
               <p className="source-drawer__meta">
@@ -63,12 +59,12 @@ export function VehicleInsightPanel({ vehicleId, onClose, onOpenDiagnosis }: Veh
               </p>
             ) : null}
           </div>
-          <button type="button" className="icon-btn" onClick={onClose} aria-label="Закрыть">
-            <X size={18} />
+          <button type="button" className="icon-btn" onClick={onClose} aria-label={t('insight.close')}>
+            <X size={18} aria-hidden />
           </button>
         </header>
 
-        {loading ? <p className="panel__subtitle">Загрузка…</p> : null}
+        {loading ? <p className="panel__subtitle">{t('insight.loading')}</p> : null}
         {error ? <p className="panel__error">{error}</p> : null}
 
         {row ? (
@@ -88,7 +84,7 @@ export function VehicleInsightPanel({ vehicleId, onClose, onOpenDiagnosis }: Veh
               className="btn btn--primary btn--block"
               onClick={() => onOpenDiagnosis(row.vehicle_id, row.latest_session_id)}
             >
-              Открыть в диагностике
+              {t('insight.openDiagnosis')}
             </button>
             <ul className="history-list" style={{ maxHeight: 'none', marginTop: '1rem' }}>
               {history.map((h) => (
@@ -102,7 +98,7 @@ export function VehicleInsightPanel({ vehicleId, onClose, onOpenDiagnosis }: Veh
                       {h.session_id} · {h.status}
                       {h.anomaly_type ? ` · ${h.anomaly_type}` : ''}
                     </span>
-                    <span className="history-item__date">{formatWhen(h.checked_at)}</span>
+                    <span className="history-item__date">{formatSessionDateTime(locale, h.checked_at)}</span>
                   </button>
                 </li>
               ))}

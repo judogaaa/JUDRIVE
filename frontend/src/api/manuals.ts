@@ -1,3 +1,5 @@
+import { i18nError } from '../lib/i18nError'
+
 export interface ManualSearchHit {
   evidence_id: string
   doc_id: string
@@ -27,7 +29,7 @@ export async function searchManuals(
     body: JSON.stringify({ engine_model: engineModel, query, limit }),
   })
   if (!response.ok) {
-    throw new Error(`Ошибка поиска (${response.status})`)
+    throw i18nError('error.manualSearch', response.status)
   }
   return (await response.json()) as ManualSearchResponse
 }
@@ -41,7 +43,7 @@ export type EvidenceRecord = ManualSearchHit
 export async function fetchEvidence(evidenceId: string): Promise<EvidenceRecord> {
   const response = await fetch(`/api/sources/evidence/${encodeURIComponent(evidenceId)}`)
   if (!response.ok) {
-    throw new Error(`Источник не найден (${response.status})`)
+    throw i18nError('error.evidence', response.status)
   }
   const data = (await response.json()) as EvidenceRecord
   return data

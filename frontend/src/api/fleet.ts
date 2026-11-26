@@ -1,3 +1,5 @@
+import { i18nError } from '../lib/i18nError'
+
 export interface EarlyWarning {
   code: string
   message: string
@@ -90,12 +92,12 @@ export async function fetchFleetDashboard(filters: FleetDashboardFilters = {}): 
   if (filters.q) params.set('q', filters.q)
   const query = params.toString()
   const response = await fetch(`/api/fleet/dashboard${query ? `?${query}` : ''}`)
-  if (!response.ok) throw new Error(`Ошибка сводки (${response.status})`)
+  if (!response.ok) throw i18nError('error.dashboardHttp', response.status)
   return (await response.json()) as FleetDashboard
 }
 
 export async function fetchVehicleInsight(vehicleId: string): Promise<VehicleInsight> {
   const response = await fetch(`/api/fleet/vehicles/${encodeURIComponent(vehicleId)}/insight`)
-  if (!response.ok) throw new Error(`Ошибка истории (${response.status})`)
+  if (!response.ok) throw i18nError('error.insight', response.status)
   return (await response.json()) as VehicleInsight
 }

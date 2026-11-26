@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Mic, Square } from 'lucide-react'
 import { transcribeAudio } from '../api/voice'
 import { useI18n } from '../i18n/I18nContext'
+import { resolveErrorMessage } from '../lib/i18nError'
 
 interface VoiceCaptureProps {
   onText: (text: string) => void
@@ -30,7 +31,7 @@ export function VoiceCapture({ onText, disabled }: VoiceCaptureProps) {
       const text = await transcribeAudio(blob, locale)
       setDraft(text)
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'STT error')
+      setError(resolveErrorMessage(t, err, 'error.stt'))
     } finally {
       setTranscribing(false)
     }

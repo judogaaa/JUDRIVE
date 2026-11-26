@@ -1,3 +1,5 @@
+import { i18nError } from '../lib/i18nError'
+
 export interface Conversation {
   conversation_id: string
   vehicle_id: string
@@ -91,5 +93,5 @@ async function readError(response: Response): Promise<string> {
   } catch {
     /* ignore */
   }
-  return `Ошибка (${response.status})`
+  return i18nError('error.http', response.status).message
 }

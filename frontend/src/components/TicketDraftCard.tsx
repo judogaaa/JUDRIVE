@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { confirmTicketDraft, type DraftPayload } from '../api/chat'
+import { useI18n } from '../i18n/I18nContext'
+import { resolveErrorMessage } from '../lib/i18nError'
 
 interface TicketDraftCardProps {
   draft: DraftPayload | null
@@ -7,6 +9,7 @@ interface TicketDraftCardProps {
 }
 
 export function TicketDraftCard({ draft, onConfirmed }: TicketDraftCardProps) {
+  const { t } = useI18n()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [status, setStatus] = useState<string | null>(null)
@@ -29,7 +32,7 @@ export function TicketDraftCard({ draft, onConfirmed }: TicketDraftCardProps) {
         setError(result.message)
       }
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Ошибка подтверждения')
+      setError(resolveErrorMessage(t, err, 'error.confirm'))
     } finally {
       setLoading(false)
     }
@@ -38,26 +41,26 @@ export function TicketDraftCard({ draft, onConfirmed }: TicketDraftCardProps) {
   return (
     <section className="ticket-draft panel" aria-labelledby="ticket-draft-title">
       <h2 id="ticket-draft-title" className="panel__title">
-        Черновик заявки ТОиР
+        {t('ticket.confirmTitle')}
       </h2>
-      <p className="panel__subtitle">Отправка возможна только после вашего подтверждения.</p>
+      <p className="panel__subtitle">{t('ticket.draft.subtitle')}</p>
 
       {payload ? (
         <dl className="ticket-draft__grid">
           <div>
-            <dt>Диагноз (гипотеза)</dt>
+            <dt>{t('ticket.draft.diagnosis')}</dt>
             <dd>{payload.conclusion}</dd>
           </div>
           <div>
-            <dt>Приоритет</dt>
+            <dt>{t('ticket.draft.priority')}</dt>
             <dd>{payload.urgency}</dd>
           </div>
           <div>
-            <dt>Код отклонения</dt>
+            <dt>{t('ticket.draft.code')}</dt>
             <dd>{payload.anomaly_type ?? '—'}</dd>
           </div>
           <div>
-            <dt>Работы</dt>
+            <dt>{t('ticket.draft.operations')}</dt>
             <dd>
               <ul>
                 {payload.operations.map((op) => (
@@ -67,12 +70,12 @@ export function TicketDraftCard({ draft, onConfirmed }: TicketDraftCardProps) {
             </dd>
           </div>
           <div>
-            <dt>Источники</dt>
+            <dt>{t('ticket.draft.sources')}</dt>
             <dd>
               <ul>
                 {payload.references.map((ref) => (
                   <li key={`${ref.manual}-${ref.pdf_page}`}>
-                    {ref.manual}, PDF стр. {ref.pdf_page}
+                    {ref.manual}, {t('ticket.pdfPage')} {ref.pdf_page}
                   </li>
                 ))}
               </ul>
@@ -82,7 +85,7 @@ export function TicketDraftCard({ draft, onConfirmed }: TicketDraftCardProps) {
       ) : null}
 
       {error ? <p className="panel__error">{error}</p> : null}
-      {status === 'created' ? <p className="ticket-draft__ok">Заявка создана в Mock ТОиР.</p> : null}
+      {status === 'created' ? <p className="ticket-draft__ok">{t('ticket.draft.created')}</p> : null}
 
       <button
         type="button"
@@ -90,7 +93,7 @@ export function TicketDraftCard({ draft, onConfirmed }: TicketDraftCardProps) {
         disabled={loading || status === 'created'}
         onClick={() => void onConfirm()}
       >
-        {loading ? 'Отправка…' : 'Подтвердить и отправить заявку'}
+        {loading ? t('ticket.draft.sending') : t('ticket.confirmBtn')}
       </button>
     </section>
   )

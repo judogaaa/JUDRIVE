@@ -1,15 +1,18 @@
 import type { ApiErrorBody, DiagnoseResponse, VehicleSummary } from './types'
+import { i18nError } from '../lib/i18nError'
 
-async function parseError(response: Response): Promise<string> {
+async function parseError(response: Response): Promise<never> {
   try {
     const body = (await response.json()) as ApiErrorBody
     if (typeof body.detail === 'string') {
-      return body.detail
+      throw new Error(body.detail)
     }
-  } catch {
-    /* ignore */
+  } catch (err) {
+    if (err instanceof Error && !err.message.startsWith('@i18n:')) {
+      throw err
+    }
   }
-  return `Ошибка сервера (${response.status})`
+  throw i18nError('error.http', response.status)
 }
 
 export async function fetchVehicles(): Promise<VehicleSummary[]> {

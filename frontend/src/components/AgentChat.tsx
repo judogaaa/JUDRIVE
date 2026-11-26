@@ -165,7 +165,7 @@ export function AgentChat({ vehicleId, sessionId, diagnoseResult }: AgentChatPro
                       disabled={evidenceLoading}
                       onClick={() => void openEvidence(s)}
                     >
-                      {s.manual_title}, PDF {s.pdf_page}
+                      {s.manual_title}, {t('ticket.pdfPage')} {s.pdf_page}
                     </button>
                   </li>
                 ))}

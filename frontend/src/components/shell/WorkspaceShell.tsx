@@ -38,11 +38,11 @@ export function WorkspaceShell({ view, onViewChange, themeMode, onThemeCycle, ch
         </div>
         <div className="shell-toolbar">
           <label className="lang-select">
-            <span className="sr-only">Язык</span>
+            <span className="sr-only">{t('common.language')}</span>
             <select
               value={locale}
               onChange={(e) => setLocale(e.target.value as LocaleCode)}
-              aria-label="Язык интерфейса"
+              aria-label={t('common.language')}
             >
               {locales.map((code) => (
                 <option key={code} value={code}>
@@ -57,7 +57,7 @@ export function WorkspaceShell({ view, onViewChange, themeMode, onThemeCycle, ch
         </div>
       </header>
 
-      <nav className="shell-nav-mobile" aria-label="Разделы">
+      <nav className="shell-nav-mobile" aria-label={t('common.sections')}>
         {NAV.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
@@ -72,7 +72,7 @@ export function WorkspaceShell({ view, onViewChange, themeMode, onThemeCycle, ch
       </nav>
 
       <div className="shell-body">
-        <nav className="shell-nav" aria-label="Разделы">
+        <nav className="shell-nav" aria-label={t('common.sections')}>
           {NAV.map(({ id, label, icon: Icon }) => (
             <button
               key={id}

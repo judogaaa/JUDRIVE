@@ -3,6 +3,8 @@ import { ExternalLink, X } from 'lucide-react'
 import * as pdfjs from 'pdfjs-dist'
 import type { ManualSearchHit } from '../api/manuals'
 import { pdfSourceUrl } from '../api/manuals'
+import { useI18n } from '../i18n/I18nContext'
+import { resolveErrorMessage } from '../lib/i18nError'
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   'pdfjs-dist/build/pdf.worker.min.mjs',
@@ -15,6 +17,7 @@ interface SourceDrawerProps {
 }
 
 export function SourceDrawer({ hit, onClose }: SourceDrawerProps) {
+  const { t } = useI18n()
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const [renderError, setRenderError] = useState<string | null>(null)
 
@@ -37,7 +40,7 @@ export function SourceDrawer({ hit, onClose }: SourceDrawerProps) {
         await page.render({ canvasContext: context, viewport, canvas }).promise
       } catch (err: unknown) {
         if (!cancelled) {
-          setRenderError(err instanceof Error ? err.message : 'Не удалось отрисовать PDF')
+          setRenderError(resolveErrorMessage(t, err, 'error.pdfRender'))
         }
       }
     }
@@ -45,7 +48,7 @@ export function SourceDrawer({ hit, onClose }: SourceDrawerProps) {
     return () => {
       cancelled = true
     }
-  }, [hit])
+  }, [hit, t])
 
   if (!hit) return null
 
@@ -55,11 +58,11 @@ export function SourceDrawer({ hit, onClose }: SourceDrawerProps) {
       <div className="source-drawer__panel">
         <header className="source-drawer__header">
           <div>
-            <p className="source-drawer__eyebrow">Источник</p>
+            <p className="source-drawer__eyebrow">{t('source.eyebrow')}</p>
             <h3>{hit.manual_title}</h3>
-            <p className="source-drawer__meta">Физическая страница PDF: {hit.pdf_page}</p>
+            <p className="source-drawer__meta">{t('source.pdfPage', { page: hit.pdf_page })}</p>
           </div>
-          <button type="button" className="icon-btn" onClick={onClose} aria-label="Закрыть панель источника">
+          <button type="button" className="icon-btn" onClick={onClose} aria-label={t('source.close')}>
             <X size={18} aria-hidden />
           </button>
         </header>
@@ -70,7 +73,7 @@ export function SourceDrawer({ hit, onClose }: SourceDrawerProps) {
         {renderError ? <p className="panel__error">{renderError}</p> : null}
         <a className="ghost-button" href={pdfSourceUrl(hit.doc_id, hit.pdf_page)} target="_blank" rel="noreferrer">
           <ExternalLink size={16} aria-hidden />
-          Открыть PDF
+          {t('source.openPdf')}
         </a>
       </div>
     </div>

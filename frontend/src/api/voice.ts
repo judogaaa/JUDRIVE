@@ -1,4 +1,5 @@
 import type { LocaleCode } from '../i18n/translations'
+import { i18nError } from '../lib/i18nError'
 
 export async function transcribeAudio(blob: Blob, locale: LocaleCode): Promise<string> {
   const form = new FormData()
@@ -9,14 +10,15 @@ export async function transcribeAudio(blob: Blob, locale: LocaleCode): Promise<s
     body: form,
   })
   if (!response.ok) {
-    let detail = `Ошибка STT (${response.status})`
     try {
       const body = (await response.json()) as { detail?: string }
-      if (body.detail) detail = body.detail
-    } catch {
-      /* ignore */
+      if (body.detail) throw new Error(body.detail)
+    } catch (err) {
+      if (err instanceof Error && err.message && !err.message.includes('JSON')) {
+        throw err
+      }
     }
-    throw new Error(detail)
+    throw i18nError('error.stt', response.status)
   }
   const data = (await response.json()) as { text: string }
   return data.text

@@ -1,3 +1,4 @@
+import json
 import sys
 from pathlib import Path
 
@@ -25,6 +26,16 @@ def test_voice_transcribe_requires_key():
         data={"locale": "ru"},
     )
     assert response.status_code in {400, 413, 422, 502, 503}
+
+
+def test_all_locale_json_have_same_keys_as_ru():
+    i18n = ROOT / "frontend" / "src" / "i18n" / "locales"
+    ru_keys = set(json.loads((i18n / "ru.json").read_text(encoding="utf-8")).keys())
+    for name in ("uz", "kk", "tg", "ky", "hi", "bn"):
+        path = i18n / f"{name}.json"
+        assert path.is_file(), f"missing {name}.json"
+        keys = set(json.loads(path.read_text(encoding="utf-8")).keys())
+        assert keys == ru_keys, f"{name}.json keys mismatch: missing {ru_keys - keys}, extra {keys - ru_keys}"
 
 
 def test_chat_accepts_locale_field():

@@ -1,4 +1,5 @@
 import type { TrendPoint } from '../api/fleet'
+import { useI18n } from '../i18n/I18nContext'
 
 interface AnomalyTrendChartProps {
   points: TrendPoint[]
@@ -6,6 +7,7 @@ interface AnomalyTrendChartProps {
 }
 
 export function AnomalyTrendChart({ points, height = 140 }: AnomalyTrendChartProps) {
+  const { t } = useI18n()
   const width = 320
   const pad = { top: 16, right: 12, bottom: 28, left: 36 }
   const innerW = width - pad.left - pad.right
@@ -15,7 +17,7 @@ export function AnomalyTrendChart({ points, height = 140 }: AnomalyTrendChartPro
   if (numeric.length === 0) {
     return (
       <p className="panel__subtitle" style={{ margin: 0 }}>
-        Нет валидных точек anomaly_score (записи со сбоем пропущены).
+        {t('chart.emptyPoints')}
       </p>
     )
   }
@@ -32,7 +34,7 @@ export function AnomalyTrendChart({ points, height = 140 }: AnomalyTrendChartPro
   const polyline = coords.map((c) => `${c.x},${c.y}`).join(' ')
 
   return (
-    <figure style={{ margin: 0 }} aria-label="График anomaly_score">
+    <figure style={{ margin: 0 }} aria-label={t('chart.anomalyTrend')}>
       <svg width="100%" viewBox={`0 0 ${width} ${height}`} role="img">
         <line
           x1={pad.left}
@@ -53,14 +55,14 @@ export function AnomalyTrendChart({ points, height = 140 }: AnomalyTrendChartPro
           </g>
         ))}
         <text x={pad.left} y={height - 6} fill="var(--text-muted)" fontSize="10">
-          сессии →
+          {t('chart.sessionsAxis')}
         </text>
         <text x={6} y={pad.top + 8} fill="var(--text-muted)" fontSize="10">
           score
         </text>
       </svg>
       <figcaption className="panel__subtitle" style={{ marginTop: '0.35rem' }}>
-        До {numeric.length} валидных точек; сбои записи не интерполируются. Не прогноз отказа.
+        {t('chart.footnote', { count: String(numeric.length) })}
       </figcaption>
     </figure>
   )

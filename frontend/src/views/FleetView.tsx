@@ -54,11 +54,11 @@ export function FleetView({ vehicles, fleetError, onOpenDiagnosis }: FleetViewPr
             <table className="fleet-table">
               <thead>
                 <tr>
-                  <th>Госномер</th>
-                  <th>Гараж</th>
-                  <th>Марка / модель</th>
-                  <th>Двигатель</th>
-                  <th>Сессий</th>
+                  <th>{t('fleet.col.plate')}</th>
+                  <th>{t('fleet.col.garage')}</th>
+                  <th>{t('fleet.col.model')}</th>
+                  <th>{t('fleet.col.engine')}</th>
+                  <th>{t('fleet.col.sessions')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -88,7 +88,7 @@ export function FleetView({ vehicles, fleetError, onOpenDiagnosis }: FleetViewPr
           </div>
           {filtered.length === 0 ? (
             <p className="panel__subtitle" style={{ marginTop: '1rem' }}>
-              Ничего не найдено по запросу «{query}».
+              {t('fleet.empty', { query })}
             </p>
           ) : null}
         </section>

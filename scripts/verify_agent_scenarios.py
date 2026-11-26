@@ -120,7 +120,11 @@ async def run_scenario(
                 elif confirm_body.get("status") == "created":
                     result.notes.append(f"TKT {confirm_body.get('ticket_id')}")
                 elif confirm_body.get("status") == "duplicate":
-                    result.notes.append("заявка уже существовала (duplicate) — допустимо при повторном прогоне")
+                    tid = confirm_body.get("ticket_id")
+                    suffix = f" TKT {tid}" if tid else ""
+                    result.notes.append(
+                        f"заявка уже существовала (duplicate){suffix} — допустимо при повторном прогоне"
+                    )
                 else:
                     result.notes.append(f"confirm: {confirm_body.get('status')} {confirm_body.get('message', '')}")
     elif draft:
@@ -146,6 +150,11 @@ def sum_groq_usage(db_path: Path) -> dict[str, int]:
 async def main() -> int:
     parser = argparse.ArgumentParser(description="Проверка 3 сценариев агента JUDRIVE")
     parser.add_argument("--base-url", default=DEFAULT_BASE)
+    parser.add_argument(
+        "--only",
+        choices=("normal", "anomaly", "check_failed"),
+        help="Выполнить один сценарий (например anomaly — B418HK98/S-0009 + TKT)",
+    )
     args = parser.parse_args()
 
     get_settings.cache_clear()
@@ -165,8 +174,10 @@ async def main() -> int:
             f"manuals={h.get('manuals_index')} groq={h.get('groq_agent')}"
         )
 
-        scenarios = [
-            await run_scenario(
+        all_scenarios = [
+            (
+                "normal",
+                await run_scenario(
                 client,
                 label="normal M333YK47/S-0006",
                 vehicle_id="M333YK47",
@@ -179,7 +190,10 @@ async def main() -> int:
                 expect_draft=False,
                 try_confirm=False,
             ),
-            await run_scenario(
+            ),
+            (
+                "anomaly",
+                await run_scenario(
                 client,
                 label="anomaly B418HK98/S-0009 + ticket",
                 vehicle_id="B418HK98",
@@ -193,7 +207,10 @@ async def main() -> int:
                 expect_draft=True,
                 try_confirm=True,
             ),
-            await run_scenario(
+            ),
+            (
+                "check_failed",
+                await run_scenario(
                 client,
                 label="check_failed P456AT178/S-0003",
                 vehicle_id="P456AT178",
@@ -205,7 +222,12 @@ async def main() -> int:
                 expect_draft=False,
                 try_confirm=False,
             ),
+            ),
         ]
+        if args.only:
+            scenarios = [s for key, s in all_scenarios if key == args.only]
+        else:
+            scenarios = [s for _, s in all_scenarios]
 
     usage_totals = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
     failed = 0
