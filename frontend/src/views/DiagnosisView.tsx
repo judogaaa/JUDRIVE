@@ -11,6 +11,7 @@ import { VehiclePicker } from '../components/VehiclePicker'
 import { VerdictCard } from '../components/VerdictCard'
 import { useI18n } from '../i18n/I18nContext'
 import { formatSessionDateTime } from '../lib/formatLocale'
+import { resolveErrorMessage } from '../lib/i18nError'
 import { latestSessionId } from '../lib/vehicle'
 import type { ChatIntent, ManualSearchIntent } from '../lib/workflow'
 import {
@@ -24,6 +25,7 @@ import {
 interface DiagnosisViewProps {
   vehicles: VehicleSummary[]
   fleetError: string | null
+  onRetryFleet?: () => void
   vehicleId: string
   sessionId: string
   onVehicleChange: (id: string) => void
@@ -37,6 +39,7 @@ interface DiagnosisViewProps {
 export function DiagnosisView({
   vehicles,
   fleetError,
+  onRetryFleet,
   vehicleId,
   sessionId,
   onVehicleChange,
@@ -104,7 +107,7 @@ export function DiagnosisView({
       .catch((err: unknown) => {
         if (generation !== trendGen.current || controller.signal.aborted) return
         setTrendData({ vehicleId, points: [] })
-        setTrendError(err instanceof Error ? err.message : tRef.current('error.unknown'))
+        setTrendError(resolveErrorMessage(tRef.current, err, 'error.unknown'))
       })
     return () => {
       controller.abort()
@@ -150,7 +153,7 @@ export function DiagnosisView({
       setResult(response)
     } catch (err: unknown) {
       if (gen !== requestGen.current) return
-      setError(err instanceof Error ? err.message : tRef.current('error.unknown'))
+      setError(resolveErrorMessage(tRef.current, err, 'error.unknown'))
     } finally {
       if (gen === requestGen.current) {
         inFlightRef.current = false
@@ -270,9 +273,14 @@ export function DiagnosisView({
       </header>
 
       {fleetError ? (
-        <p className="panel__error" role="alert">
-          {fleetError}
-        </p>
+        <div className="panel__error" role="alert">
+          <span>{fleetError}</span>
+          {onRetryFleet ? (
+            <button type="button" className="btn btn--secondary" onClick={onRetryFleet}>
+              {t('history.retry')}
+            </button>
+          ) : null}
+        </div>
       ) : null}
 
       <section className="diag-controls" aria-label={t('diag.title')}>

@@ -4,7 +4,9 @@ import hashlib
 import json
 import logging
 import sqlite3
+from contextlib import contextmanager
 from pathlib import Path
+from typing import Iterator
 
 from app.rag.catalog import MANUAL_SPECS, ManualSpec
 from app.rag.extract import extract_pdf_pages, extraction_profile
@@ -78,10 +80,22 @@ class ManualIndexer:
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
 
     def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self._db_path)
+        conn = sqlite3.connect(self._db_path, timeout=30)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys=ON")
         return conn
+
+    @contextmanager
+    def _connection(self) -> Iterator[sqlite3.Connection]:
+        conn = self._connect()
+        try:
+            yield conn
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
 
     def missing_files(self) -> list[str]:
         return [spec.filename for spec in MANUAL_SPECS if not (self._pdf_dir / spec.filename).is_file()]
@@ -92,7 +106,7 @@ class ManualIndexer:
         fingerprint = _corpus_fingerprint(self._pdf_dir)
         if not self._db_path.is_file():
             return False
-        with self._connect() as conn:
+        with self._connection() as conn:
             conn.executescript(SCHEMA_SQL)
             row = conn.execute(
                 "SELECT value FROM index_meta WHERE key = 'corpus_sha256'",
@@ -116,7 +130,7 @@ class ManualIndexer:
         fingerprint = _corpus_fingerprint(self._pdf_dir)
         stats = {"documents": 0, "pages": 0, "ocr_pages": 0, "sparse_pages": 0}
 
-        with self._connect() as conn:
+        with self._connection() as conn:
             conn.executescript(SCHEMA_SQL)
             conn.execute("DELETE FROM pages")
             conn.execute("DELETE FROM documents")
@@ -193,7 +207,7 @@ class ManualIndexer:
             status["pages"] = 0
             return status
 
-        with self._connect() as conn:
+        with self._connection() as conn:
             conn.executescript(SCHEMA_SQL)
             status["documents"] = conn.execute("SELECT COUNT(*) AS c FROM documents").fetchone()["c"]
             status["pages"] = conn.execute("SELECT COUNT(*) AS c FROM pages").fetchone()["c"]

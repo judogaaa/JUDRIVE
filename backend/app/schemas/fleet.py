@@ -15,6 +15,9 @@ class VehicleSummary(BaseModel):
     engine_model: str
     fuel: str
     sessions: list[SessionSummary] = Field(default_factory=list)
+    latest_session_id: str | None = None
+    latest_status: str | None = None
+    latest_signal_quality: str | None = None
 
 
 class DiagnosisHistoryPoint(BaseModel):

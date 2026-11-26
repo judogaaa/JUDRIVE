@@ -24,6 +24,7 @@ export function VehicleInsightPanel({ vehicleId, onClose, onOpenDiagnosis, onOpe
   const [reason, setReason] = useState('')
   const [ack, setAck] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [retry, setRetry] = useState(0)
   const savingRef = useRef(false)
   const vehicleRef = useRef(vehicleId)
   vehicleRef.current = vehicleId
@@ -54,7 +55,7 @@ export function VehicleInsightPanel({ vehicleId, onClose, onOpenDiagnosis, onOpe
     return () => {
       cancelled = true
     }
-  }, [vehicleId, t])
+  }, [vehicleId, t, retry])
 
   const saveRecommendation = async () => {
     if (!row || row.vehicle_id !== vehicleId || !ack || reason.trim().length < 10 || savingRef.current) return
@@ -98,7 +99,14 @@ export function VehicleInsightPanel({ vehicleId, onClose, onOpenDiagnosis, onOpe
         </header>
 
         {loading ? <p className="panel__subtitle">{t('insight.loading')}</p> : null}
-        {error ? <p className="panel__error">{error}</p> : null}
+        {error ? (
+          <div className="panel__error" role="alert">
+            <span>{error}</span>
+            <button type="button" className="btn btn--secondary" onClick={() => setRetry((value) => value + 1)}>
+              {t('history.retry')}
+            </button>
+          </div>
+        ) : null}
 
         {row?.vehicle_id === vehicleId ? (
           <>

@@ -6,16 +6,14 @@ const READ_TIMEOUT_MS = 20_000
 const DIAGNOSIS_TIMEOUT_MS = 45_000
 
 async function parseError(response: Response): Promise<never> {
+  let detail: string | undefined
   try {
     const body = (await response.json()) as ApiErrorBody
-    if (typeof body.detail === 'string') {
-      throw new Error(body.detail)
-    }
-  } catch (err) {
-    if (err instanceof Error && !err.message.startsWith('@i18n:')) {
-      throw err
-    }
+    if (typeof body.detail === 'string' && body.detail.trim()) detail = body.detail
+  } catch {
+    /* non-JSON gateway/error page */
   }
+  if (detail) throw new Error(detail)
   throw i18nError('error.http', response.status)
 }
 
@@ -28,7 +26,12 @@ function timedSignal(ms: number): AbortSignal {
 
 async function request(input: RequestInfo | URL, init: RequestInit, timeoutMs: number): Promise<Response> {
   try {
-    return await fetch(input, { ...init, signal: init.signal ?? timedSignal(timeoutMs) })
+    const timeoutSignal = timedSignal(timeoutMs)
+    const signal =
+      init.signal && typeof AbortSignal.any === 'function'
+        ? AbortSignal.any([init.signal, timeoutSignal])
+        : init.signal ?? timeoutSignal
+    return await fetch(input, { ...init, signal })
   } catch (err) {
     if (err instanceof DOMException && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
       throw i18nError('error.timeout')

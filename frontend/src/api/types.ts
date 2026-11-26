@@ -15,6 +15,9 @@ export interface VehicleSummary {
   engine_model: string
   fuel: string
   sessions: SessionSummary[]
+  latest_session_id?: string | null
+  latest_status?: string | null
+  latest_signal_quality?: string | null
 }
 
 export interface DiagnoseResponse {

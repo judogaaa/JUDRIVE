@@ -288,4 +288,5 @@ export const ru: Record<TranslationKey, string> = {
   'verdict.related.title': 'Подходящие источники',
   'verdict.related.hint': 'Возможные материалы для проверки по текущему двигателю, не подтверждение неисправности.',
   'verdict.reviewPriority': 'Приоритет проверки (не прогноз отказа)',
+  'fleet.col.status': 'Статус',
 }

@@ -23,7 +23,7 @@ const QUICK_QUERIES = [
 const GENERAL_INSPECTION_QUERY = 'осмотр двигателя техническое обслуживание'
 
 export function ManualSearchPanel({ engineModel, searchIntent, onSearchIntentConsumed, onAskInChat }: ManualSearchPanelProps) {
-  const { t } = useI18n()
+  const { locale, t } = useI18n()
   const [query, setQuery] = useState(QUICK_QUERIES[0])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -158,7 +158,7 @@ export function ManualSearchPanel({ engineModel, searchIntent, onSearchIntentCon
       {refusal ? (
         <div className="manual-refusal" role="status">
           <strong>{t('manual.refusalTitle')}</strong>
-          <p>{payload?.message}</p>
+          {locale === 'ru' && payload?.message ? <p>{payload.message}</p> : null}
           {canOfferGeneral ? (
             <button
               type="button"

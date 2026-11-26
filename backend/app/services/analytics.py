@@ -195,7 +195,7 @@ def _classify_vehicle(
     elif band == "medium":
         priority += 40
 
-    confirmed = False  # This is a documented recommendation, not an operational restriction.
+    confirmed = bool(quarantine and category == "quarantine")  # Saved only after a chief's explicit acknowledgement.
     return VehicleFleetRow(
         vehicle_id=vehicle["vehicle_id"],
         garage_no=vehicle["garage_no"],

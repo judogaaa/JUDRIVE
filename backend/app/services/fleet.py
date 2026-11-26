@@ -25,6 +25,7 @@ class FleetService:
                 )
                 for s in item["sessions"]
             ]
+            ordered_sessions = sorted(item["sessions"], key=lambda s: s["checked_at"])
             vehicles.append(
                 VehicleSummary(
                     vehicle_id=item["vehicle_id"],
@@ -35,6 +36,9 @@ class FleetService:
                     engine_model=item["engine_model"],
                     fuel=item["fuel"],
                     sessions=sessions,
+                    latest_session_id=(ordered_sessions[-1]["session_id"] if ordered_sessions else None),
+                    latest_status=(ordered_sessions[-1].get("status") if ordered_sessions else None),
+                    latest_signal_quality=(ordered_sessions[-1].get("signal_quality") if ordered_sessions else None),
                 )
             )
             for session in item["sessions"]:

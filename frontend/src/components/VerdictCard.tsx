@@ -165,7 +165,7 @@ export function VerdictCard({ result, loading, error, vehicleId, actions, onRetr
             <p className="verdict-card__quality">{t('verdict.signal.warningNote')}</p>
           ) : null}
           {effective === 'anomaly' && result.review_priority ? (
-            <p className="verdict-card__quality">
+            <p className="verdict-card__priority">
               <strong>{t('verdict.reviewPriority')}:</strong> {t(`ticket.urgency.${result.review_priority}`)}
             </p>
           ) : null}

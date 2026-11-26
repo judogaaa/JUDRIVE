@@ -288,4 +288,5 @@ export const uz: Record<TranslationKey, string> = {
   'verdict.related.title': 'Mos manbalar',
   'verdict.related.hint': 'Joriy dvigatelni tekshirish uchun mumkin bo‘lgan manbalar; nosozlik tasdig‘i emas.',
   'verdict.reviewPriority': 'Tekshiruv ustuvorligi (nosozlik prognozi emas)',
+  'fleet.col.status': 'Holat',
 }

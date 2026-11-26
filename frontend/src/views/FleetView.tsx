@@ -8,32 +8,50 @@ import { displayVehicleModel, matchesVehicle } from '../lib/vehicle'
 interface FleetViewProps {
   vehicles: VehicleSummary[]
   fleetError: string | null
+  onRetryFleet?: () => void
   onOpenDiagnosis: (vehicleId: string, sessionId?: string) => void
   onOpenTickets?: (vehicleId: string) => void
 }
 
 type SortKey = 'plate' | 'sessions' | 'make'
 
-export function FleetView({ vehicles, fleetError, onOpenDiagnosis, onOpenTickets }: FleetViewProps) {
+export function FleetView({ vehicles, fleetError, onRetryFleet, onOpenDiagnosis, onOpenTickets }: FleetViewProps) {
   const { t, locale } = useI18n()
   const [query, setQuery] = useState('')
   const [engineFilter, setEngineFilter] = useState('')
   const [makeFilter, setMakeFilter] = useState('')
   const [typeFilter, setTypeFilter] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
   const [sort, setSort] = useState<SortKey>('plate')
   const [desc, setDesc] = useState(false)
   const [selected, setSelected] = useState<string | null>(null)
+
+  const fleetStatus = (vehicle: VehicleSummary): 'normal' | 'anomaly' | 'failed' | 'unknown' => {
+    if (vehicle.latest_signal_quality === 'bad' || vehicle.latest_status === 'check_failed') return 'failed'
+    if (vehicle.latest_status === 'anomaly') return 'anomaly'
+    if (vehicle.latest_status === 'normal') return 'normal'
+    return 'unknown'
+  }
+  const statusLabel = (status: ReturnType<typeof fleetStatus>) => {
+    if (status === 'normal') return t('verdict.normal.title')
+    if (status === 'anomaly') return t('verdict.anomaly.title')
+    if (status === 'failed') return t('verdict.failed.title')
+    return '—'
+  }
 
   const options = useMemo(() => {
     const engines = new Map<string, number>()
     const makes = new Map<string, number>()
     const types = new Map<string, number>()
+    const statuses = new Map<string, number>()
     for (const vehicle of vehicles) {
       engines.set(vehicle.engine_model, (engines.get(vehicle.engine_model) ?? 0) + 1)
       makes.set(vehicle.make, (makes.get(vehicle.make) ?? 0) + 1)
       types.set(vehicle.vehicle_type, (types.get(vehicle.vehicle_type) ?? 0) + 1)
+      const status = fleetStatus(vehicle)
+      statuses.set(status, (statuses.get(status) ?? 0) + 1)
     }
-    return { engines, makes, types }
+    return { engines, makes, types, statuses }
   }, [vehicles])
 
   const filtered = useMemo(() => {
@@ -42,6 +60,7 @@ export function FleetView({ vehicles, fleetError, onOpenDiagnosis, onOpenTickets
     if (engineFilter) rows = rows.filter((vehicle) => vehicle.engine_model === engineFilter)
     if (makeFilter) rows = rows.filter((vehicle) => vehicle.make === makeFilter)
     if (typeFilter) rows = rows.filter((vehicle) => vehicle.vehicle_type === typeFilter)
+    if (statusFilter) rows = rows.filter((vehicle) => fleetStatus(vehicle) === statusFilter)
     if (q) rows = rows.filter((vehicle) => matchesVehicle(vehicle, q))
     const copy = [...rows]
     copy.sort((a, b) => {
@@ -51,15 +70,16 @@ export function FleetView({ vehicles, fleetError, onOpenDiagnosis, onOpenTickets
       return a.vehicle_id.localeCompare(b.vehicle_id) * direction
     })
     return copy
-  }, [query, engineFilter, makeFilter, typeFilter, sort, desc, vehicles])
+  }, [query, engineFilter, makeFilter, typeFilter, statusFilter, sort, desc, vehicles])
 
   const active = vehicles.find((vehicle) => vehicle.vehicle_id === selected) ?? null
-  const hasFilters = Boolean(query || engineFilter || makeFilter || typeFilter)
+  const hasFilters = Boolean(query || engineFilter || makeFilter || typeFilter || statusFilter)
   const reset = () => {
     setQuery('')
     setEngineFilter('')
     setMakeFilter('')
     setTypeFilter('')
+    setStatusFilter('')
   }
 
   const toggleSort = (key: SortKey) => {
@@ -86,9 +106,14 @@ export function FleetView({ vehicles, fleetError, onOpenDiagnosis, onOpenTickets
       </header>
 
       {fleetError ? (
-        <p className="panel__error" role="alert">
-          {fleetError}
-        </p>
+        <div className="panel__error" role="alert">
+          <span>{fleetError}</span>
+          {onRetryFleet ? (
+            <button type="button" className="btn btn--secondary" onClick={onRetryFleet}>
+              {t('history.retry')}
+            </button>
+          ) : null}
+        </div>
       ) : (
         <section className="panel fleet-panel">
           <div className="toolbar-bar">
@@ -137,6 +162,17 @@ export function FleetView({ vehicles, fleetError, onOpenDiagnosis, onOpenTickets
                 ))}
               </select>
             </label>
+            <label className="field">
+              <span>{t('fleet.col.status')}</span>
+              <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+                <option value="">{t('chief.filter.all')} ({vehicles.length})</option>
+                {(['normal', 'anomaly', 'failed'] as const).map((status) => (
+                  <option key={status} value={status}>
+                    {statusLabel(status)} ({options.statuses.get(status) ?? 0})
+                  </option>
+                ))}
+              </select>
+            </label>
             <button
               type="button"
               className="btn btn--secondary fleet-reset"
@@ -167,6 +203,7 @@ export function FleetView({ vehicles, fleetError, onOpenDiagnosis, onOpenTickets
                     </button>
                   </th>
                   <th>{t('fleet.col.engine')}</th>
+                  <th>{t('fleet.col.status')}</th>
                   <th>
                     <button type="button" className="sort-btn" onClick={() => toggleSort('sessions')}>
                       {t('fleet.col.sessions')} {sortMark('sessions')}
@@ -194,6 +231,11 @@ export function FleetView({ vehicles, fleetError, onOpenDiagnosis, onOpenTickets
                     <td>{vehicle.garage_no}</td>
                     <td>{displayVehicleModel(vehicle.make, vehicle.model)}</td>
                     <td>{vehicle.engine_model}</td>
+                    <td>
+                      <span className={`badge badge--${fleetStatus(vehicle) === 'normal' ? 'normal' : fleetStatus(vehicle) === 'failed' || fleetStatus(vehicle) === 'anomaly' ? 'attention' : 'rerecord'}`}>
+                        {statusLabel(fleetStatus(vehicle))}
+                      </span>
+                    </td>
                     <td>{vehicle.sessions.length}</td>
                     <td>
                       <button
@@ -244,6 +286,10 @@ export function FleetView({ vehicles, fleetError, onOpenDiagnosis, onOpenTickets
               <span className="vehicle-summary__item">
                 <span>{t('chief.filter.vehicleType')}</span>
                 {active.vehicle_type}
+              </span>
+              <span className="vehicle-summary__item">
+                <span>{t('fleet.col.status')}</span>
+                {statusLabel(fleetStatus(active))}
               </span>
             </div>
 

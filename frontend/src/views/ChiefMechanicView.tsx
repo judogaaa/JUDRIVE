@@ -8,6 +8,7 @@ import {
 } from '../api/fleet'
 import { VehicleInsightPanel } from '../components/VehicleInsightPanel'
 import { useI18n } from '../i18n/I18nContext'
+import { resolveErrorMessage } from '../lib/i18nError'
 
 interface ChiefMechanicViewProps {
   onOpenDiagnosis: (vehicleId: string, sessionId?: string) => void
@@ -75,7 +76,7 @@ export function ChiefMechanicView({ onOpenDiagnosis, onOpenTickets }: ChiefMecha
           setAuthed(false)
           return
         }
-        setError(err instanceof Error ? err.message : t('error.dashboard'))
+        setError(resolveErrorMessage(t, err, 'error.dashboard'))
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -104,7 +105,14 @@ export function ChiefMechanicView({ onOpenDiagnosis, onOpenTickets }: ChiefMecha
         <p>{t('chief.subtitle')}</p>
       </header>
 
-      {error ? <p className="panel__error">{error}</p> : null}
+      {error ? (
+        <div className="panel__error" role="alert">
+          <span>{error}</span>
+          <button type="button" className="btn btn--secondary" onClick={() => setRevision((value) => value + 1)}>
+            {t('history.retry')}
+          </button>
+        </div>
+      ) : null}
       {loading && !data ? <p className="panel__subtitle">{t('chief.loading')}</p> : null}
 
       {data ? (
@@ -450,26 +458,38 @@ function ChiefLogin({ onSuccess }: { onSuccess: () => void }) {
   return (
     <div className="auth-screen">
       <section className="panel auth-card">
-      <h1>{t('auth.title')}</h1>
-      <p className="panel__subtitle">{t('chief.subtitle')}</p>
-      <label className="field">
-        <span>{t('auth.user')}</span>
-        <input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" />
-      </label>
-      <label className="field">
-        <span>{t('auth.password')}</span>
-        <input
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          autoComplete="current-password"
-        />
-      </label>
-      {error ? <p className="panel__error">{error}</p> : null}
-      <button type="button" className="btn btn--primary" disabled={busy || !username || !password} onClick={() => void submit()}>
-        {t('auth.submit')}
-      </button>
-    </section>
+        <form
+          className="auth-card__form"
+          onSubmit={(event) => {
+            event.preventDefault()
+            if (!busy && username && password) void submit()
+          }}
+        >
+          <h1>{t('auth.title')}</h1>
+          <p className="panel__subtitle">{t('chief.subtitle')}</p>
+          <label className="field">
+            <span>{t('auth.user')}</span>
+            <input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" />
+          </label>
+          <label className="field">
+            <span>{t('auth.password')}</span>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
+            />
+          </label>
+          {error ? <p className="panel__error">{error}</p> : null}
+          <button
+            type="submit"
+            className="btn btn--primary"
+            disabled={busy || !username || !password}
+          >
+            {t('auth.submit')}
+          </button>
+        </form>
+      </section>
     </div>
   )
 }

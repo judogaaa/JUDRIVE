@@ -286,3 +286,4 @@ export type TranslationKey =
   | 'verdict.related.title'
   | 'verdict.related.hint'
   | 'verdict.reviewPriority'
+  | 'fleet.col.status'

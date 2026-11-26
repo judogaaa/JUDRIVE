@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import sqlite3
 import threading
+from contextlib import contextmanager
 from pathlib import Path
+from typing import Iterator
 
 from app.rag.catalog import SPECS_BY_ID, allowed_doc_ids, known_engine_models
 from app.rag.indexer import ManualIndexer
@@ -25,9 +27,17 @@ class ManualRagService:
             return self._indexer.ensure_index(force=force)
 
     def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self._indexer._db_path)
+        conn = sqlite3.connect(self._indexer._db_path, timeout=30)
         conn.row_factory = sqlite3.Row
         return conn
+
+    @contextmanager
+    def _connection(self) -> Iterator[sqlite3.Connection]:
+        conn = self._connect()
+        try:
+            yield conn
+        finally:
+            conn.close()
 
     def search(self, engine_model: str, query: str, *, limit: int = 5) -> dict:
         query = query.strip()
@@ -71,7 +81,7 @@ class ManualRagService:
                 **build_info,
             }
 
-        with self._connect() as conn:
+        with self._connection() as conn:
             hits = ManualSearch(conn).search(engine_model, query, limit=limit)
 
         if not hits:
@@ -108,7 +118,7 @@ class ManualRagService:
         }
 
     def get_evidence(self, page_id: str, *, full_text: bool = False) -> dict | None:
-        with self._connect() as conn:
+        with self._connection() as conn:
             row = ManualSearch(conn).get_page(page_id)
         if not row:
             return None

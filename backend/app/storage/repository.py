@@ -3,8 +3,10 @@ from __future__ import annotations
 import json
 import sqlite3
 import uuid
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Iterator
 
 from app.storage.schema import APP_SCHEMA_SQL
 
@@ -20,17 +22,30 @@ class AppRepository:
         self._init_schema()
 
     def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self._db_path)
+        conn = sqlite3.connect(self._db_path, timeout=30)
         conn.row_factory = sqlite3.Row
         return conn
 
+    @contextmanager
+    def _connection(self) -> Iterator[sqlite3.Connection]:
+        """Commit/rollback and always close; sqlite's own context manager does not close."""
+        conn = self._connect()
+        try:
+            yield conn
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
     def _init_schema(self) -> None:
-        with self._connect() as conn:
+        with self._connection() as conn:
             conn.executescript(APP_SCHEMA_SQL)
 
     def create_conversation(self, vehicle_id: str, session_id: str, engine_model: str, context_hash: str) -> str:
         conversation_id = str(uuid.uuid4())
-        with self._connect() as conn:
+        with self._connection() as conn:
             conn.execute(
                 """
                 INSERT INTO chat_conversations (id, vehicle_id, session_id, engine_model, context_hash, created_at)
@@ -42,7 +57,7 @@ class AppRepository:
         return conversation_id
 
     def get_conversation(self, conversation_id: str) -> sqlite3.Row | None:
-        with self._connect() as conn:
+        with self._connection() as conn:
             return conn.execute(
                 "SELECT * FROM chat_conversations WHERE id = ?",
                 (conversation_id,),
@@ -59,7 +74,7 @@ class AppRepository:
         draft_id: str | None = None,
     ) -> str:
         message_id = str(uuid.uuid4())
-        with self._connect() as conn:
+        with self._connection() as conn:
             conn.execute(
                 """
                 INSERT INTO chat_messages (id, conversation_id, role, content, tool_trace, sources, draft_id, created_at)
@@ -80,7 +95,7 @@ class AppRepository:
         return message_id
 
     def list_messages(self, conversation_id: str) -> list[sqlite3.Row]:
-        with self._connect() as conn:
+        with self._connection() as conn:
             return conn.execute(
                 "SELECT * FROM chat_messages WHERE conversation_id = ? ORDER BY created_at",
                 (conversation_id,),
@@ -97,7 +112,7 @@ class AppRepository:
         draft_id = str(uuid.uuid4())
         nonce = str(uuid.uuid4())
         now = _now()
-        with self._connect() as conn:
+        with self._connection() as conn:
             conn.execute(
                 """
                 INSERT INTO ticket_drafts
@@ -121,11 +136,11 @@ class AppRepository:
         return {"draft_id": draft_id, "confirm_nonce": nonce, "version": 1, "status": "draft", "payload": payload}
 
     def get_draft(self, draft_id: str) -> sqlite3.Row | None:
-        with self._connect() as conn:
+        with self._connection() as conn:
             return conn.execute("SELECT * FROM ticket_drafts WHERE draft_id = ?", (draft_id,)).fetchone()
 
     def invalidate_drafts_for_context(self, vehicle_id: str, session_id: str) -> None:
-        with self._connect() as conn:
+        with self._connection() as conn:
             conn.execute(
                 """
                 UPDATE ticket_drafts
@@ -137,7 +152,7 @@ class AppRepository:
             conn.commit()
 
     def mark_draft_submitted(self, draft_id: str) -> None:
-        with self._connect() as conn:
+        with self._connection() as conn:
             conn.execute(
                 "UPDATE ticket_drafts SET status = 'submitted', updated_at = ? WHERE draft_id = ?",
                 (_now(), draft_id),
@@ -146,7 +161,7 @@ class AppRepository:
 
     def claim_draft_sending(self, draft_id: str, confirm_nonce: str) -> bool:
         """Атомарно переводит черновик draft → sending до вызова ТОиР."""
-        with self._connect() as conn:
+        with self._connection() as conn:
             cur = conn.execute(
                 """
                 UPDATE ticket_drafts
@@ -159,7 +174,7 @@ class AppRepository:
             return cur.rowcount == 1
 
     def set_draft_status(self, draft_id: str, status: str) -> None:
-        with self._connect() as conn:
+        with self._connection() as conn:
             conn.execute(
                 "UPDATE ticket_drafts SET status = ?, updated_at = ? WHERE draft_id = ?",
                 (status, _now(), draft_id),
@@ -176,7 +191,7 @@ class AppRepository:
         """Одна активная отправка на пару ТС/сессия до ответа ТОиР."""
         local_id = str(uuid.uuid4())
         try:
-            with self._connect() as conn:
+            with self._connection() as conn:
                 conn.execute(
                     """
                     INSERT INTO ticket_submissions
@@ -206,7 +221,7 @@ class AppRepository:
         ticket_id: str | None = None,
         error_detail: str | None = None,
     ) -> None:
-        with self._connect() as conn:
+        with self._connection() as conn:
             conn.execute(
                 """
                 UPDATE ticket_submissions
@@ -218,7 +233,7 @@ class AppRepository:
             conn.commit()
 
     def has_blocking_submission(self, vehicle_id: str, session_id: str) -> sqlite3.Row | None:
-        with self._connect() as conn:
+        with self._connection() as conn:
             return conn.execute(
                 """
                 SELECT * FROM ticket_submissions
@@ -231,7 +246,7 @@ class AppRepository:
             ).fetchone()
 
     def has_submitted_ticket(self, vehicle_id: str, session_id: str) -> bool:
-        with self._connect() as conn:
+        with self._connection() as conn:
             row = conn.execute(
                 """
                 SELECT 1 FROM ticket_submissions
@@ -254,7 +269,7 @@ class AppRepository:
     ) -> str:
         local_id = str(uuid.uuid4())
         try:
-            with self._connect() as conn:
+            with self._connection() as conn:
                 conn.execute(
                     """
                     INSERT INTO ticket_submissions
@@ -287,7 +302,7 @@ class AppRepository:
         total_tokens: int,
         latency_ms: int,
     ) -> None:
-        with self._connect() as conn:
+        with self._connection() as conn:
             conn.execute(
                 """
                 INSERT INTO groq_usage (conversation_id, prompt_tokens, completion_tokens, total_tokens, latency_ms, created_at)
@@ -298,7 +313,7 @@ class AppRepository:
             conn.commit()
 
     def list_tickets(self, vehicle_id: str | None = None) -> list[dict]:
-        with self._connect() as conn:
+        with self._connection() as conn:
             if vehicle_id:
                 rows = conn.execute(
                     """
@@ -314,7 +329,7 @@ class AppRepository:
         return [dict(row) for row in rows]
 
     def quarantine_recommendation(self, vehicle_id: str, session_id: str) -> dict | None:
-        with self._connect() as conn:
+        with self._connection() as conn:
             row = conn.execute(
                 "SELECT * FROM chief_quarantine_events WHERE vehicle_id=? AND session_id=? ORDER BY id DESC LIMIT 1",
                 (vehicle_id, session_id),
@@ -323,7 +338,7 @@ class AppRepository:
 
     def record_quarantine_recommendation(self, vehicle_id: str, session_id: str,
                                          active: bool, reason: str, chief_username: str) -> None:
-        with self._connect() as conn:
+        with self._connection() as conn:
             conn.execute(
                 "INSERT INTO chief_quarantine_events(vehicle_id, session_id, active, reason, chief_username, created_at) VALUES (?, ?, ?, ?, ?, ?)",
                 (vehicle_id, session_id, int(active), reason, chief_username, _now()),
@@ -332,7 +347,7 @@ class AppRepository:
 
     def recover_interrupted_submissions(self) -> None:
         """Single-worker startup recovery: never resend an interrupted external POST."""
-        with self._connect() as conn:
+        with self._connection() as conn:
             conn.execute("""
                 UPDATE ticket_drafts
                 SET status='unknown', updated_at=?

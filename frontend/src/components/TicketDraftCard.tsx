@@ -25,7 +25,7 @@ function TicketDraftBody({
   draft: DraftPayload
   onConfirmed: (ticketId: string) => void
 }) {
-  const { t } = useI18n()
+  const { locale, t } = useI18n()
   const confirming = useRef(false)
   const [phase, setPhase] = useState<'idle' | 'sending' | 'created' | 'duplicate' | 'unknown' | 'blocked'>('idle')
   const [error, setError] = useState<string | null>(null)
@@ -62,21 +62,21 @@ function TicketDraftBody({
           setTicketId(result.ticket_id)
           onConfirmed(result.ticket_id)
         }
-        setError(result.message || t('ticket.status.duplicate'))
+        setError(t('ticket.status.duplicate'))
         return
       }
       if (result.status === 'unknown') {
         setPhase('unknown')
-        setError(result.message || t('ticket.status.unknown'))
+        setError(t('ticket.status.unknown'))
         return
       }
       if (result.status === 'refused' || result.status === 'stale') {
         setPhase('blocked')
-        setError(result.message || t('ticket.confirmBlocked'))
+        setError(t('ticket.confirmBlocked'))
         return
       }
       setPhase('idle')
-      setError(result.message || t('error.confirm'))
+      setError(locale === 'ru' ? result.message || t('error.confirm') : t('error.confirm'))
     } catch (err: unknown) {
       setPhase('idle')
       setError(resolveErrorMessage(t, err, 'error.confirm'))

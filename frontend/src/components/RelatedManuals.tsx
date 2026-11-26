@@ -6,7 +6,7 @@ import { SourceDrawer } from './SourceDrawer'
 
 /** Search data only; these are leads for investigation, not a diagnosis or repair authorization. */
 export function RelatedManuals({ engineModel, query }: { engineModel: string; query: string }) {
-  const { t } = useI18n()
+  const { locale, t } = useI18n()
   const [data, setData] = useState<ManualSearchResponse | null>(null)
   const [error, setError] = useState(false)
   const [retry, setRetry] = useState(0)
@@ -26,11 +26,14 @@ export function RelatedManuals({ engineModel, query }: { engineModel: string; qu
       <p className="panel__subtitle">{t('verdict.related.hint')}</p>
       {!data && !error && <p className="panel__subtitle">{t('manual.searching')}</p>}
       {error || (data && !['ok', 'not_found'].includes(data.status)) ? (
-        <button type="button" className="btn btn--secondary" onClick={() => setRetry((n) => n + 1)}>
-          <RotateCcw size={15} aria-hidden /> {t('history.retry')}
-        </button>
+        <>
+          {locale === 'ru' && data?.message ? <p className="panel__subtitle">{data.message}</p> : null}
+          <button type="button" className="btn btn--secondary" onClick={() => setRetry((n) => n + 1)}>
+            <RotateCcw size={15} aria-hidden /> {t('history.retry')}
+          </button>
+        </>
       ) : data?.status === 'not_found' ? (
-        <p className="panel__subtitle">{t('manual.refusalTitle')}</p>
+        <p className="panel__subtitle">{locale === 'ru' ? data.message || t('manual.refusalTitle') : t('manual.refusalTitle')}</p>
       ) : (
         <ul className="history-list" style={{ marginTop: '0.75rem' }}>
           {data?.results.slice(0, 3).map((hit) => (

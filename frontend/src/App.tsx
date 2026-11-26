@@ -11,6 +11,7 @@ import { ManualsView } from './views/ManualsView'
 import { TicketsView } from './views/TicketsView'
 import type { ChatIntent, ManualSearchIntent } from './lib/workflow'
 import { latestSessionId } from './lib/vehicle'
+import { resolveErrorMessage } from './lib/i18nError'
 
 export default function App() {
   const { t } = useI18n()
@@ -18,6 +19,7 @@ export default function App() {
   const [view, setView] = useState<AppView>('diagnosis')
   const [vehicles, setVehicles] = useState<VehicleSummary[]>([])
   const [fleetError, setFleetError] = useState<string | null>(null)
+  const [fleetRevision, setFleetRevision] = useState(0)
   const [vehicleId, setVehicleId] = useState('')
   const [sessionId, setSessionId] = useState('')
   const [manualIntent, setManualIntent] = useState<ManualSearchIntent | null>(null)
@@ -66,6 +68,7 @@ export default function App() {
       .then((list) => {
         if (cancelled) return
         setVehicles(list)
+        setFleetError(null)
         // Initial selection only. Changing language must not reset the mechanic's context.
         if (!selectionRef.current.vehicleId && list.length > 0) {
           const first = list[0]
@@ -75,12 +78,17 @@ export default function App() {
       })
       .catch((err: unknown) => {
         if (cancelled) return
-        setFleetError(err instanceof Error ? err.message : tRef.current('error.fleet'))
+        setFleetError(resolveErrorMessage(tRef.current, err, 'error.fleet'))
       })
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [fleetRevision])
+
+  const retryFleet = () => {
+    setFleetError(null)
+    setFleetRevision((value) => value + 1)
+  }
 
   const openDiagnosisForVehicle = (id: string, sessionOverride?: string) => {
     setVehicleId(id)
@@ -100,6 +108,7 @@ export default function App() {
         <DiagnosisView
           vehicles={vehicles}
           fleetError={fleetError}
+          onRetryFleet={retryFleet}
           vehicleId={vehicleId}
           sessionId={sessionId}
           onVehicleChange={setVehicleId}
@@ -133,6 +142,7 @@ export default function App() {
         <FleetView
           vehicles={vehicles}
           fleetError={fleetError}
+          onRetryFleet={retryFleet}
           onOpenDiagnosis={openDiagnosisForVehicle}
           onOpenTickets={openTicketsForVehicle}
         />

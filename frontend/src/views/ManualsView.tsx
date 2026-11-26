@@ -29,6 +29,7 @@ export function ManualsView({ engineModel, searchIntent, onSearchIntentConsumed,
   const [engines, setEngines] = useState<{ engine_model: string; documents: CatalogDoc[] }[]>([])
   const [catalogLoading, setCatalogLoading] = useState(true)
   const [catalogError, setCatalogError] = useState(false)
+  const [catalogRevision, setCatalogRevision] = useState(0)
   const [engine, setEngine] = useState(engineModel ?? '')
   const [catalogQuery, setCatalogQuery] = useState('')
   const [tab, setTab] = useState<'all' | 'fav' | 'recent'>('all')
@@ -70,7 +71,7 @@ export function ManualsView({ engineModel, searchIntent, onSearchIntentConsumed,
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [catalogRevision])
 
   // Follow the vehicle selected in diagnosis unless the mechanic is already in the same engine group.
   useEffect(() => {
@@ -80,8 +81,16 @@ export function ManualsView({ engineModel, searchIntent, onSearchIntentConsumed,
 
   const docs = useMemo(() => {
     const rows = engines.find((row) => row.engine_model === engine)?.documents ?? []
-    const selected =
-      tab === 'fav' ? rows.filter((doc) => favorites.includes(doc.doc_id)) : tab === 'recent' ? rows.filter((doc) => recent.includes(doc.doc_id)) : rows
+    let selected: CatalogDoc[]
+    if (tab === 'fav') {
+      const byId = new Map(rows.map((doc) => [doc.doc_id, doc]))
+      selected = favorites.map((id) => byId.get(id)).filter((doc): doc is CatalogDoc => Boolean(doc))
+    } else if (tab === 'recent') {
+      const byId = new Map(rows.map((doc) => [doc.doc_id, doc]))
+      selected = recent.map((id) => byId.get(id)).filter((doc): doc is CatalogDoc => Boolean(doc))
+    } else {
+      selected = rows
+    }
     const query = catalogQuery.trim().toLowerCase()
     if (!query) return selected
     return selected.filter((doc) => doc.title.toLowerCase().includes(query) || doc.doc_id.toLowerCase().includes(query))
@@ -164,7 +173,14 @@ export function ManualsView({ engineModel, searchIntent, onSearchIntentConsumed,
         </div>
 
         {catalogLoading ? <p className="panel__subtitle">{t('tickets.loading')}</p> : null}
-        {catalogError ? <p className="panel__error">{t('error.manualsCatalog')}</p> : null}
+        {catalogError ? (
+          <div className="panel__error" role="alert">
+            <span>{t('error.manualsCatalog')}</span>
+            <button type="button" className="btn btn--secondary" onClick={() => setCatalogRevision((value) => value + 1)}>
+              {t('history.retry')}
+            </button>
+          </div>
+        ) : null}
         {!catalogLoading && !catalogError ? (
           <ul className="manual-catalog">
             {docs.map((doc) => (

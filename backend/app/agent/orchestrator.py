@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 
 from fastapi import HTTPException
 
@@ -16,6 +17,9 @@ from app.services.analytics import diagnosis_review_priority
 from app.services.fleet import FleetService
 from app.services.mock_clients import MockMlClient
 from app.storage.repository import AppRepository
+
+
+logger = logging.getLogger(__name__)
 
 
 class AgentOrchestrator:
@@ -143,8 +147,10 @@ class AgentOrchestrator:
                 max_steps=self._settings.agent_max_tool_steps,
             )
         except RuntimeError as exc:
+            logger.warning("Groq rate limit or runtime error: %s", exc)
             raise HTTPException(status_code=429, detail="Лимит запросов Groq. Повторите позже.") from exc
         except Exception as exc:  # noqa: BLE001
+            logger.warning("Agent call failed (%s): %s", type(exc).__name__, exc)
             raise HTTPException(status_code=502, detail="Не удалось получить ответ агента. Повторите позже.") from exc
 
         self._repo.log_usage(
