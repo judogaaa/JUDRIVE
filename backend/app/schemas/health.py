@@ -5,3 +5,4 @@ class HealthResponse(BaseModel):
     status: str
     mock_ml: str
     mock_toir: str
+    manuals_index: str | None = None

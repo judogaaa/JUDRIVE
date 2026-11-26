@@ -6,14 +6,20 @@ AI-powered engine diagnostics and intelligent fleet management platform.
 
 ## Статус
 
-**26.11.2026 — этап 01 готов.** Скелет React + FastAPI, загрузка 50 ТС / 195 сессий, прокси `POST /api/diagnose` в оригинальный Mock ML, health обеих заглушек. LLM/RAG/ТОиР-заявки в UI ещё не реализованы (этапы 02+).
+**26.11.2026 — этапы 01–02 готовы.** Mock ML + SQLite FTS5 по шести PDF (strict engine filter, цитаты, viewer). LLM-агент и ТОиР-заявки — этап 03+.
 
-## Локальный запуск (этап 01)
+## Локальный запуск (этапы 01–02)
 
 Требования: Python 3.11+ (проверено на 3.14), Node.js LTS, UTF-8 в терминале Windows.
 
 1. Скопируйте `.env.example` в `.env` при необходимости (значения по умолчанию совпадают).
-2. Заглушки заказчика (из корня репозитория, **не меняя** `vendor/neurodvs_mock`):
+2. **PDF (этап 02):** положите шесть оригиналов в `materials/manuals/` (папка в `.gitignore`) по [docs/SOURCES.md](docs/SOURCES.md). Быстрое копирование, если файлы уже в `Documents`:
+
+```powershell
+.\scripts\sync_manuals.ps1
+# или указать каталог: .\scripts\sync_manuals.ps1 -SourceDir "D:\path\to\pdfs"
+```
+3. Заглушки заказчика (из корня репозитория, **не меняя** `vendor/neurodvs_mock`):
 
 ```powershell
 cd vendor/neurodvs_mock
@@ -26,7 +32,7 @@ uvicorn mock_ml.app:app --port 8001
 uvicorn mock_toir.app:app --port 8002
 ```
 
-3. Backend JUDRIVE:
+4. Backend JUDRIVE (при старте строит/подхватывает индекс в `local-data/judrive.sqlite`, ~2 мин при первом запуске):
 
 ```powershell
 cd backend
@@ -36,7 +42,7 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8080
 ```
 
-4. Frontend (прокси `/api` → `127.0.0.1:8080`):
+5. Frontend (прокси `/api` → `127.0.0.1:8080`):
 
 ```powershell
 cd frontend
@@ -44,7 +50,11 @@ npm install
 npm run dev
 ```
 
-Откройте `http://127.0.0.1:5173`. Проверка health: `GET http://127.0.0.1:8080/api/health` (ожидается `mock_ml` и `mock_toir` = `up`).
+Откройте `http://127.0.0.1:5173`. Health: `GET /api/health` — `mock_ml`, `mock_toir`, `manuals_index` (при подключённых PDF).
+
+**RAG API (без LLM):** `POST /api/manuals/search` `{ "engine_model": "ЯМЗ-236М2", "query": "..." }`, `GET /api/sources/evidence/{id}`, `GET /api/sources/pdf/{doc_id}`.
+
+Переиндексация вручную: `backend\.venv\Scripts\python.exe scripts\build_manual_index.py` (флаг `--force` — принудительно). Контрольные запросы: `scripts\verify_rag_queries.py`.
 
 ### Быстрые smoke-тесты
 
@@ -53,7 +63,7 @@ cd backend
 .\.venv\Scripts\Activate.ps1
 pip install -r ..\tests\requirements-dev.txt
 cd ..
-pytest -q tests/test_stage01_api.py tests/test_stage01_fleet.py
+pytest -q tests/test_stage01_api.py tests/test_stage01_fleet.py tests/test_stage02_rag.py
 ```
 
 Параметрические вызовы Mock ML в `test_stage01_fleet.py` выполняются только если заглушка на порту 8001 уже запущена.
