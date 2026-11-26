@@ -86,7 +86,7 @@ export function TicketDraftCard({ draft, onConfirmed }: TicketDraftCardProps) {
 
       <button
         type="button"
-        className="primary-button"
+        className="btn btn--primary btn--block"
         disabled={loading || status === 'created'}
         onClick={() => void onConfirm()}
       >

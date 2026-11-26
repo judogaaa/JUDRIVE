@@ -35,3 +35,14 @@ export async function searchManuals(
 export function pdfSourceUrl(docId: string, page: number): string {
   return `/api/sources/pdf/${encodeURIComponent(docId)}#page=${page}`
 }
+
+export type EvidenceRecord = ManualSearchHit
+
+export async function fetchEvidence(evidenceId: string): Promise<EvidenceRecord> {
+  const response = await fetch(`/api/sources/evidence/${encodeURIComponent(evidenceId)}`)
+  if (!response.ok) {
+    throw new Error(`Источник не найден (${response.status})`)
+  }
+  const data = (await response.json()) as EvidenceRecord
+  return data
+}

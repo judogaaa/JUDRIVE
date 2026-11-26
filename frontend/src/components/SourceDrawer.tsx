@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { ExternalLink, X } from 'lucide-react'
 import * as pdfjs from 'pdfjs-dist'
 import type { ManualSearchHit } from '../api/manuals'
 import { pdfSourceUrl } from '../api/manuals'
@@ -58,8 +59,8 @@ export function SourceDrawer({ hit, onClose }: SourceDrawerProps) {
             <h3>{hit.manual_title}</h3>
             <p className="source-drawer__meta">Физическая страница PDF: {hit.pdf_page}</p>
           </div>
-          <button type="button" className="ghost-button" onClick={onClose}>
-            Закрыть
+          <button type="button" className="icon-btn" onClick={onClose} aria-label="Закрыть панель источника">
+            <X size={18} aria-hidden />
           </button>
         </header>
         <blockquote className="source-drawer__quote">{hit.quote}</blockquote>
@@ -68,7 +69,8 @@ export function SourceDrawer({ hit, onClose }: SourceDrawerProps) {
         </div>
         {renderError ? <p className="panel__error">{renderError}</p> : null}
         <a className="ghost-button" href={pdfSourceUrl(hit.doc_id, hit.pdf_page)} target="_blank" rel="noreferrer">
-          Открыть PDF в новой вкладке
+          <ExternalLink size={16} aria-hidden />
+          Открыть PDF
         </a>
       </div>
     </div>

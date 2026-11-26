@@ -6,7 +6,7 @@ AI-powered engine diagnostics and intelligent fleet management platform.
 
 ## Статус
 
-**26.11.2026 — этапы 01–03 готовы.** Mock ML, FTS5/RAG, Groq-агент с tools и подтверждёнными заявками ТОиР. UI-полировка — этап 04+.
+**26.11.2026 — этапы 01–04 готовы.** Mock ML, RAG, Groq-агент, цельный UI механика (shell, темы, автопарк, журнал заявок, evidence drawer).
 
 ## Локальный запуск (этапы 01–03)
 
@@ -81,6 +81,14 @@ pytest -q tests/
 | P456AT178 / S-0003 | `check_failed` (scores = `null`) |
 
 Сборка UI: `cd frontend && npm run build`.
+
+### UI (этап 04)
+
+- Оболочка: **Диагностика** / **Автопарк** / **Заявки**, светлая/тёмная/системная тема, Manrope, Lucide.
+- Диагностика: вердикт, история сессий, RAG, чат с кликабельными источниками и PDF drawer, подтверждение черновика.
+- Адаптив: мобильная навигация, полноэкранный drawer на узком экране.
+
+**Универсальные наработки (read-only референс):** [industrial-safety-ai-platform](https://github.com/judogaaa/industrial-safety-ai-platform) — адаптированы идеи `application.css` (токены/темы), `WorkspaceShell`, `EvidenceDrawer` → `SourceDrawer` и shell в `frontend/src/`; оригинальный репозиторий не изменялся.
 
 ## Быстрый вход для разработчика или нового ИИ-чата
 

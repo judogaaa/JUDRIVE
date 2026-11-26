@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { MessageSquare, Send } from 'lucide-react'
 import {
   createConversation,
   sendChatMessage,
@@ -6,11 +7,15 @@ import {
   type DraftPayload,
   type SourceHit,
 } from '../api/chat'
+import type { DiagnoseResponse } from '../api/types'
+import { fetchEvidence, type ManualSearchHit } from '../api/manuals'
+import { SourceDrawer } from './SourceDrawer'
 import { TicketDraftCard } from './TicketDraftCard'
 
 interface AgentChatProps {
   vehicleId: string
   sessionId: string
+  diagnoseResult?: DiagnoseResponse | null
 }
 
 const SUGGESTIONS = [
@@ -19,25 +24,26 @@ const SUGGESTIONS = [
   'Подготовь черновик заявки с источниками',
 ]
 
-export function AgentChat({ vehicleId, sessionId }: AgentChatProps) {
+export function AgentChat({ vehicleId, sessionId, diagnoseResult }: AgentChatProps) {
   const contextKey = useMemo(() => `${vehicleId}:${sessionId}`, [vehicleId, sessionId])
   const [conversationId, setConversationId] = useState<string | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [sources, setSources] = useState<SourceHit[]>([])
   const [draft, setDraft] = useState<DraftPayload | null>(null)
   const [ticketId, setTicketId] = useState<string | null>(null)
+  const [evidenceHit, setEvidenceHit] = useState<ManualSearchHit | null>(null)
+  const [evidenceLoading, setEvidenceLoading] = useState(false)
 
   useEffect(() => {
     let cancelled = false
     setConversationId(null)
     setMessages([])
-    setSources([])
     setDraft(null)
     setTicketId(null)
     setError(null)
+    setEvidenceHit(null)
 
     if (!vehicleId || !sessionId) return
 
@@ -74,7 +80,6 @@ export function AgentChat({ vehicleId, sessionId }: AgentChatProps) {
         sources: reply.sources,
       }
       setMessages((prev) => [...prev, assistantMsg])
-      if (reply.sources?.length) setSources(reply.sources)
       if (reply.draft?.draft_id && reply.draft.confirm_nonce) {
         setDraft(reply.draft)
       }
@@ -85,11 +90,39 @@ export function AgentChat({ vehicleId, sessionId }: AgentChatProps) {
     }
   }
 
+  const openEvidence = async (hit: SourceHit) => {
+    if (hit.doc_id) {
+      setEvidenceHit({
+        evidence_id: hit.evidence_id,
+        doc_id: hit.doc_id,
+        manual_title: hit.manual_title,
+        pdf_page: hit.pdf_page,
+        quote: hit.quote,
+        score: 0,
+        extraction: 'rag',
+      })
+      return
+    }
+    setEvidenceLoading(true)
+    try {
+      const row = await fetchEvidence(hit.evidence_id)
+      setEvidenceHit({ ...row, score: 'score' in row ? Number(row.score) || 0 : 0 })
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Не удалось открыть источник')
+    } finally {
+      setEvidenceLoading(false)
+    }
+  }
+
   return (
     <section className="panel chat-panel">
-      <h2 className="panel__title">Чат с цифровым механиком</h2>
+      <div className="panel__title" style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+        <MessageSquare size={18} aria-hidden />
+        <h2 style={{ margin: 0, font: 'inherit' }}>Чат с цифровым механиком</h2>
+      </div>
       <p className="panel__subtitle">
-        Агент Groq выбирает инструменты: диагностика, руководства, история, черновик заявки.
+        Агент выбирает инструменты: диагностика, руководства, история, черновик заявки.
+        {diagnoseResult ? ` Текущий статус ML: ${diagnoseResult.status}.` : ''}
       </p>
 
       <div className="chip-row">
@@ -107,7 +140,11 @@ export function AgentChat({ vehicleId, sessionId }: AgentChatProps) {
       </div>
 
       <div className="chat-log" aria-live="polite">
-        {messages.length === 0 ? <p className="chat-empty">Задайте вопрос по выбранной машине и сессии.</p> : null}
+        {messages.length === 0 ? (
+          <p className="panel__subtitle" style={{ margin: 0 }}>
+            Задайте вопрос по выбранной машине и сессии.
+          </p>
+        ) : null}
         {messages.map((msg) => (
           <article key={msg.id} className={`chat-bubble chat-bubble--${msg.role}`}>
             <p className="chat-bubble__role">{msg.role === 'user' ? 'Вы' : 'Механик'}</p>
@@ -116,14 +153,21 @@ export function AgentChat({ vehicleId, sessionId }: AgentChatProps) {
               <ul className="chat-sources">
                 {msg.sources.map((s) => (
                   <li key={s.evidence_id}>
-                    {s.manual_title}, PDF {s.pdf_page}: {s.quote.slice(0, 160)}…
+                    <button
+                      type="button"
+                      className="chat-source-link"
+                      disabled={evidenceLoading}
+                      onClick={() => void openEvidence(s)}
+                    >
+                      {s.manual_title}, PDF {s.pdf_page}
+                    </button>
                   </li>
                 ))}
               </ul>
             ) : null}
           </article>
         ))}
-        {loading ? <p className="chat-loading">Агент обрабатывает запрос…</p> : null}
+        {loading ? <p className="panel__subtitle">Агент обрабатывает запрос…</p> : null}
       </div>
 
       {error ? <p className="panel__error">{error}</p> : null}
@@ -142,26 +186,16 @@ export function AgentChat({ vehicleId, sessionId }: AgentChatProps) {
           rows={3}
           disabled={loading || !conversationId}
         />
-        <button type="submit" className="primary-button" disabled={loading || !conversationId || !input.trim()}>
+        <button type="submit" className="btn btn--primary" disabled={loading || !conversationId || !input.trim()}>
+          <Send size={18} aria-hidden />
           Отправить
         </button>
       </form>
 
-      {sources.length > 0 ? (
-        <aside className="chat-evidence">
-          <h3>Источники в ответе</h3>
-          <ul>
-            {sources.map((s) => (
-              <li key={s.evidence_id}>
-                {s.manual_title} · стр. {s.pdf_page}
-              </li>
-            ))}
-          </ul>
-        </aside>
-      ) : null}
-
       <TicketDraftCard draft={draft} onConfirmed={(id) => setTicketId(id)} />
       {ticketId ? <p className="ticket-draft__ok">Номер заявки: {ticketId}</p> : null}
+
+      <SourceDrawer hit={evidenceHit} onClose={() => setEvidenceHit(null)} />
     </section>
   )
 }

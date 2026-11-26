@@ -56,7 +56,7 @@ export function ManualSearchPanel({ engineModel }: ManualSearchPanelProps) {
             placeholder="Например: момент затяжки болтов"
           />
         </label>
-        <button type="button" className="primary-button" disabled={disabled} onClick={() => void onSearch()}>
+        <button type="button" className="btn btn--primary" disabled={disabled} onClick={() => void onSearch()}>
           {loading ? 'Ищем…' : 'Найти в РЭ/РК'}
         </button>
       </div>
