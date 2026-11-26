@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import sqlite3
 import sys
 from dataclasses import dataclass, field
@@ -19,7 +20,7 @@ if str(ROOT / "backend") not in sys.path:
 
 from app.config import get_settings  # noqa: E402
 
-DEFAULT_BASE = "http://127.0.0.1:8080"
+DEFAULT_BASE = os.environ.get("JUDRIVE_API_BASE", "http://127.0.0.1:8090")
 
 
 @dataclass

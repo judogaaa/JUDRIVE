@@ -32,20 +32,28 @@ uvicorn mock_ml.app:app --port 8001
 uvicorn mock_toir.app:app --port 8002
 ```
 
-4. Backend JUDRIVE (при старте строит/подхватывает индекс в `local-data/judrive.sqlite`, ~2 мин при первом запуске):
+4. Backend и заглушки одной командой (из корня, `PYTHONPATH=backend`, порт по умолчанию **8090**):
 
 ```powershell
-cd backend
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8080
+.\scripts\start_local.ps1
+# другой порт: $env:JUDRIVE_BACKEND_PORT='8080'; .\scripts\start_local.ps1
 ```
 
-5. Frontend (прокси `/api` → `127.0.0.1:8080`):
+Ручной запуск backend:
+
+```powershell
+cd $repoRoot
+$env:PYTHONPATH = "backend"
+.\backend\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8090
+```
+
+Индекс в `local-data/judrive.sqlite` строится при старте (~2 мин при первом запуске).
+
+5. Frontend (прокси `/api` → порт из `JUDRIVE_BACKEND_PORT`, по умолчанию `8090`):
 
 ```powershell
 cd frontend
+$env:JUDRIVE_BACKEND_PORT = "8090"
 npm install
 npm run dev
 ```

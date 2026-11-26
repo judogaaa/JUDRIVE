@@ -37,10 +37,26 @@ fleet_analytics = FleetAnalyticsService(fleet, app_repo, settings.fleet_data_pat
 voice_service = VoiceService(settings.groq_api_key, settings.groq_stt_model, settings.groq_stt_timeout_s)
 
 
+def _refresh_settings() -> None:
+    global settings, fleet, mock_ml, mock_toir, rag_service, app_repo, agent, ticket_service, fleet_analytics, voice_service
+    get_settings.cache_clear()
+    settings = get_settings()
+    fleet = FleetService(settings.fleet_data_path)
+    mock_ml = MockMlClient(settings.mock_ml_url)
+    mock_toir = MockToirClient(settings.mock_toir_url)
+    rag_service = ManualRagService(settings.db_path, settings.pdf_dir)
+    app_repo = AppRepository(settings.db_path)
+    agent = AgentOrchestrator(settings, fleet, mock_ml, rag_service, app_repo)
+    ticket_service = TicketService(app_repo, fleet, mock_ml, mock_toir)
+    fleet_analytics = FleetAnalyticsService(fleet, app_repo, settings.fleet_data_path)
+    voice_service = VoiceService(settings.groq_api_key, settings.groq_stt_model, settings.groq_stt_timeout_s)
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     import asyncio
 
+    _refresh_settings()
     # Первая индексация может занять несколько минут при 6 PDF.
     await asyncio.to_thread(rag_service.ensure_index)
     yield
@@ -98,26 +114,26 @@ async def diagnose(body: DiagnoseRequest) -> DiagnoseResponse:
 
 
 def _chief_guard(request: Request) -> None:
-    require_chief(request, settings)
+    require_chief(request, get_settings())
 
 
 @app.post(f"{settings.api_prefix}/auth/login")
 async def auth_login(request: Request, response: Response, body: dict):
     username = str(body.get("username") or "")
     password = str(body.get("password") or "")
-    chief_login(request, response, settings, username, password)
+    chief_login(request, response, get_settings(), username, password)
     return {"ok": True}
 
 
 @app.post(f"{settings.api_prefix}/auth/logout")
 async def auth_logout(response: Response):
-    clear_session(response, settings)
+    clear_session(response, get_settings())
     return {"ok": True}
 
 
 @app.get(f"{settings.api_prefix}/auth/session")
 async def auth_session(request: Request):
-    return {"authenticated": session_ok(request, settings)}
+    return {"authenticated": session_ok(request, get_settings())}
 
 
 @app.get(f"{settings.api_prefix}/manuals/catalog")

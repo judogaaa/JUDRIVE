@@ -191,10 +191,25 @@
 - Автопарк: поиск с эквивалентами кириллицы/латиницы, без дубля марки. Заявки: поиск, деталь, копирование номера, разбор по кнопке через существующий Groq-агент.
 - `npm run build` OK. `pytest` аналитики: dashboard без cookie → 401, после логина сумма категорий 50.
 
+### Локальный стенд (26.11.2026, вечер)
+
+- `.\scripts\start_local.ps1` — mock ML/ТОиР + backend (`PYTHONPATH=backend`, порт **8090**).
+- Frontend: `cd frontend; $env:JUDRIVE_BACKEND_PORT='8090'; npm run dev` → `http://127.0.0.1:5173`.
+- Health: `GET http://127.0.0.1:8090/api/health` — ml/toir up, manuals ready, groq configured (при ключе в `.env`).
+- Кабинет: `CHIEF_USERNAME` / хеш пароля в `.env`; после входа dashboard 200, без cookie — 401.
+- Backend при старте перечитывает `.env` (`lifespan` + `get_settings()` в auth); пути `FLEET_DATA_PATH`/`PDF_DIR` резолвятся от корня репозитория.
+- На Windows порт **8080** может остаться «зомби»-слушателем без PID — используйте 8090 или `npx kill-port 8080` и перезагрузку при необходимости.
+
+### Проверено (стенд)
+
+- `pytest` 30 passed; `npm run build` OK.
+- API: логин главного механика, dashboard, vehicles, diagnose (live mocks).
+- `verify_agent_scenarios.py --only check_failed`: health OK; Groq **429** (квота) — повторять перед сдачей не обязательно.
+
 ### Ограничения
 
-- Живой backend нужно перезапустить, чтобы подхватить маршруты входа. Пароль жюри задаётся только в `.env`, не в репозитории.
-- Сценарии C1–C3 с Groq в этом проходе не повторялись.
+- Пароль жюри только в локальном `.env`.
+- Полный C1–C3 с Groq в этом проходе не повторялся из‑за rate limit.
 - HTTPS-стенд по-прежнему не развёрнут.
 
 ## Следующий шаг (07)

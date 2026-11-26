@@ -1,9 +1,14 @@
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _abs_path(value: Path) -> Path:
+    return value if value.is_absolute() else (PROJECT_ROOT / value)
 
 
 class Settings(BaseSettings):
@@ -32,6 +37,15 @@ class Settings(BaseSettings):
     chief_password_hash: str | None = None
     session_secret: str | None = None
     cookie_secure: bool = False
+
+    @field_validator("fleet_data_path", "pdf_dir", "db_path", mode="before")
+    @classmethod
+    def _resolve_path(cls, value: object) -> object:
+        if isinstance(value, Path):
+            return _abs_path(value)
+        if isinstance(value, str):
+            return str(_abs_path(Path(value)))
+        return value
 
 
 @lru_cache
