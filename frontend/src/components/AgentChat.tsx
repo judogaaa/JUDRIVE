@@ -34,6 +34,7 @@ export function AgentChat({ vehicleId, sessionId, diagnoseResult, onDiagnoseComm
   const contextKey = `${vehicleId}:${sessionId}`
   const contextRef = useRef(contextKey)
   const sendGen = useRef(0)
+  const logRef = useRef<HTMLDivElement>(null)
   const tRef = useRef(t)
   tRef.current = t
 
@@ -46,6 +47,10 @@ export function AgentChat({ vehicleId, sessionId, diagnoseResult, onDiagnoseComm
   const [ticketId, setTicketId] = useState<string | null>(null)
   const [evidenceHit, setEvidenceHit] = useState<ManualSearchHit | null>(null)
   const [evidenceLoading, setEvidenceLoading] = useState(false)
+
+  useEffect(() => {
+    if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight
+  }, [messages, draft, ticketId, loading])
 
   const statusLine = useMemo(() => {
     if (!diagnoseResult) return t('chat.contextEmpty')
@@ -106,7 +111,7 @@ export function AgentChat({ vehicleId, sessionId, diagnoseResult, onDiagnoseComm
 
   const send = async (text: string) => {
     const trimmed = text.trim()
-    if (!conversationId || !trimmed) return
+    if (!conversationId || !trimmed || loading) return
     const epoch = ++sendGen.current
     const key = contextKey
     const convId = conversationId
@@ -194,7 +199,7 @@ export function AgentChat({ vehicleId, sessionId, diagnoseResult, onDiagnoseComm
         ))}
       </div>
 
-      <div className="chat-log" aria-live="polite">
+      <div className="chat-log" ref={logRef} aria-live="polite">
         {messages.length === 0 ? <p className="panel__subtitle chat-empty">{t('chat.empty')}</p> : null}
         {messages.map((msg) => (
           <article key={msg.id} className={`chat-bubble chat-bubble--${msg.role}`}>
@@ -221,6 +226,12 @@ export function AgentChat({ vehicleId, sessionId, diagnoseResult, onDiagnoseComm
             ) : null}
           </article>
         ))}
+        <TicketDraftCard draft={draft} onConfirmed={(id) => setTicketId(id)} />
+        {ticketId ? (
+          <p className="ticket-draft__ok">
+            {t('ticket.confirmedId')}: {ticketId}
+          </p>
+        ) : null}
         {loading ? <p className="panel__subtitle">{t('chat.processing')}</p> : null}
       </div>
 
@@ -249,12 +260,6 @@ export function AgentChat({ vehicleId, sessionId, diagnoseResult, onDiagnoseComm
         </div>
       </form>
 
-      <TicketDraftCard draft={draft} onConfirmed={(id) => setTicketId(id)} />
-      {ticketId ? (
-        <p className="ticket-draft__ok">
-          {t('ticket.confirmedId')}: {ticketId}
-        </p>
-      ) : null}
 
       <SourceDrawer hit={evidenceHit} onClose={() => setEvidenceHit(null)} />
     </section>

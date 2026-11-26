@@ -202,5 +202,13 @@
   "error.insight": "Tarixni yuklash xatosi",
   "error.pdfRender": "PDFni chizib bo‘lmadi",
   "ticket.status.duplicate": "इस जोड़ी के लिए आवेदन पहले से है",
-  "ticket.status.unknown": "भेजने का परिणाम अज्ञात है। दोहराव निषिद्ध है।"
+  "ticket.status.unknown": "भेजने का परिणाम अज्ञात है। दोहराव निषिद्ध है।",
+  "history.checks": "जाँचें",
+  "history.trend": "रुझान",
+  "history.empty": "कोई जाँच नहीं",
+  "history.trendUnavailable": "रुझान लोड नहीं हुआ। जाँचों की सूची उपलब्ध है।",
+  "history.retry": "फिर कोशिश करें",
+  "tickets.find": "आवेदन खोजें",
+  "tickets.more": "विवरण",
+  "tickets.statusCreated": "बनाई गई"
 }

@@ -202,5 +202,13 @@
   "error.insight": "Ошибка загрузки истории",
   "error.pdfRender": "Не удалось отрисовать PDF",
   "ticket.status.duplicate": "Заявка по этой паре уже есть",
-  "ticket.status.unknown": "Исход отправки неизвестен. Повтор запрещён."
+  "ticket.status.unknown": "Исход отправки неизвестен. Повтор запрещён.",
+  "history.checks": "Проверки",
+  "history.trend": "Динамика",
+  "history.empty": "Нет проверок",
+  "history.trendUnavailable": "Не удалось загрузить динамику. Список проверок доступен.",
+  "history.retry": "Повторить",
+  "tickets.find": "Найти заявку",
+  "tickets.more": "Подробнее",
+  "tickets.statusCreated": "Создана"
 }

@@ -208,6 +208,22 @@ PACK_UZ: dict[str, str] = {
     "error.pdfRender": "PDFni chizib bo‘lmadi",
     "ticket.status.duplicate": "Bu juftlik bo‘yicha ariza allaqachon bor",
     "ticket.status.unknown": "Yuborish natijasi noma’lum. Takrorlash taqiqlangan.",
+    "history.checks": "Tekshiruvlar",
+    "history.trend": "Dinamika",
+    "history.empty": "Tekshiruvlar yo‘q",
+    "history.trendUnavailable": "Dinamika yuklanmadi. Tekshiruvlar ro‘yxati mavjud.",
+    "history.retry": "Qayta urinish",
+    "tickets.find": "Arizani topish",
+    "tickets.more": "Batafsil",
+    "tickets.statusCreated": "Yaratilgan",
+    "fleet.actionDiagnose": "Diagnostika",
+    "fleet.count": "Ko‘rsatilgan {shown} / {total}",
+    "fleet.sortLabel": "Saralash",
+    "manuals.favorite": "Sevimlilar",
+    "manuals.favorited": "Sevimlida",
+    "manuals.open": "PDFni ochish",
+    "manuals.pages": "{count} bet",
+    "manuals.recent": "So‘nggi",
 }
 
 assert set(PACK_UZ) == set(RU)

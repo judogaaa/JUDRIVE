@@ -3,11 +3,12 @@ import { ArrowRight, Search, X } from 'lucide-react'
 import type { VehicleSummary } from '../api/types'
 import { useI18n } from '../i18n/I18nContext'
 import { formatSessionDateTime } from '../lib/formatLocale'
+import { displayVehicleModel, matchesVehicle } from '../lib/vehicle'
 
 interface FleetViewProps {
   vehicles: VehicleSummary[]
   fleetError: string | null
-  onOpenDiagnosis: (vehicleId: string) => void
+  onOpenDiagnosis: (vehicleId: string, sessionId?: string) => void
 }
 
 type SortKey = 'plate' | 'sessions' | 'make'
@@ -35,18 +36,12 @@ export function FleetView({ vehicles, fleetError, onOpenDiagnosis }: FleetViewPr
   }, [vehicles])
 
   const filtered = useMemo(() => {
-    const q = fold(query.trim())
+    const q = query.trim()
     let rows = vehicles
     if (engineFilter) rows = rows.filter((v) => v.engine_model === engineFilter)
     if (makeFilter) rows = rows.filter((v) => v.make === makeFilter)
     if (typeFilter) rows = rows.filter((v) => v.vehicle_type === typeFilter)
-    if (q) {
-      rows = rows.filter((v) => {
-        const model = v.model && v.model !== v.make ? v.model : ''
-        const hay = fold([v.vehicle_id, v.garage_no, v.make, model, v.engine_model, v.vehicle_type].join(' '))
-        return hay.includes(q)
-      })
-    }
+    if (q) rows = rows.filter((v) => matchesVehicle(v, q))
     const copy = [...rows]
     copy.sort((a, b) => {
       const dir = desc ? -1 : 1
@@ -137,7 +132,7 @@ export function FleetView({ vehicles, fleetError, onOpenDiagnosis }: FleetViewPr
                   <tr key={v.vehicle_id}>
                     <td>{v.vehicle_id}</td>
                     <td>{v.garage_no}</td>
-                    <td>{displayMake(v.make, v.model)}</td>
+                    <td>{displayVehicleModel(v.make, v.model)}</td>
                     <td>{v.engine_model}</td>
                     <td>{v.sessions.length}</td>
                     <td>
@@ -160,11 +155,11 @@ export function FleetView({ vehicles, fleetError, onOpenDiagnosis }: FleetViewPr
               <h2>{active.vehicle_id}</h2>
               <button type="button" className="icon-btn" onClick={() => setSelected(null)} aria-label={t('common.close')}><X size={18} /></button>
             </div>
-            <p>{displayMake(active.make, active.model)} · {active.garage_no} · {active.engine_model} · {active.vehicle_type}</p>
+            <p>{displayVehicleModel(active.make, active.model)} · {active.garage_no} · {active.engine_model} · {active.vehicle_type}</p>
             <ul className="history-list">
               {[...active.sessions].sort((a, b) => b.checked_at.localeCompare(a.checked_at)).slice(0, 8).map((s) => (
                 <li key={s.session_id}>
-                  <button type="button" className="history-item" onClick={() => onOpenDiagnosis(active.vehicle_id)}>
+                  <button type="button" className="history-item" onClick={() => onOpenDiagnosis(active.vehicle_id, s.session_id)}>
                     <span>{s.session_id}</span>
                     <span>{formatSessionDateTime(locale, s.checked_at)}</span>
                   </button>
@@ -179,14 +174,4 @@ export function FleetView({ vehicles, fleetError, onOpenDiagnosis }: FleetViewPr
       ) : null}
     </>
   )
-}
-
-function displayMake(make: string, model: string | null): string {
-  if (!model || model === make || model.startsWith(make)) return model || make
-  return `${make} ${model}`
-}
-
-function fold(value: string): string {
-  const map: Record<string, string> = { а: 'a', в: 'b', е: 'e', к: 'k', м: 'm', н: 'h', о: 'o', р: 'p', с: 'c', т: 't', у: 'y', х: 'x' }
-  return value.toLowerCase().split('').map((ch) => map[ch] ?? ch).join('')
 }

@@ -19,10 +19,24 @@ export function VoiceCapture({ onText, disabled, compact }: VoiceCaptureProps) {
   const [micOk, setMicOk] = useState(true)
   const recorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<BlobPart[]>([])
+  const alive = useRef(false)
+  const streamRef = useRef<MediaStream | null>(null)
 
   useEffect(() => {
+    alive.current = true
     if (!navigator.mediaDevices?.getUserMedia) {
       setMicOk(false)
+    }
+    return () => {
+      alive.current = false
+      const recorder = recorderRef.current
+      if (recorder) {
+        recorder.onstop = null
+        if (recorder.state !== 'inactive') recorder.stop()
+      }
+      recorderRef.current = null
+      streamRef.current?.getTracks().forEach((track) => track.stop())
+      streamRef.current = null
     }
   }, [])
 
@@ -30,11 +44,11 @@ export function VoiceCapture({ onText, disabled, compact }: VoiceCaptureProps) {
     setTranscribing(true)
     try {
       const text = await transcribeAudio(blob, locale)
-      setDraft(text)
+      if (alive.current) setDraft(text)
     } catch (err: unknown) {
-      setError(resolveErrorMessage(t, err, 'error.stt'))
+      if (alive.current) setError(resolveErrorMessage(t, err, 'error.stt'))
     } finally {
-      setTranscribing(false)
+      if (alive.current) setTranscribing(false)
     }
   }
 
@@ -49,6 +63,8 @@ export function VoiceCapture({ onText, disabled, compact }: VoiceCaptureProps) {
     setDraft('')
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      if (!alive.current) { stream.getTracks().forEach((track) => track.stop()); return }
+      streamRef.current = stream
       const recorder = new MediaRecorder(stream, { mimeType: preferMimeType() })
       chunksRef.current = []
       recorder.ondataavailable = (e) => {
@@ -56,6 +72,8 @@ export function VoiceCapture({ onText, disabled, compact }: VoiceCaptureProps) {
       }
       recorder.onstop = () => {
         stream.getTracks().forEach((tr) => tr.stop())
+        streamRef.current = null
+        if (!alive.current) return
         const blob = new Blob(chunksRef.current, { type: recorder.mimeType || 'audio/webm' })
         void runTranscribe(blob)
       }
@@ -63,6 +81,9 @@ export function VoiceCapture({ onText, disabled, compact }: VoiceCaptureProps) {
       recorderRef.current = recorder
       setRecording(true)
     } catch {
+      streamRef.current?.getTracks().forEach((track) => track.stop())
+      streamRef.current = null
+      if (!alive.current) return
       setMicOk(false)
       setError(t('voice.unavailable'))
     }

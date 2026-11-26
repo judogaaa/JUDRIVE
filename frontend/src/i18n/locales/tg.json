@@ -202,5 +202,13 @@
   "error.insight": "Tarixni yuklash xatosi",
   "error.pdfRender": "PDFni chizib bo‘lmadi",
   "ticket.status.duplicate": "Дархост барои ин ҷуфт аллакай ҳаст",
-  "ticket.status.unknown": "Натиҷаи ирсол номаълум аст. Такрор манъ аст."
+  "ticket.status.unknown": "Натиҷаи ирсол номаълум аст. Такрор манъ аст.",
+  "history.checks": "Санҷишҳо",
+  "history.trend": "Динамика",
+  "history.empty": "Санҷишҳо нестанд",
+  "history.trendUnavailable": "Динамика бор нашуд. Рӯйхати санҷишҳо дастрас аст.",
+  "history.retry": "Такрор кардан",
+  "tickets.find": "Ҷустуҷӯи дархост",
+  "tickets.more": "Муфассал",
+  "tickets.statusCreated": "Эҷод шуд"
 }

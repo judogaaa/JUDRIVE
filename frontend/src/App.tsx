@@ -56,6 +56,7 @@ export default function App() {
     <WorkspaceShell view={view} onViewChange={setView} themeMode={themeMode} onThemeChange={setThemeMode}>
       <div hidden={view !== 'diagnosis'}>
         <DiagnosisView
+          key={JSON.stringify([vehicleId, sessionId])}
           vehicles={vehicles}
           fleetError={fleetError}
           vehicleId={vehicleId}
@@ -69,7 +70,7 @@ export default function App() {
       ) : null}
       {view === 'chief' ? <ChiefMechanicView onOpenDiagnosis={openDiagnosisForVehicle} /> : null}
       {view === 'fleet' ? (
-        <FleetView vehicles={vehicles} fleetError={fleetError} onOpenDiagnosis={(id) => openDiagnosisForVehicle(id)} />
+        <FleetView vehicles={vehicles} fleetError={fleetError} onOpenDiagnosis={openDiagnosisForVehicle} />
       ) : null}
       {view === 'tickets' ? <TicketsView /> : null}
     </WorkspaceShell>

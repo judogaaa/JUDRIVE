@@ -202,5 +202,13 @@
   "error.insight": "Tarixni yuklash xatosi",
   "error.pdfRender": "PDFni chizib bo‘lmadi",
   "ticket.status.duplicate": "Осы жұп бойынша өтінім бар",
-  "ticket.status.unknown": "Жіберу нәтижесі белгісіз. Қайталауға болмайды."
+  "ticket.status.unknown": "Жіберу нәтижесі белгісіз. Қайталауға болмайды.",
+  "history.checks": "Тексерулер",
+  "history.trend": "Динамика",
+  "history.empty": "Тексерулер жоқ",
+  "history.trendUnavailable": "Динамиканы жүктеу мүмкін болмады. Тексерулер тізімі қолжетімді.",
+  "history.retry": "Қайталау",
+  "tickets.find": "Өтінімді табу",
+  "tickets.more": "Толығырақ",
+  "tickets.statusCreated": "Құрылды"
 }
