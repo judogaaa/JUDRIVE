@@ -92,10 +92,13 @@ export function TicketsView({ filterVehicleId }: TicketsViewProps) {
 
       {!loading && !error ? (
         <section className="panel">
-          <label className="field">
-            <span>{t('fleet.searchLabel')}</span>
-            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t('fleet.searchPlaceholder')} />
-          </label>
+          <div className="ticket-toolbar">
+            <label className="field">
+              <span>{t('fleet.searchLabel')}</span>
+              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t('fleet.searchPlaceholder')} />
+            </label>
+          </div>
+          <p className="toolbar-meta">{t('fleet.count', { shown: visible.length, total: tickets.length })}</p>
           {visible.length === 0 ? (
             <p className="panel__subtitle">{t('tickets.empty')}</p>
           ) : (
@@ -107,7 +110,10 @@ export function TicketsView({ filterVehicleId }: TicketsViewProps) {
                     <span className="ticket-row__meta">{formatSessionDateTime(locale, row.created_at)}</span>
                   </button>
                   <p className="ticket-row__meta">
-                    {row.vehicle_id} · {row.session_id} · {row.submit_status}
+                    {row.vehicle_id} · {row.session_id}{' '}
+                    <span className={`badge badge--${row.submit_status === 'created' ? 'normal' : 'attention'}`}>
+                      {row.submit_status}
+                    </span>
                   </p>
                   {parseConclusion(row.payload_snapshot) ? (
                     <p>{parseConclusion(row.payload_snapshot)}</p>
@@ -125,7 +131,7 @@ export function TicketsView({ filterVehicleId }: TicketsViewProps) {
                       <button type="button" className="btn btn--secondary" disabled={reviewing} onClick={() => void explain(row)}>
                         {reviewing ? t('chat.processing') : t('tickets.review')}
                       </button>
-                      {review ? <p>{review}</p> : null}
+                      {review ? <div className="ticket-review">{review}</div> : null}
                     </div>
                   ) : null}
                 </article>

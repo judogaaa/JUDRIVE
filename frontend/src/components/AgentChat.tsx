@@ -171,7 +171,7 @@ export function AgentChat({ vehicleId, sessionId, diagnoseResult, onDiagnoseComm
   }
 
   return (
-    <section className="panel chat-panel">
+    <section className="chat-panel">
       <div className="chat-panel__head">
         <MessageSquare size={18} aria-hidden />
         <div>
@@ -230,14 +230,14 @@ export function AgentChat({ vehicleId, sessionId, diagnoseResult, onDiagnoseComm
           void send(input)
         }}
       >
-        <textarea
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder={t('chat.placeholder')}
-          rows={2}
-          disabled={loading || !conversationId}
-        />
-        <div className="chat-compose__actions">
+        <div className="chat-compose__bar">
+          <textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder={t('chat.placeholder')}
+            rows={2}
+            disabled={loading || !conversationId}
+          />
           <VoiceCapture disabled={loading || !conversationId} onText={onVoiceText} compact />
           <button type="submit" className="btn btn--primary" disabled={loading || !conversationId || !input.trim()}>
             <Send size={16} aria-hidden />

@@ -362,7 +362,8 @@ function ChiefLogin({ onSuccess }: { onSuccess: () => void }) {
   }
 
   return (
-    <section className="panel auth-card">
+    <div className="auth-screen">
+      <section className="panel auth-card">
       <h1>{t('auth.title')}</h1>
       <p className="panel__subtitle">{t('chief.subtitle')}</p>
       <label className="field">
@@ -383,6 +384,7 @@ function ChiefLogin({ onSuccess }: { onSuccess: () => void }) {
         {t('auth.submit')}
       </button>
     </section>
+    </div>
   )
 }
 

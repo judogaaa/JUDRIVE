@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { ExternalLink, FileText, Star } from 'lucide-react'
 import { ManualSearchPanel } from '../components/ManualSearchPanel'
 import { useI18n } from '../i18n/I18nContext'
 
@@ -30,7 +31,13 @@ export function ManualsView({ engineModel }: ManualsViewProps) {
     void fetch('/api/manuals/catalog')
       .then((r) => r.json())
       .then((body: { engines?: { engine_model: string; documents: CatalogDoc[] }[] }) => {
-        setEngines(body.engines ?? [])
+        const list = body.engines ?? []
+        setEngines(list)
+        setEngine((prev) => {
+          if (prev) return prev
+          if (engineModel) return engineModel
+          return list[0]?.engine_model ?? ''
+        })
       })
       .catch(() => setEngines([]))
   }, [])
@@ -50,10 +57,11 @@ export function ManualsView({ engineModel }: ManualsViewProps) {
   }
 
   return (
-    <>
+    <div className="manual-sections">
       <header className="page-header page-header--compact">
         <h1>{t('nav.manuals')}</h1>
       </header>
+
       <section className="panel">
         <label className="field">
           <span>{t('diag.engine')}</span>
@@ -66,23 +74,61 @@ export function ManualsView({ engineModel }: ManualsViewProps) {
             ))}
           </select>
         </label>
-        <ul className="manual-catalog">
-          {docs.map((doc) => (
-            <li key={doc.doc_id}>
-              <button type="button" className="chat-source-link" onClick={() => remember(doc.doc_id)}>
-                {doc.title}
-              </button>
-              <span className="panel__subtitle"> · {doc.pages}</span>
-              <button type="button" className="chip-button" onClick={() => toggleFav(doc.doc_id)}>
-                {favorites.includes(doc.doc_id) ? '★' : '☆'}
-              </button>
-            </li>
-          ))}
-        </ul>
-        {recent.length ? <p className="panel__subtitle">{recent.join(' · ')}</p> : null}
+
+        {docs.length ? (
+          <ul className="manual-catalog">
+            {docs.map((doc) => (
+              <li key={doc.doc_id}>
+                <article className="manual-card">
+                  <div className="manual-card__head">
+                    <span className="manual-card__icon" aria-hidden>
+                      <FileText size={20} />
+                    </span>
+                    <div>
+                      <h3 className="manual-card__title">{doc.title}</h3>
+                      <p className="manual-card__engine">
+                        {engine || '—'} · {t('manuals.pages', { count: doc.pages })}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="manual-card__actions">
+                    <a
+                      className="btn btn--primary"
+                      href={`/api/sources/pdf/${encodeURIComponent(doc.doc_id)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => remember(doc.doc_id)}
+                    >
+                      <ExternalLink size={16} aria-hidden />
+                      {t('manuals.open')}
+                    </a>
+                    <button
+                      type="button"
+                      className={`chip-button ${favorites.includes(doc.doc_id) ? 'chip-button--on' : ''}`}
+                      onClick={() => toggleFav(doc.doc_id)}
+                      aria-pressed={favorites.includes(doc.doc_id)}
+                    >
+                      <Star size={14} aria-hidden />
+                      {favorites.includes(doc.doc_id) ? t('manuals.favorited') : t('manuals.favorite')}
+                    </button>
+                  </div>
+                </article>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="panel__subtitle">{t('manual.hintNoVehicle')}</p>
+        )}
+
+        {recent.length ? (
+          <p className="panel__subtitle">
+            {t('manuals.recent')}: {recent.join(', ')}
+          </p>
+        ) : null}
       </section>
+
       <ManualSearchPanel engineModel={engine || null} />
-    </>
+    </div>
   )
 }
 

@@ -29,21 +29,31 @@
   --radius-lg: 12px;
   --radius-xl: 16px;
   --nav-width: 232px;
-  --header-h: 56px;
-  --space-1: 0.25rem;
-  --space-2: 0.5rem;
-  --space-3: 0.75rem;
-  --space-4: 1rem;
-  --space-5: 1.5rem;
-  --space-6: 2rem;
+  --header-h: 52px;
+  --control-h: 42px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --brand-bg: #1c1c1e;
+  --brand-fg: #f5f5f3;
   --focus-ring: 0 0 0 2px color-mix(in srgb, var(--text) 25%, transparent);
   --accent: var(--primary);
   --accent-hover: var(--primary-hover);
   --accent-soft: var(--surface-muted);
 }
 
+[data-theme='light'] {
+  --brand-bg: #1c1c1e;
+  --brand-fg: #f5f5f3;
+}
+
 [data-theme='dark'] {
   color-scheme: dark;
+  --brand-bg: #f5f5f3;
+  --brand-fg: #111111;
   --page-bg: #0d0d0d;
   --surface: #181818;
   --surface-elevated: #1f1f1f;
@@ -71,6 +81,8 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
     color-scheme: dark;
+    --brand-bg: #f5f5f3;
+    --brand-fg: #111111;
     --page-bg: #0d0d0d;
     --surface: #181818;
     --surface-elevated: #1f1f1f;
