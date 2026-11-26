@@ -3,15 +3,17 @@ import type { DiagnoseResponse } from '../api/types'
 import { useI18n } from '../i18n/I18nContext'
 import type { TranslationKey } from '../i18n/translations'
 import { formatMetric } from '../lib/verdict'
+import { VerdictActions, type VerdictActionsProps } from './VerdictActions'
 
 interface VerdictCardProps {
   result: DiagnoseResponse | null
   loading: boolean
   error: string | null
   vehicleId?: string
+  actions?: Omit<VerdictActionsProps, 'result'> | null
 }
 
-export function VerdictCard({ result, loading, error, vehicleId }: VerdictCardProps) {
+export function VerdictCard({ result, loading, error, vehicleId, actions }: VerdictCardProps) {
   const { t } = useI18n()
 
   const signalLabel = (q: DiagnoseResponse['signal_quality']) => {
@@ -152,6 +154,17 @@ export function VerdictCard({ result, loading, error, vehicleId }: VerdictCardPr
             ))}
           </ol>
         </div>
+      ) : null}
+      {actions ? (
+        <VerdictActions
+          result={result}
+          onExplain={actions.onExplain}
+          onWhatToCheck={actions.onWhatToCheck}
+          onSearchManual={actions.onSearchManual}
+          onPrepareTicket={actions.onPrepareTicket}
+          onCopyPlan={actions.onCopyPlan}
+          onOtherSession={actions.onOtherSession}
+        />
       ) : null}
     </section>
   )

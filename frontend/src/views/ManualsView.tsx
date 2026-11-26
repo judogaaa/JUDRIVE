@@ -4,6 +4,7 @@ import { ManualSearchPanel } from '../components/ManualSearchPanel'
 import { SourceDrawer } from '../components/SourceDrawer'
 import type { ManualSearchHit } from '../api/manuals'
 import { useI18n } from '../i18n/I18nContext'
+import type { ManualSearchIntent } from '../lib/workflow'
 
 interface CatalogDoc {
   doc_id: string
@@ -14,12 +15,14 @@ interface CatalogDoc {
 
 interface ManualsViewProps {
   engineModel: string | null
+  searchIntent?: ManualSearchIntent | null
+  onSearchIntentConsumed?: () => void
 }
 
 const FAV_KEY = 'judrive-manual-fav'
 const RECENT_KEY = 'judrive-manual-recent'
 
-export function ManualsView({ engineModel }: ManualsViewProps) {
+export function ManualsView({ engineModel, searchIntent, onSearchIntentConsumed }: ManualsViewProps) {
   const { t } = useI18n()
   const [engines, setEngines] = useState<{ engine_model: string; documents: CatalogDoc[] }[]>([])
   const [engine, setEngine] = useState(engineModel ?? '')
@@ -119,7 +122,11 @@ export function ManualsView({ engineModel }: ManualsViewProps) {
           ))}
         </ul>
       </section>
-      <ManualSearchPanel engineModel={engine || null} />
+      <ManualSearchPanel
+        engineModel={(searchIntent?.engineModel ?? engine) || null}
+        searchIntent={searchIntent}
+        onSearchIntentConsumed={onSearchIntentConsumed}
+      />
       <SourceDrawer hit={open} onClose={() => setOpen(null)} />
     </div>
   )

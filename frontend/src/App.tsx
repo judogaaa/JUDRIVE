@@ -9,6 +9,7 @@ import { DiagnosisView } from './views/DiagnosisView'
 import { FleetView } from './views/FleetView'
 import { ManualsView } from './views/ManualsView'
 import { TicketsView } from './views/TicketsView'
+import type { ChatIntent, ManualSearchIntent } from './lib/workflow'
 
 function latestSessionId(vehicle: VehicleSummary): string {
   const sessions = [...vehicle.sessions].sort((a, b) => b.checked_at.localeCompare(a.checked_at))
@@ -23,6 +24,9 @@ export default function App() {
   const [fleetError, setFleetError] = useState<string | null>(null)
   const [vehicleId, setVehicleId] = useState('')
   const [sessionId, setSessionId] = useState('')
+  const [manualIntent, setManualIntent] = useState<ManualSearchIntent | null>(null)
+  const [chatIntent, setChatIntent] = useState<ChatIntent | null>(null)
+  const [ticketsVehicleFilter, setTicketsVehicleFilter] = useState<string | undefined>(undefined)
 
   useEffect(() => {
     let cancelled = false
@@ -52,6 +56,11 @@ export default function App() {
     setView('diagnosis')
   }
 
+  const openManualsWithIntent = (intent: ManualSearchIntent) => {
+    setManualIntent(intent)
+    setView('manuals')
+  }
+
   return (
     <WorkspaceShell view={view} onViewChange={setView} themeMode={themeMode} onThemeChange={setThemeMode}>
       <div hidden={view !== 'diagnosis'}>
@@ -62,16 +71,26 @@ export default function App() {
           sessionId={sessionId}
           onVehicleChange={setVehicleId}
           onSessionChange={setSessionId}
+          onOpenManuals={openManualsWithIntent}
+          onChatIntent={setChatIntent}
+          chatIntent={chatIntent}
+          onChatIntentConsumed={() => setChatIntent(null)}
         />
       </div>
       {view === 'manuals' ? (
-        <ManualsView engineModel={vehicles.find((v) => v.vehicle_id === vehicleId)?.engine_model ?? null} />
+        <ManualsView
+          engineModel={vehicles.find((v) => v.vehicle_id === vehicleId)?.engine_model ?? null}
+          searchIntent={manualIntent}
+          onSearchIntentConsumed={() => setManualIntent(null)}
+        />
       ) : null}
       {view === 'chief' ? <ChiefMechanicView onOpenDiagnosis={openDiagnosisForVehicle} /> : null}
       {view === 'fleet' ? (
         <FleetView vehicles={vehicles} fleetError={fleetError} onOpenDiagnosis={(id) => openDiagnosisForVehicle(id)} />
       ) : null}
-      {view === 'tickets' ? <TicketsView /> : null}
+      {view === 'tickets' ? (
+        <TicketsView filterVehicleId={ticketsVehicleFilter} onFilterConsumed={() => setTicketsVehicleFilter(undefined)} />
+      ) : null}
     </WorkspaceShell>
   )
 }

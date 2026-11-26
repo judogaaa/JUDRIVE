@@ -1,10 +1,13 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { searchManuals, type ManualSearchHit, type ManualSearchResponse } from '../api/manuals'
+import type { ManualSearchIntent } from '../lib/workflow'
 import { useI18n } from '../i18n/I18nContext'
 import { SourceDrawer } from './SourceDrawer'
 
 interface ManualSearchPanelProps {
   engineModel: string | null
+  searchIntent?: ManualSearchIntent | null
+  onSearchIntentConsumed?: () => void
 }
 
 const QUICK_QUERIES = [
@@ -13,13 +16,14 @@ const QUICK_QUERIES = [
   'давление масла',
 ]
 
-export function ManualSearchPanel({ engineModel }: ManualSearchPanelProps) {
+export function ManualSearchPanel({ engineModel, searchIntent, onSearchIntentConsumed }: ManualSearchPanelProps) {
   const { t } = useI18n()
   const [query, setQuery] = useState(QUICK_QUERIES[0])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [payload, setPayload] = useState<ManualSearchResponse | null>(null)
   const [active, setActive] = useState<ManualSearchHit | null>(null)
+  const lastIntentRef = useRef<number | null>(null)
 
   const disabled = !engineModel || loading
 
@@ -28,21 +32,36 @@ export function ManualSearchPanel({ engineModel }: ManualSearchPanelProps) {
     return `${t('manual.hintEngine')} «${engineModel}».`
   }, [engineModel, t])
 
-  const onSearch = async () => {
-    if (!engineModel || !query.trim()) return
-    setLoading(true)
-    setError(null)
-    setPayload(null)
-    setActive(null)
-    try {
-      const result = await searchManuals(engineModel, query.trim(), 6)
-      setPayload(result)
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : t('error.unknown'))
-    } finally {
-      setLoading(false)
-    }
-  }
+  const runSearch = useCallback(
+    async (q: string, autoOpenSingle?: boolean) => {
+      if (!engineModel || !q.trim()) return
+      setLoading(true)
+      setError(null)
+      setPayload(null)
+      setActive(null)
+      try {
+        const result = await searchManuals(engineModel, q.trim(), 6)
+        setPayload(result)
+        if (autoOpenSingle && result.results?.length === 1) {
+          setActive(result.results[0])
+        }
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : t('error.unknown'))
+      } finally {
+        setLoading(false)
+      }
+    },
+    [engineModel, t],
+  )
+
+  const onSearch = () => void runSearch(query)
+
+  useEffect(() => {
+    if (!searchIntent || searchIntent.id === lastIntentRef.current) return
+    lastIntentRef.current = searchIntent.id
+    setQuery(searchIntent.query)
+    void runSearch(searchIntent.query, searchIntent.autoOpenSingle).finally(() => onSearchIntentConsumed?.())
+  }, [onSearchIntentConsumed, runSearch, searchIntent])
 
   return (
     <section className="panel manual-panel">

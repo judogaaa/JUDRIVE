@@ -9,6 +9,7 @@ import { formatSessionDateTime } from '../lib/formatLocale'
 
 interface TicketsViewProps {
   filterVehicleId?: string
+  onFilterConsumed?: () => void
 }
 
 function docIdFromTitle(title: string): string {
@@ -41,7 +42,7 @@ function parsePayload(snapshot: string | null): {
   }
 }
 
-export function TicketsView({ filterVehicleId }: TicketsViewProps) {
+export function TicketsView({ filterVehicleId, onFilterConsumed }: TicketsViewProps) {
   const { t, locale } = useI18n()
   const [tickets, setTickets] = useState<TicketSubmission[]>([])
   const [loading, setLoading] = useState(true)
@@ -51,6 +52,13 @@ export function TicketsView({ filterVehicleId }: TicketsViewProps) {
   const [review, setReview] = useState<string | null>(null)
   const [reviewing, setReviewing] = useState(false)
   const [source, setSource] = useState<ManualSearchHit | null>(null)
+
+  useEffect(() => {
+    if (filterVehicleId) {
+      setQuery(filterVehicleId)
+      onFilterConsumed?.()
+    }
+  }, [filterVehicleId, onFilterConsumed])
 
   useEffect(() => {
     let cancelled = false

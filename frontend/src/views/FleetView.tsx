@@ -3,6 +3,7 @@ import { ArrowRight, Search, X } from 'lucide-react'
 import type { VehicleSummary } from '../api/types'
 import { useI18n } from '../i18n/I18nContext'
 import { formatSessionDateTime } from '../lib/formatLocale'
+import { vehicleModelLabel } from '../lib/vehicleLabel'
 
 interface FleetViewProps {
   vehicles: VehicleSummary[]
@@ -137,7 +138,7 @@ export function FleetView({ vehicles, fleetError, onOpenDiagnosis }: FleetViewPr
                   <tr key={v.vehicle_id}>
                     <td>{v.vehicle_id}</td>
                     <td>{v.garage_no}</td>
-                    <td>{displayMake(v.make, v.model)}</td>
+                    <td>{vehicleModelLabel(v.make, v.model)}</td>
                     <td>{v.engine_model}</td>
                     <td>{v.sessions.length}</td>
                     <td>
@@ -160,7 +161,7 @@ export function FleetView({ vehicles, fleetError, onOpenDiagnosis }: FleetViewPr
               <h2>{active.vehicle_id}</h2>
               <button type="button" className="icon-btn" onClick={() => setSelected(null)} aria-label={t('common.close')}><X size={18} /></button>
             </div>
-            <p>{displayMake(active.make, active.model)} · {active.garage_no} · {active.engine_model} · {active.vehicle_type}</p>
+            <p>{vehicleModelLabel(active.make, active.model)} · {active.garage_no} · {active.engine_model} · {active.vehicle_type}</p>
             <ul className="history-list">
               {[...active.sessions].sort((a, b) => b.checked_at.localeCompare(a.checked_at)).slice(0, 8).map((s) => (
                 <li key={s.session_id}>
@@ -179,11 +180,6 @@ export function FleetView({ vehicles, fleetError, onOpenDiagnosis }: FleetViewPr
       ) : null}
     </>
   )
-}
-
-function displayMake(make: string, model: string | null): string {
-  if (!model || model === make || model.startsWith(make)) return model || make
-  return `${make} ${model}`
 }
 
 function fold(value: string): string {

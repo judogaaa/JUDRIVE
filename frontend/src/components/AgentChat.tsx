@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { MessageSquare, Send } from 'lucide-react'
 import {
   createConversation,
@@ -14,12 +14,15 @@ import type { TranslationKey } from '../i18n/translations'
 import { SourceDrawer } from './SourceDrawer'
 import { TicketDraftCard } from './TicketDraftCard'
 import { VoiceCapture } from './VoiceCapture'
+import type { ChatIntent } from '../lib/workflow'
 
 interface AgentChatProps {
   vehicleId: string
   sessionId: string
   diagnoseResult?: DiagnoseResponse | null
   onDiagnoseCommand?: () => void
+  chatIntent?: ChatIntent | null
+  onChatIntentConsumed?: () => void
 }
 
 const SUGGESTION_KEYS: TranslationKey[] = ['chat.suggest1', 'chat.suggest2', 'chat.suggest3']
@@ -29,11 +32,20 @@ function isDiagnoseVoiceCommand(text: string): boolean {
   return /диагност|diagnost|tekshir|талда|निदान|নির্ণয়/.test(q)
 }
 
-export function AgentChat({ vehicleId, sessionId, diagnoseResult, onDiagnoseCommand }: AgentChatProps) {
+export function AgentChat({
+  vehicleId,
+  sessionId,
+  diagnoseResult,
+  onDiagnoseCommand,
+  chatIntent,
+  onChatIntentConsumed,
+}: AgentChatProps) {
   const { locale, t } = useI18n()
   const contextKey = `${vehicleId}:${sessionId}`
   const contextRef = useRef(contextKey)
+  const logRef = useRef<HTMLDivElement | null>(null)
   const sendGen = useRef(0)
+  const chatIntentRef = useRef<number | null>(null)
   const tRef = useRef(t)
   tRef.current = t
 
@@ -53,6 +65,12 @@ export function AgentChat({ vehicleId, sessionId, diagnoseResult, onDiagnoseComm
     if (diagnoseResult.status === 'anomaly') return t('chat.status.anomaly')
     return t('chat.status.check_failed')
   }, [diagnoseResult, t])
+
+  useEffect(() => {
+    const log = logRef.current
+    if (!log) return
+    log.scrollTop = log.scrollHeight
+  }, [messages, loading])
 
   useEffect(() => {
     if (!diagnoseResult) return
@@ -104,38 +122,53 @@ export function AgentChat({ vehicleId, sessionId, diagnoseResult, onDiagnoseComm
       })
   }, [contextKey, vehicleId, sessionId])
 
-  const send = async (text: string) => {
-    const trimmed = text.trim()
-    if (!conversationId || !trimmed) return
-    const epoch = ++sendGen.current
-    const key = contextKey
-    const convId = conversationId
-    setLoading(true)
-    setError(null)
-    const userMsg: ChatMessage = { id: crypto.randomUUID(), role: 'user', content: trimmed }
-    setMessages((prev) => [...prev, userMsg])
-    setInput('')
+  const send = useCallback(
+    async (text: string) => {
+      const trimmed = text.trim()
+      if (!conversationId || !trimmed) return
+      const epoch = ++sendGen.current
+      const key = contextKey
+      const convId = conversationId
+      setLoading(true)
+      setError(null)
+      const userMsg: ChatMessage = { id: crypto.randomUUID(), role: 'user', content: trimmed }
+      setMessages((prev) => [...prev, userMsg])
+      setInput('')
 
-    try {
-      const reply = await sendChatMessage(convId, trimmed, locale)
-      if (epoch !== sendGen.current || contextRef.current !== key) return
-      const assistantMsg: ChatMessage = {
-        id: crypto.randomUUID(),
-        role: 'assistant',
-        content: reply.reply,
-        sources: reply.sources,
+      try {
+        const reply = await sendChatMessage(convId, trimmed, locale)
+        if (epoch !== sendGen.current || contextRef.current !== key) return
+        const assistantMsg: ChatMessage = {
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content: reply.reply,
+          sources: reply.sources,
+        }
+        setMessages((prev) => [...prev, assistantMsg])
+        if (reply.draft?.draft_id && reply.draft.confirm_nonce) {
+          setDraft(reply.draft)
+        }
+      } catch (err: unknown) {
+        if (epoch !== sendGen.current || contextRef.current !== key) return
+        setError(err instanceof Error ? err.message : tRef.current('error.agent'))
+      } finally {
+        if (epoch === sendGen.current && contextRef.current === key) setLoading(false)
       }
-      setMessages((prev) => [...prev, assistantMsg])
-      if (reply.draft?.draft_id && reply.draft.confirm_nonce) {
-        setDraft(reply.draft)
-      }
-    } catch (err: unknown) {
-      if (epoch !== sendGen.current || contextRef.current !== key) return
-      setError(err instanceof Error ? err.message : tRef.current('error.agent'))
-    } finally {
-      if (epoch === sendGen.current && contextRef.current === key) setLoading(false)
+    },
+    [contextKey, conversationId, locale],
+  )
+
+  useEffect(() => {
+    if (!chatIntent || !conversationId) return
+    if (chatIntentRef.current === chatIntent.id) return
+    chatIntentRef.current = chatIntent.id
+    if (chatIntent.autoSend) {
+      void send(chatIntent.message)
+    } else {
+      setInput(chatIntent.message)
     }
-  }
+    onChatIntentConsumed?.()
+  }, [chatIntent, conversationId, onChatIntentConsumed, send])
 
   const openEvidence = async (hit: SourceHit) => {
     const key = contextKey
@@ -194,7 +227,7 @@ export function AgentChat({ vehicleId, sessionId, diagnoseResult, onDiagnoseComm
         ))}
       </div>
 
-      <div className="chat-log" aria-live="polite">
+      <div className="chat-log" ref={logRef} aria-live="polite">
         {messages.length === 0 ? <p className="panel__subtitle chat-empty">{t('chat.empty')}</p> : null}
         {messages.map((msg) => (
           <article key={msg.id} className={`chat-bubble chat-bubble--${msg.role}`}>

@@ -1,14 +1,21 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Play } from 'lucide-react'
 import { fetchDiagnosis, fetchVehicleDiagnosisHistory } from '../api/client'
 import type { TrendPoint } from '../api/fleet'
 import type { DiagnoseResponse, SessionSummary, VehicleSummary } from '../api/types'
 import { AgentChat } from '../components/AgentChat'
-import { AnomalyTrendChart } from '../components/AnomalyTrendChart'
 import { VehicleHistoryPanel } from '../components/VehicleHistoryPanel'
 import { VerdictCard } from '../components/VerdictCard'
 import { useI18n } from '../i18n/I18nContext'
 import { formatSessionDateTime } from '../lib/formatLocale'
+import { vehicleModelLabel } from '../lib/vehicleLabel'
+import type { ChatIntent, ManualSearchIntent } from '../lib/workflow'
+import {
+  buildExplainDiagnosisMessage,
+  buildPrepareTicketMessage,
+  buildWhatToCheckMessage,
+  manualQueryFromDiagnosis,
+} from '../lib/workflow'
 
 interface DiagnosisViewProps {
   vehicles: VehicleSummary[]
@@ -17,6 +24,10 @@ interface DiagnosisViewProps {
   sessionId: string
   onVehicleChange: (id: string) => void
   onSessionChange: (id: string) => void
+  onOpenManuals: (intent: ManualSearchIntent) => void
+  onChatIntent: (intent: ChatIntent) => void
+  chatIntent: ChatIntent | null
+  onChatIntentConsumed: () => void
 }
 
 export function DiagnosisView({
@@ -26,9 +37,15 @@ export function DiagnosisView({
   sessionId,
   onVehicleChange,
   onSessionChange,
+  onOpenManuals,
+  onChatIntent,
+  chatIntent,
+  onChatIntentConsumed,
 }: DiagnosisViewProps) {
   const { t, locale } = useI18n()
+  const sessionRef = useRef<HTMLSelectElement | null>(null)
   const [vehicleQuery, setVehicleQuery] = useState('')
+  const [copyHint, setCopyHint] = useState(false)
   const [result, setResult] = useState<DiagnoseResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -120,9 +137,74 @@ export function DiagnosisView({
 
   const sortedSessions: SessionSummary[] = [...sessions].sort((a, b) => b.checked_at.localeCompare(a.checked_at))
 
-  const plateValue = selectedVehicle
-    ? `${selectedVehicle.vehicle_id} · ${selectedVehicle.make}${selectedVehicle.model ? ` ${selectedVehicle.model}` : ''}`
-    : ''
+  const modelLabel = selectedVehicle ? vehicleModelLabel(selectedVehicle.make, selectedVehicle.model) : ''
+  const plateValue = selectedVehicle ? `${selectedVehicle.vehicle_id} · ${modelLabel}` : ''
+  const activeSession = sortedSessions.find((session) => session.session_id === sessionId) ?? null
+  const engineModel = selectedVehicle?.engine_model ?? result?.engine_model ?? null
+
+  const copyVerdictPlan = useCallback(async () => {
+    if (!result) return
+    const stepKeys =
+      result.status === 'normal'
+        ? ['verdict.steps.normal.1', 'verdict.steps.normal.2']
+        : result.status === 'anomaly'
+          ? ['verdict.steps.anomaly.1', 'verdict.steps.anomaly.2', 'verdict.steps.anomaly.3']
+          : ['verdict.steps.failed.1', 'verdict.steps.failed.2']
+    const body = [
+      t(
+        result.status === 'normal'
+          ? 'verdict.normal.title'
+          : result.status === 'anomaly'
+            ? 'verdict.anomaly.title'
+            : 'verdict.failed.title',
+      ),
+      result.vehicle_id,
+      result.session_id,
+      result.engine_model ? `${t('verdict.engine')}: ${result.engine_model}` : '',
+      result.anomaly_title ? `${result.anomaly_type}: ${result.anomaly_title}` : '',
+      ...stepKeys.map((key) => t(key as 'verdict.steps.normal.1')),
+    ]
+      .filter(Boolean)
+      .join('\n')
+    try {
+      await navigator.clipboard.writeText(body)
+      setCopyHint(true)
+      window.setTimeout(() => setCopyHint(false), 2200)
+    } catch {
+      /* clipboard blocked */
+    }
+  }, [result, t])
+
+  const verdictActions = useMemo(() => {
+    if (!result) return null
+    return {
+      onExplain: () =>
+        onChatIntent({ id: Date.now(), message: buildExplainDiagnosisMessage(result), autoSend: true }),
+      onWhatToCheck: () =>
+        onChatIntent({ id: Date.now(), message: buildWhatToCheckMessage(result), autoSend: true }),
+      onSearchManual: () => {
+        if (!engineModel) return
+        onOpenManuals({
+          id: Date.now(),
+          engineModel,
+          query: manualQueryFromDiagnosis(result),
+          autoOpenSingle: true,
+        })
+      },
+      onPrepareTicket:
+        result.status === 'anomaly' && result.signal_quality !== 'bad'
+          ? () => onChatIntent({ id: Date.now(), message: buildPrepareTicketMessage(result), autoSend: true })
+          : undefined,
+      onCopyPlan: () => void copyVerdictPlan(),
+      onOtherSession:
+        result.status === 'check_failed'
+          ? () => {
+              sessionRef.current?.focus()
+              sessionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+            }
+          : undefined,
+    }
+  }, [copyVerdictPlan, engineModel, onChatIntent, onOpenManuals, result])
 
   return (
     <div className="diag-page">
@@ -157,7 +239,7 @@ export function DiagnosisView({
                           setVehicleQuery('')
                         }}
                       >
-                        {v.vehicle_id} · {v.garage_no} · {v.make} {v.model ?? ''} · {v.engine_model}
+                        {v.vehicle_id} · {v.garage_no} · {vehicleModelLabel(v.make, v.model)} · {v.engine_model}
                       </button>
                     </li>
                   ))}
@@ -165,20 +247,25 @@ export function DiagnosisView({
               ) : null}
               {selectedVehicle ? (
                 <p className="diag-toolbar__hint">
-                  {selectedVehicle.make}
-                  {selectedVehicle.model ? ` ${selectedVehicle.model}` : ''} · {t('diag.garage')} {selectedVehicle.garage_no} · {selectedVehicle.engine_model}
+                  {modelLabel} · {t('diag.garage')} {selectedVehicle.garage_no} · {selectedVehicle.engine_model}
                 </p>
               ) : null}
             </div>
             <label className="field">
               <span>{t('diag.check')}</span>
-              <select value={sessionId} onChange={(e) => onSessionSelect(e.target.value)}>
-                {sessions.map((s) => (
+              <select ref={sessionRef} value={sessionId} onChange={(e) => onSessionSelect(e.target.value)}>
+                {sortedSessions.map((s) => (
                   <option key={s.session_id} value={s.session_id}>
-                    {formatSessionDateTime(locale, s.checked_at)} · {s.session_id}
+                    {s.session_id} · {formatSessionDateTime(locale, s.checked_at)}
                   </option>
                 ))}
               </select>
+              {activeSession ? (
+                <p className="session-indicator">
+                  <span className="session-indicator__mark">{t('history.selected')}</span>
+                  {activeSession.session_id} · {formatSessionDateTime(locale, activeSession.checked_at)}
+                </p>
+              ) : null}
             </label>
             <button
               type="button"
@@ -189,25 +276,20 @@ export function DiagnosisView({
               <Play size={18} aria-hidden />
               {loading ? t('diag.running') : t('diag.run')}
             </button>
-            <VerdictCard result={result} loading={loading} error={error} vehicleId={vehicleId} />
-            <section className="panel" aria-labelledby="diag-trend-title">
-              <h2 id="diag-trend-title" className="panel__title">
-                {t('diag.history')}
-              </h2>
-              {trendError ? (
-                <p className="panel__error" role="alert">
-                  {trendError}
-                </p>
-              ) : (
-                <AnomalyTrendChart
-                  points={trendPoints.filter((p) => !p.skipped && typeof p.anomaly_score === 'number')}
-                />
-              )}
-            </section>
+            <VerdictCard
+              result={result}
+              loading={loading}
+              error={error}
+              vehicleId={vehicleId}
+              actions={verdictActions}
+            />
+            {copyHint ? <p className="panel__subtitle diag-copy-hint">{t('common.copied')}</p> : null}
             <VehicleHistoryPanel
-              sessions={sortedSessions.slice(0, 6)}
+              sessions={sortedSessions}
               activeSessionId={sessionId}
               onSelectSession={onSessionSelect}
+              trendPoints={trendPoints}
+              trendError={trendError}
             />
           </section>
           <section className="diag-col diag-col--chat">
@@ -217,6 +299,8 @@ export function DiagnosisView({
                 sessionId={sessionId}
                 diagnoseResult={result}
                 onDiagnoseCommand={() => void runDiagnosis()}
+                chatIntent={chatIntent}
+                onChatIntentConsumed={onChatIntentConsumed}
               />
             ) : null}
           </section>
