@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react'
-import { Activity, Bus, ClipboardList, Moon, Sun, Truck } from 'lucide-react'
+import { Activity, Bus, ClipboardList, LayoutDashboard, Moon, Sun, Truck } from 'lucide-react'
 import type { ThemeMode } from '../../hooks/useTheme'
 
-export type AppView = 'diagnosis' | 'fleet' | 'tickets'
+export type AppView = 'diagnosis' | 'chief' | 'fleet' | 'tickets'
 
 interface WorkspaceShellProps {
   view: AppView
@@ -14,6 +14,7 @@ interface WorkspaceShellProps {
 
 const NAV: { id: AppView; label: string; icon: typeof Activity }[] = [
   { id: 'diagnosis', label: 'Диагностика', icon: Activity },
+  { id: 'chief', label: 'Главный механик', icon: LayoutDashboard },
   { id: 'fleet', label: 'Автопарк', icon: Bus },
   { id: 'tickets', label: 'Заявки', icon: ClipboardList },
 ]

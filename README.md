@@ -6,7 +6,7 @@ AI-powered engine diagnostics and intelligent fleet management platform.
 
 ## Статус
 
-**26.11.2026 — этапы 01–04 готовы.** Mock ML, RAG, Groq-агент, цельный UI механика (shell, темы, автопарк, журнал заявок, evidence drawer).
+**26.11.2026 — этапы 01–05 готовы.** Добавлен дашборд главного механика (аналитика без LLM).
 
 ## Локальный запуск (этапы 01–03)
 
@@ -55,6 +55,8 @@ npm run dev
 **RAG API:** `POST /api/manuals/search`, `GET /api/sources/evidence/{id}`, `GET /api/sources/pdf/{doc_id}`.
 
 **Агент (этап 03):** `POST /api/conversations` `{ vehicle_id, session_id }`, `POST /api/conversations/{id}/messages`, `POST /api/tickets/drafts/{id}/confirm` с `acknowledge: true`.
+
+**Аналитика парка (этап 05):** `GET /api/fleet/dashboard`, `GET /api/fleet/vehicles/{vehicle_id}/insight` — категории, очередь, график anomaly_score, ранние предупреждения; данные из `vehicles.json` + журнал заявок.
 
 Переиндексация: `scripts\build_manual_index.py`. Контроль RAG: `scripts\verify_rag_queries.py`. Контроль агента (live Groq + mocks): `backend\.venv\Scripts\python.exe scripts\verify_agent_scenarios.py`.
 

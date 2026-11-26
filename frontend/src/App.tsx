@@ -3,6 +3,7 @@ import { fetchVehicles } from './api/client'
 import type { VehicleSummary } from './api/types'
 import { WorkspaceShell, type AppView } from './components/shell/WorkspaceShell'
 import { useTheme } from './hooks/useTheme'
+import { ChiefMechanicView } from './views/ChiefMechanicView'
 import { DiagnosisView } from './views/DiagnosisView'
 import { FleetView } from './views/FleetView'
 import { TicketsView } from './views/TicketsView'
@@ -35,10 +36,10 @@ export default function App() {
     }
   }, [])
 
-  const openDiagnosisForVehicle = (id: string) => {
+  const openDiagnosisForVehicle = (id: string, sessionOverride?: string) => {
     setVehicleId(id)
     const vehicle = vehicles.find((v) => v.vehicle_id === id)
-    setSessionId(vehicle?.sessions[0]?.session_id ?? '')
+    setSessionId(sessionOverride ?? vehicle?.sessions[0]?.session_id ?? '')
     setView('diagnosis')
   }
 
@@ -54,8 +55,9 @@ export default function App() {
           onSessionChange={setSessionId}
         />
       ) : null}
+      {view === 'chief' ? <ChiefMechanicView onOpenDiagnosis={openDiagnosisForVehicle} /> : null}
       {view === 'fleet' ? (
-        <FleetView vehicles={vehicles} fleetError={fleetError} onOpenDiagnosis={openDiagnosisForVehicle} />
+        <FleetView vehicles={vehicles} fleetError={fleetError} onOpenDiagnosis={(id) => openDiagnosisForVehicle(id)} />
       ) : null}
       {view === 'tickets' ? <TicketsView /> : null}
     </WorkspaceShell>

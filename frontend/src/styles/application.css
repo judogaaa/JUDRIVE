@@ -881,3 +881,181 @@ a:focus-visible {
     width: 100%;
   }
 }
+
+.chief-summary {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  margin-bottom: 1rem;
+}
+
+.summary-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  padding: 1rem 1.1rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.summary-card--ok {
+  border-color: color-mix(in srgb, var(--ok) 35%, var(--border));
+}
+
+.summary-card--warn {
+  border-color: color-mix(in srgb, var(--warn) 35%, var(--border));
+}
+
+.summary-card--danger {
+  border-color: color-mix(in srgb, var(--danger) 35%, var(--border));
+}
+
+.summary-card__icon {
+  display: inline-flex;
+  margin-bottom: 0.35rem;
+  color: var(--text-muted);
+}
+
+.summary-card__value {
+  margin: 0;
+  font-size: 2rem;
+  font-weight: 750;
+  line-height: 1.1;
+}
+
+.summary-card__label {
+  margin: 0.2rem 0 0;
+  font-weight: 650;
+}
+
+.summary-card__hint {
+  margin: 0.35rem 0 0;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
+.stats-grid {
+  display: grid;
+  gap: 0.75rem;
+}
+
+@media (min-width: 800px) {
+  .stats-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.stat-block {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 0.85rem 1rem;
+  background: var(--surface-elevated);
+}
+
+.stat-block h3 {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.stat-block ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.88rem;
+}
+
+.stat-block li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.chief-filters {
+  display: grid;
+  gap: 0.75rem;
+}
+
+@media (min-width: 760px) {
+  .chief-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 650;
+  border: 1px solid var(--border);
+  background: var(--surface-elevated);
+}
+
+.badge--normal {
+  color: var(--ok);
+  background: var(--ok-soft);
+}
+
+.badge--attention {
+  color: var(--warn);
+  background: var(--warn-soft);
+}
+
+.badge--quarantine {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.badge--rerecord {
+  margin-left: 0.35rem;
+  font-size: 0.72rem;
+}
+
+.priority-queue {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.queue-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--surface-elevated);
+  cursor: pointer;
+  text-align: left;
+  min-height: 44px;
+}
+
+.queue-row__id {
+  font-weight: 600;
+}
+
+.queue-row__meta {
+  margin-left: auto;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.insight-warnings {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.88rem;
+  color: var(--text-muted);
+}

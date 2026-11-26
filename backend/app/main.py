@@ -15,6 +15,7 @@ from app.schemas.diagnose import DiagnoseRequest, DiagnoseResponse
 from app.schemas.health import HealthResponse
 from app.schemas.manuals import ManualSearchRequest, ManualSearchResponse, ManualSearchHit
 from app.schemas.tickets import TicketConfirmRequest
+from app.services.analytics import FleetAnalyticsService
 from app.services.fleet import FleetService
 from app.services.mock_clients import MockMlClient, MockToirClient
 from app.services.tickets import TicketService
@@ -28,6 +29,7 @@ rag_service = ManualRagService(settings.db_path, settings.pdf_dir)
 app_repo = AppRepository(settings.db_path)
 agent = AgentOrchestrator(settings, fleet, mock_ml, rag_service, app_repo)
 ticket_service = TicketService(app_repo, fleet, mock_ml, mock_toir)
+fleet_analytics = FleetAnalyticsService(fleet, app_repo, settings.fleet_data_path)
 
 
 @asynccontextmanager
@@ -172,3 +174,26 @@ async def confirm_ticket_draft(draft_id: str, body: TicketConfirmRequest):
 @app.get(f"{settings.api_prefix}/tickets")
 async def list_submitted_tickets(vehicle_id: str | None = None):
     return {"tickets": app_repo.list_tickets(vehicle_id)}
+
+
+@app.get(f"{settings.api_prefix}/fleet/dashboard")
+async def fleet_dashboard(
+    category: str | None = None,
+    engine_model: str | None = None,
+    vehicle_type: str | None = None,
+    q: str | None = None,
+):
+    return fleet_analytics.dashboard(
+        category=category,
+        engine_model=engine_model,
+        vehicle_type=vehicle_type,
+        query=q,
+    )
+
+
+@app.get(f"{settings.api_prefix}/fleet/vehicles/{{vehicle_id}}/insight")
+async def fleet_vehicle_insight(vehicle_id: str):
+    insight = fleet_analytics.vehicle_insight(vehicle_id)
+    if insight is None:
+        raise HTTPException(status_code=404, detail="Транспорт не найден")
+    return insight
