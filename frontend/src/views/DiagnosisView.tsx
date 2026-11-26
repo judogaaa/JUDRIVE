@@ -23,6 +23,7 @@ interface DiagnosisViewProps {
   vehicles: VehicleSummary[]
   fleetError: string | null
   onRetryFleet?: () => void
+  onOpenTicket?: (ticketId: string) => void
   vehicleId: string
   sessionId: string
   onVehicleChange: (id: string) => void
@@ -37,6 +38,7 @@ export function DiagnosisView({
   vehicles,
   fleetError,
   onRetryFleet,
+  onOpenTicket,
   vehicleId,
   sessionId,
   onVehicleChange,
@@ -257,9 +259,9 @@ export function DiagnosisView({
               })
           : undefined,
       onCopyPlan: () => void copyVerdictPlan(),
-      onOtherSession: () => setSessionChooserOpen(true),
+      onOtherSession: sortedSessions.length > 1 ? () => setSessionChooserOpen(true) : undefined,
     }
-  }, [activeResult, copyVerdictPlan, engineModel, onChatIntent, onOpenManuals, sessionId, t, vehicleId])
+  }, [activeResult, copyVerdictPlan, engineModel, onChatIntent, onOpenManuals, sessionId, sortedSessions.length, t, vehicleId])
 
   return (
     <div className="diag-page">
@@ -356,6 +358,9 @@ export function DiagnosisView({
               onDiagnoseCommand={() => void runDiagnosis()}
               chatIntent={chatIntent}
               onChatIntentConsumed={onChatIntentConsumed}
+              onOpenTicket={onOpenTicket}
+              onOpenHistory={() => document.getElementById('diagnosis-history')?.focus()}
+              onChooseSession={sortedSessions.length > 1 ? () => setSessionChooserOpen(true) : undefined}
               onOpenManuals={(query) => {
                 if (!engineModel) return
                 onOpenManuals({

@@ -22,6 +22,18 @@ export default function App() {
   const onboarding = useOnboarding()
   const helpDestination = useRef<string | null>(null)
   const [view, setView] = useState<AppView>('diagnosis')
+  const [visited, setVisited] = useState<AppView[]>(['diagnosis'])
+  const [diagnosisOrigin, setDiagnosisOrigin] = useState<AppView | null>(null)
+  const [manualOrigin, setManualOrigin] = useState<AppView | null>(null)
+  const [manualEngine, setManualEngine] = useState<string | null>(null)
+  const [manualRevision, setManualRevision] = useState(0)
+  const scrollPositions = useRef<Partial<Record<AppView, number>>>({})
+  const navigate = (next: AppView) => {
+    if (next === view) return
+    scrollPositions.current[view] = window.scrollY
+    setVisited((current) => current.includes(next) ? current : [...current, next])
+    setView(next)
+  }
   const [vehicles, setVehicles] = useState<VehicleSummary[]>([])
   const [fleetError, setFleetError] = useState<string | null>(null)
   const [fleetRevision, setFleetRevision] = useState(0)
@@ -29,6 +41,7 @@ export default function App() {
   const [sessionId, setSessionId] = useState('')
   const [manualIntent, setManualIntent] = useState<ManualSearchIntent | null>(null)
   const [chatIntent, setChatIntent] = useState<ChatIntent | null>(null)
+  const [linkedTicket, setLinkedTicket] = useState<string | undefined>(undefined)
   const [ticketsVehicleFilter, setTicketsVehicleFilter] = useState<string | undefined>(undefined)
   const sequence = useRef(0)
   const selectionRef = useRef({ vehicleId: '', sessionId: '' })
@@ -39,8 +52,7 @@ export default function App() {
   const currentEngine = vehicles.find((v) => v.vehicle_id === vehicleId)?.engine_model ?? null
 
   useEffect(() => {
-    // Keep the new section anchored at its title; diagnosis context lives in state.
-    window.scrollTo({ top: 0, behavior: 'auto' })
+    window.scrollTo({ top: scrollPositions.current[view] ?? 0, behavior: 'auto' })
   }, [view])
 
   useEffect(() => {
@@ -52,19 +64,22 @@ export default function App() {
   const openManuals = (intent: Omit<ManualSearchIntent, 'id'> | string) => {
     const engine = typeof intent === 'string' ? currentEngine : intent.engineModel
     const query = typeof intent === 'string' ? intent : intent.query
-    if (!engine || !query.trim()) return
-    setManualIntent({
+    if (!engine) return
+    setManualOrigin(view)
+    setManualEngine(engine)
+    setManualRevision((value) => value + 1)
+    setManualIntent(query.trim() ? {
       id: ++sequence.current,
       engineModel: engine,
       query,
       autoOpenSingle: typeof intent !== 'string' ? intent.autoOpenSingle : false,
-    })
-    setView('manuals')
+    } : null)
+    navigate('manuals')
   }
 
-  const askInChat = (message: string, autoSend = true, target?: { vehicleId: string; sessionId: string }) => {
-    const vid = target?.vehicleId ?? vehicleId
-    const sid = target?.sessionId ?? sessionId
+  const askInChat = (message: string, autoSend = true, evidenceId?: string) => {
+    const vid = vehicleId
+    const sid = sessionId
     if (!vid || !sid || !message.trim()) return
     setVehicleId(vid)
     setSessionId(sid)
@@ -74,8 +89,11 @@ export default function App() {
       sessionId: sid,
       message,
       autoSend,
+      evidenceId,
     })
-    setView('diagnosis')
+    setDiagnosisOrigin(view)
+    helpDestination.current = 'diagnosis-chat'
+    navigate('diagnosis')
   }
 
   useEffect(() => {
@@ -110,18 +128,25 @@ export default function App() {
     setVehicleId(id)
     const vehicle = vehicles.find((v) => v.vehicle_id === id)
     setSessionId(sessionOverride ?? (vehicle ? latestSessionId(vehicle) : ''))
-    setView('diagnosis')
+    setDiagnosisOrigin(view)
+    navigate('diagnosis')
   }
 
-  const openTicketsForVehicle = (id: string) => {
+  const openTicketsForVehicle = (id: string, ticketId?: string) => {
+    setLinkedTicket(ticketId)
     setTicketsVehicleFilter(id)
-    setView('tickets')
+    navigate('tickets')
   }
 
   return (
     <>
-      <WorkspaceShell modalOpen={onboarding.open} view={view} onViewChange={setView} themeMode={themeMode} onThemeChange={setThemeMode}>
+      <WorkspaceShell modalOpen={onboarding.open} view={view} onViewChange={navigate} themeMode={themeMode} onThemeChange={setThemeMode}>
         <div hidden={view !== 'diagnosis'}>
+          {diagnosisOrigin && diagnosisOrigin !== 'diagnosis' && (
+            <button type="button" className="btn btn--secondary context-return" onClick={() => navigate(diagnosisOrigin)}>
+              ← {t(`nav.${diagnosisOrigin}`)}
+            </button>
+          )}
           <DiagnosisView
             vehicles={vehicles}
             fleetError={fleetError}
@@ -138,6 +163,7 @@ export default function App() {
             }}
             chatIntent={chatIntent}
             onChatIntentConsumed={() => setChatIntent(null)}
+            onOpenTicket={(ticketId) => openTicketsForVehicle(vehicleId, ticketId)}
           />
         </div>
         {view === 'help' ? (
@@ -147,45 +173,60 @@ export default function App() {
                 chat: 'diagnosis-chat', voice: 'diagnosis-chat', history: 'diagnosis-history',
               }
               helpDestination.current = destinations[topic] ?? null
-              setView(target)
+              navigate(target)
             }}
             onRestartOnboarding={onboarding.start}
             themeMode={themeMode}
             onThemeChange={setThemeMode}
           />
         ) : null}
-        {view === 'manuals' ? (
-          <ManualsView
-            engineModel={currentEngine}
-            searchIntent={manualIntent}
-            onSearchIntentConsumed={() => setManualIntent(null)}
-            onAskInChat={(text, engine) => {
-              if (engine === currentEngine) askInChat(text, false)
-            }}
-            onBack={() => setView('diagnosis')}
-          />
+        {visited.includes('manuals') ? (
+          <div hidden={view !== 'manuals'}>
+            <ManualsView
+              key={manualRevision}
+              engineModel={manualEngine ?? currentEngine}
+              chatEngineModel={currentEngine}
+              searchIntent={manualIntent}
+              onSearchIntentConsumed={() => setManualIntent(null)}
+              onAskInChat={(text, engine, evidenceId) => {
+                if (engine === currentEngine) askInChat(text, false, evidenceId)
+              }}
+              onBack={manualOrigin ? () => navigate(manualOrigin) : undefined}
+              backLabel={manualOrigin ? t(`nav.${manualOrigin}`) : undefined}
+            />
+          </div>
         ) : null}
-        {view === 'chief' ? (
-          <ChiefMechanicView
-            onOpenDiagnosis={openDiagnosisForVehicle}
-            onOpenTickets={openTicketsForVehicle}
-          />
+        {visited.includes('chief') ? (
+          <div hidden={view !== 'chief'}>
+            <ChiefMechanicView
+              onOpenDiagnosis={openDiagnosisForVehicle}
+              onOpenTickets={openTicketsForVehicle}
+            />
+          </div>
         ) : null}
-        {view === 'fleet' ? (
-          <FleetView
-            vehicles={vehicles}
-            fleetError={fleetError}
-            onRetryFleet={retryFleet}
-            onOpenDiagnosis={openDiagnosisForVehicle}
-            onOpenTickets={openTicketsForVehicle}
-          />
+        {visited.includes('fleet') ? (
+          <div hidden={view !== 'fleet'}>
+            <FleetView
+              vehicles={vehicles}
+              fleetError={fleetError}
+              onRetryFleet={retryFleet}
+              onOpenManuals={(engineModel) => openManuals({ engineModel, query: '' })}
+              onOpenDiagnosis={openDiagnosisForVehicle}
+              onOpenTickets={openTicketsForVehicle}
+            />
+          </div>
         ) : null}
-        {view === 'tickets' ? (
-          <TicketsView
-            filterVehicleId={ticketsVehicleFilter}
-            onFilterConsumed={() => setTicketsVehicleFilter(undefined)}
-            onOpenDiagnosis={openDiagnosisForVehicle}
-          />
+        {visited.includes('tickets') ? (
+          <div hidden={view !== 'tickets'}>
+            <TicketsView
+              isVisible={view === 'tickets'}
+              filterVehicleId={ticketsVehicleFilter}
+              linkedTicketId={linkedTicket}
+              onLinkedTicketConsumed={() => setLinkedTicket(undefined)}
+              onFilterConsumed={() => setTicketsVehicleFilter(undefined)}
+              onOpenDiagnosis={openDiagnosisForVehicle}
+            />
+          </div>
         ) : null}
       </WorkspaceShell>
       <Onboarding
@@ -198,7 +239,6 @@ export default function App() {
         onStart={() => {
           if (onboarding.state.step !== onboarding.lastStep || !onboarding.state.acknowledged) return
           onboarding.complete()
-          setView('diagnosis')
         }}
       />
     </>

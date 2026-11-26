@@ -90,11 +90,12 @@ export async function sendChatMessage(
   analysisOnly = false,
   signal?: AbortSignal,
   action?: DiagnosisAction,
+  evidenceId?: string,
 ): Promise<ChatReply> {
   const response = await chatFetch<ChatReply>(`/api/conversations/${conversationId}/messages`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message, locale, analysis_only: analysisOnly, action }),
+    body: JSON.stringify({ message, locale, analysis_only: analysisOnly, action, evidence_id: evidenceId }),
     signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(180000)]) : AbortSignal.timeout(180000),
   })
   if (!response || typeof response.reply !== 'string' || !response.reply.trim() || !Array.isArray(response.sources)) throw i18nError('error.agentUnavailable')

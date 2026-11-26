@@ -26,6 +26,9 @@ interface AgentChatProps {
   onDiagnoseCommand?: () => void
   chatIntent?: ChatIntent | null
   onChatIntentConsumed?: () => void
+  onOpenTicket?: (ticketId: string) => void
+  onOpenHistory?: () => void
+  onChooseSession?: () => void
   onOpenManuals?: (query: string) => void
 }
 
@@ -50,6 +53,9 @@ export function AgentChat({
   chatIntent,
   onChatIntentConsumed,
   onOpenManuals,
+  onOpenHistory,
+  onOpenTicket,
+  onChooseSession,
 }: AgentChatProps) {
   const { locale, t } = useI18n()
   const contextKey = `${vehicleId}:${sessionId}`
@@ -60,6 +66,7 @@ export function AgentChat({
   const sendAbortRef = useRef<AbortController | null>(null)
   const pendingIntent = useRef<{ text: string; action?: DiagnosisAction } | null>(null)
   const sourceRequest = useRef(0)
+  const composerEvidence = useRef<string | undefined>(undefined)
   const chatIntentRef = useRef<number | null>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const tRef = useRef(t)
@@ -71,7 +78,7 @@ export function AgentChat({
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [retryMessage, setRetryMessage] = useState<{ text: string; action?: DiagnosisAction } | null>(null)
+  const [retryMessage, setRetryMessage] = useState<{ text: string; action?: DiagnosisAction; evidenceId?: string } | null>(null)
   const [draft, setDraft] = useState<DraftPayload | null>(null)
   const [ticketId, setTicketId] = useState<string | null>(null)
   const [evidenceHit, setEvidenceHit] = useState<ManualSearchHit | null>(null)
@@ -144,7 +151,7 @@ export function AgentChat({
   }, [contextKey, vehicleId, sessionId, conversationRetry])
 
   const send = useCallback(
-    async (text: string, action?: DiagnosisAction) => {
+    async (text: string, action?: DiagnosisAction, evidenceId?: string) => {
       const trimmed = text.trim()
       if (!trimmed) return
       if (!conversationId) {
@@ -171,8 +178,9 @@ export function AgentChat({
       setInput((current) => current.trim() === trimmed ? '' : current)
 
       try {
-        const reply = await sendChatMessage(convId, trimmed, locale, false, controller.signal, action)
+        const reply = await sendChatMessage(convId, trimmed, locale, false, controller.signal, action, evidenceId)
         if (epoch !== sendGen.current || contextRef.current !== key) return
+        if (composerEvidence.current === evidenceId) composerEvidence.current = undefined
         const assistantMsg: ChatMessage = {
           id: crypto.randomUUID(),
           role: 'assistant',
@@ -188,7 +196,7 @@ export function AgentChat({
         if (epoch !== sendGen.current || contextRef.current !== key) return
         setMessages((prev) => prev.filter((message) => message.id !== userMsg.id))
         setError(resolveErrorMessage(tRef.current, err, 'error.agent'))
-        setRetryMessage({ text: trimmed, action })
+        setRetryMessage({ text: trimmed, action, evidenceId })
         setInput((prev) => (prev.trim() ? prev : trimmed))
       } finally {
         if (epoch === sendGen.current && contextRef.current === key) {
@@ -207,6 +215,7 @@ export function AgentChat({
     if (chatIntent.autoSend) {
       pendingIntent.current = { text: chatIntent.message, action: chatIntent.action }
     } else {
+      composerEvidence.current = chatIntent.evidenceId
       prefill(chatIntent.message)
     }
     onChatIntentConsumed?.()
@@ -342,6 +351,22 @@ export function AgentChat({
                   <MessageSquare size={16} aria-hidden />
                   {t('action.followUp')}
                 </button>
+                {onOpenHistory && status !== 'check_failed' && (
+                  <button type="button" className="btn btn--secondary" onClick={onOpenHistory}>
+                    {t('history.title')}
+                  </button>
+                )}
+                {onChooseSession && status === 'check_failed' && (
+                  <button type="button" className="btn btn--secondary" onClick={onChooseSession}>
+                    {t('verdict.action.chooseOther')}
+                  </button>
+                )}
+                {status === 'anomaly' && !draft && !ticketId && (
+                  <button type="button" className="btn btn--secondary" disabled={loading || !conversationId}
+                    onClick={() => void send(t('chat.suggest3'), 'prepare_ticket')}>
+                    {t('chat.suggest3')}
+                  </button>
+                )}
                 {onOpenManuals && status !== 'check_failed' ? (
                   <button
                     type="button"
@@ -356,10 +381,18 @@ export function AgentChat({
             ) : null}
           </article>
         ))}
-        <TicketDraftCard draft={status === 'check_failed' ? null : draft} onConfirmed={(id) => setTicketId(id)} />
+        <TicketDraftCard
+          onReplace={status === 'anomaly' && !loading && conversationId
+            ? () => void send(t('chat.suggest3'), 'prepare_ticket') : undefined}
+          draft={status === 'check_failed' ? null : draft} onConfirmed={(id) => setTicketId(id)} />
         {ticketId ? (
           <p className="ticket-draft__ok">
             {t('ticket.confirmedId')}: {ticketId}
+            {onOpenTicket && (
+              <button type="button" className="chat-source-link" onClick={() => onOpenTicket(ticketId)}>
+                {t('nav.tickets')}
+              </button>
+            )}
           </p>
         ) : null}
         {loading ? (
@@ -381,7 +414,7 @@ export function AgentChat({
               </button>
             ) : null}
             {retryMessage ? (
-              <button type="button" className="btn btn--secondary" onClick={() => void send(retryMessage.text, retryMessage.action)}>
+              <button type="button" className="btn btn--secondary" onClick={() => void send(retryMessage.text, retryMessage.action, retryMessage.evidenceId)}>
                 <RotateCcw size={15} aria-hidden />
                 {t('chat.retrySend')}
               </button>
@@ -410,7 +443,7 @@ export function AgentChat({
         className="chat-compose"
         onSubmit={(event) => {
           event.preventDefault()
-          void send(input)
+          void send(input, undefined, composerEvidence.current)
         }}
       >
         <div className="chat-compose__bar">
@@ -425,7 +458,7 @@ export function AgentChat({
             onKeyDown={(event) => {
               if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
                 event.preventDefault()
-                if (!loading && input.trim()) void send(input)
+                if (!loading && input.trim()) void send(input, undefined, composerEvidence.current)
               }
             }}
           />

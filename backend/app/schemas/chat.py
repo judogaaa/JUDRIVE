@@ -17,3 +17,4 @@ class ChatMessageRequest(BaseModel):
     locale: str = Field(default="ru", max_length=8)
     analysis_only: bool = False
     action: DiagnosisAction | None = None
+    evidence_id: str | None = Field(default=None, min_length=1, max_length=100)

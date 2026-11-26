@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useId, useMemo, useState } from 'react'
 import type { TrendPoint } from '../api/fleet'
 import type { SessionSummary } from '../api/types'
 import { useI18n } from '../i18n/I18nContext'
@@ -11,6 +11,7 @@ interface VehicleHistoryPanelProps {
   onSelectSession: (sessionId: string) => void
   trendPoints: TrendPoint[]
   trendError: string | null
+  trendLoading?: boolean
 }
 
 export function VehicleHistoryPanel({
@@ -19,7 +20,9 @@ export function VehicleHistoryPanel({
   onSelectSession,
   trendPoints,
   trendError,
+  trendLoading,
 }: VehicleHistoryPanelProps) {
+  const titleId = useId()
   const { t, locale } = useI18n()
   const [tab, setTab] = useState<'checks' | 'trend'>('checks')
 
@@ -35,9 +38,9 @@ export function VehicleHistoryPanel({
   )
 
   return (
-    <section className="panel diag-history" aria-labelledby="history-title">
+    <section className="panel diag-history" aria-labelledby={titleId}>
       <div className="diag-history__head">
-        <h2 id="history-title" className="panel__title">
+        <h2 id={titleId} className="panel__title">
           {t('history.title')}
         </h2>
         <div className="diag-tabs" role="tablist">
@@ -81,6 +84,8 @@ export function VehicleHistoryPanel({
             )
           })}
         </ul>
+      ) : trendLoading ? (
+        <p className="panel__subtitle" role="status">{t('insight.loading')}</p>
       ) : trendError ? (
         <p className="panel__error" role="alert">
           {trendError}

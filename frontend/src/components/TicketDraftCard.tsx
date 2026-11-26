@@ -11,30 +11,33 @@ import { SourceDrawer } from './SourceDrawer'
 interface TicketDraftCardProps {
   draft: DraftPayload | null
   onConfirmed: (ticketId: string) => void
+  onReplace?: () => void
 }
 
-export function TicketDraftCard({ draft, onConfirmed }: TicketDraftCardProps) {
+export function TicketDraftCard({ draft, onConfirmed, onReplace }: TicketDraftCardProps) {
   if (!draft?.draft_id || !draft.confirm_nonce) return null
-  return <TicketDraftBody key={draft.draft_id} draft={draft} onConfirmed={onConfirmed} />
+  return <TicketDraftBody key={draft.draft_id} draft={draft} onConfirmed={onConfirmed} onReplace={onReplace} />
 }
 
 function TicketDraftBody({
   draft,
   onConfirmed,
+  onReplace,
 }: {
   draft: DraftPayload
   onConfirmed: (ticketId: string) => void
+  onReplace?: () => void
 }) {
   const { locale, t } = useI18n()
   const confirming = useRef(false)
-  const [phase, setPhase] = useState<'idle' | 'sending' | 'created' | 'duplicate' | 'unknown' | 'blocked'>('idle')
+  const [phase, setPhase] = useState<'idle' | 'sending' | 'created' | 'duplicate' | 'unknown' | 'blocked' | 'stale'>('idle')
   const [error, setError] = useState<string | null>(null)
   const [ticketId, setTicketId] = useState<string | null>(null)
   const [acknowledged, setAcknowledged] = useState(false)
   const [source, setSource] = useState<ManualSearchHit | null>(null)
 
   const payload = draft.payload
-  const locked = phase === 'sending' || phase === 'created' || phase === 'duplicate' || phase === 'unknown' || phase === 'blocked'
+  const locked = phase === 'sending' || phase === 'created' || phase === 'duplicate' || phase === 'unknown' || phase === 'blocked' || phase === 'stale'
 
   const urgencyLabel = (urgency: string | undefined): string => {
     if (urgency === 'low' || urgency === 'medium' || urgency === 'high') {
@@ -71,7 +74,7 @@ function TicketDraftBody({
         return
       }
       if (result.status === 'refused' || result.status === 'stale') {
-        setPhase('blocked')
+        setPhase(result.status === 'stale' ? 'stale' : 'blocked')
         setError(t('ticket.confirmBlocked'))
         return
       }
@@ -179,7 +182,10 @@ function TicketDraftBody({
         </dl>
       ) : null}
 
-      {error ? <p className="panel__error">{error}</p> : null}
+      {error ? <p className="panel__error" role="alert">{error}</p> : null}
+      {phase === 'stale' && onReplace && (
+        <button type="button" className="btn btn--secondary" onClick={onReplace}>{t('chat.suggest3')}</button>
+      )}
       {phase === 'created' ? (
         <p className="ticket-draft__ok">
           <CheckCircle2 size={16} aria-hidden />

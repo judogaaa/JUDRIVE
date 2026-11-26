@@ -230,3 +230,21 @@ def test_context_action_retry_keeps_one_complete_turn(monkeypatch, tmp_path):
     assert response.json()["draft"] is None
     assert [row["role"] for row in client.get(url).json()["messages"]] == ["user", "assistant"]
     assert checked == [("M333YK47", "S-0006")] * 2
+
+
+def test_chat_rejects_missing_and_other_engine_source(monkeypatch, tmp_path):
+    from app.main import agent
+    from app.storage.repository import AppRepository
+
+    monkeypatch.setattr(agent, "_repo", AppRepository(tmp_path / "attachment.sqlite"))
+    monkeypatch.setattr(agent._rag, "get_evidence", lambda evidence_id:
+                        {"doc_id": "z409-rk"} if evidence_id == "other:p0001" else None)
+    client = TestClient(app)
+    response = client.post("/api/conversations", json={"vehicle_id": "B418HK98", "session_id": "S-0009"})
+    url = f"/api/conversations/{response.json()['conversation_id']}/messages"
+
+    for evidence_id in ("other:p0001", "missing:p0001"):
+        response = client.post(url, json={"message": "Проверь источник", "evidence_id": evidence_id})
+        assert response.status_code == 422
+
+    assert client.get(url).json()["messages"] == []

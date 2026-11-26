@@ -13,6 +13,9 @@ import { resolveErrorMessage } from '../lib/i18nError'
 import { docIdFromManualTitle } from '../lib/manuals'
 
 interface TicketsViewProps {
+  isVisible: boolean
+  linkedTicketId?: string
+  onLinkedTicketConsumed?: () => void
   filterVehicleId?: string
   onFilterConsumed?: () => void
   onOpenDiagnosis?: (vehicleId: string, sessionId?: string) => void
@@ -38,7 +41,7 @@ function parsePayload(snapshot: string | null): TicketPayload | null {
   }
 }
 
-export function TicketsView({ filterVehicleId, onFilterConsumed, onOpenDiagnosis }: TicketsViewProps) {
+export function TicketsView({ isVisible, filterVehicleId, linkedTicketId, onLinkedTicketConsumed, onFilterConsumed, onOpenDiagnosis }: TicketsViewProps) {
   const { t, locale } = useI18n()
   const [tickets, setTickets] = useState<TicketSubmission[]>([])
   const [loading, setLoading] = useState(true)
@@ -83,11 +86,14 @@ export function TicketsView({ filterVehicleId, onFilterConsumed, onOpenDiagnosis
 
   useEffect(() => {
     if (!filterVehicleId) return
+    if (filterVehicleId !== vehicleFilter) selectTicket(null)
     setVehicleFilter(filterVehicleId)
+    setQuery('')
     onFilterConsumed?.()
   }, [filterVehicleId, onFilterConsumed])
 
   useEffect(() => {
+    if (!isVisible) return
     let cancelled = false
     setLoading(true)
     setError(null)
@@ -104,7 +110,7 @@ export function TicketsView({ filterVehicleId, onFilterConsumed, onOpenDiagnosis
     return () => {
       cancelled = true
     }
-  }, [retry, t, vehicleFilter])
+  }, [retry, t, vehicleFilter, isVisible])
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -185,6 +191,13 @@ export function TicketsView({ filterVehicleId, onFilterConsumed, onOpenDiagnosis
       }
     }
   }
+
+  useEffect(() => {
+    if (!linkedTicketId || !isVisible || loading || error || filterVehicleId) return
+    const linked = tickets.find((row) => row.ticket_id === linkedTicketId)
+    if (linked) selectTicket(linked.local_id)
+    onLinkedTicketConsumed?.()
+  }, [error, filterVehicleId, isVisible, linkedTicketId, loading, onLinkedTicketConsumed, tickets])
 
   const open = tickets.find((row) => row.local_id === openId) ?? null
   const payload = parsePayload(open?.payload_snapshot ?? null)
@@ -391,6 +404,7 @@ export function TicketsView({ filterVehicleId, onFilterConsumed, onOpenDiagnosis
             )}
 
             <div className="workflow-actions">
+              {open.ticket_id && <CopyButton text={open.ticket_id} label={t('ticket.confirmedId')} />}
               {payload ? (
                 <CopyButton
                   text={[

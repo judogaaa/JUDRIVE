@@ -1,5 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ArrowRight, ChevronDown, ChevronUp, Search, X } from 'lucide-react'
+import { fetchVehicleDiagnosisHistory } from '../api/client'
+import type { TrendPoint } from '../api/fleet'
+import { VehicleHistoryPanel } from '../components/VehicleHistoryPanel'
 import type { VehicleSummary } from '../api/types'
 import { useI18n } from '../i18n/I18nContext'
 import { formatSessionDateTime } from '../lib/formatLocale'
@@ -10,12 +13,13 @@ interface FleetViewProps {
   fleetError: string | null
   onRetryFleet?: () => void
   onOpenDiagnosis: (vehicleId: string, sessionId?: string) => void
+  onOpenManuals?: (engine: string) => void
   onOpenTickets?: (vehicleId: string) => void
 }
 
 type SortKey = 'plate' | 'sessions' | 'make'
 
-export function FleetView({ vehicles, fleetError, onRetryFleet, onOpenDiagnosis, onOpenTickets }: FleetViewProps) {
+export function FleetView({ vehicles, fleetError, onRetryFleet, onOpenDiagnosis, onOpenTickets, onOpenManuals }: FleetViewProps) {
   const { t, locale } = useI18n()
   const [query, setQuery] = useState('')
   const [engineFilter, setEngineFilter] = useState('')
@@ -73,6 +77,17 @@ export function FleetView({ vehicles, fleetError, onRetryFleet, onOpenDiagnosis,
   }, [query, engineFilter, makeFilter, typeFilter, statusFilter, sort, desc, vehicles])
 
   const active = vehicles.find((vehicle) => vehicle.vehicle_id === selected) ?? null
+  const [trend, setTrend] = useState<{ vehicleId: string; points: TrendPoint[]; failed?: boolean } | null>(null)
+  const activeId = active?.vehicle_id
+  useEffect(() => {
+    if (!activeId) return
+    const request = new AbortController()
+    fetchVehicleDiagnosisHistory(activeId, request.signal)
+      .then((points) => { if (!request.signal.aborted) setTrend({ vehicleId: activeId, points }) })
+      .catch(() => { if (!request.signal.aborted) setTrend({ vehicleId: activeId, points: [], failed: true }) })
+    return () => request.abort()
+  }, [activeId])
+  const activeTrend = trend?.vehicleId === activeId ? trend : null
   const hasFilters = Boolean(query || engineFilter || makeFilter || typeFilter || statusFilter)
   const reset = () => {
     setQuery('')
@@ -290,35 +305,31 @@ export function FleetView({ vehicles, fleetError, onRetryFleet, onOpenDiagnosis,
               </span>
             </div>
 
-            <h3 className="drawer-section-title">{t('history.title')}</h3>
-            <ul className="history-list history-list--drawer">
-              {[...active.sessions]
-                .sort((a, b) => b.checked_at.localeCompare(a.checked_at))
-                .map((session) => (
-                  <li key={session.session_id}>
-                    <button
-                      type="button"
-                      className="history-item"
-                      onClick={() => onOpenDiagnosis(active.vehicle_id, session.session_id)}
-                    >
-                      <span className="history-item__id">{session.session_id}</span>
-                      <span className="history-item__date">{formatSessionDateTime(locale, session.checked_at)}</span>
-                    </button>
-                  </li>
-                ))}
-            </ul>
-
             <div className="workflow-actions">
               <button type="button" className="btn btn--primary" onClick={() => onOpenDiagnosis(active.vehicle_id)}>
                 {t('fleet.actionDiagnose')}
                 <ArrowRight size={18} aria-hidden />
               </button>
+              {onOpenManuals && (
+                <button type="button" className="btn btn--secondary" onClick={() => onOpenManuals(active.engine_model)}>
+                  {t('nav.manuals')}
+                </button>
+              )}
               {onOpenTickets ? (
                 <button type="button" className="btn btn--secondary" onClick={() => onOpenTickets(active.vehicle_id)}>
                   {t('nav.tickets')}
                 </button>
               ) : null}
             </div>
+            <VehicleHistoryPanel
+              key={active.vehicle_id}
+              sessions={[...active.sessions].sort((a, b) => b.checked_at.localeCompare(a.checked_at))}
+              activeSessionId={active.latest_session_id ?? ''}
+              onSelectSession={(session) => onOpenDiagnosis(active.vehicle_id, session)}
+              trendPoints={activeTrend?.points ?? []}
+              trendError={activeTrend?.failed ? t('error.network') : null}
+              trendLoading={!activeTrend}
+            />
           </aside>
         </div>
       ) : null}

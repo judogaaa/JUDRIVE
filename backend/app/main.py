@@ -235,6 +235,7 @@ async def conversation_send(conversation_id: str, body: ChatMessageRequest):
         locale=body.locale,
         analysis_only=body.analysis_only,
         action=body.action,
+        evidence_id=body.evidence_id,
     )
 
 

@@ -16,6 +16,7 @@ export type ChatIntent = {
   message: string
   autoSend?: boolean
   action?: DiagnosisAction
+  evidenceId?: string
 }
 
 const TOPICS: Record<string, string> = {

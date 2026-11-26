@@ -13,7 +13,7 @@ interface ManualSearchPanelProps {
   engineModel: string | null
   searchIntent?: ManualSearchIntent | null
   onSearchIntentConsumed?: () => void
-  onAskInChat?: (text: string, engine: string) => void
+  onAskInChat?: (text: string, engine: string, evidenceId: string) => void
   onRecentChange?: (pages: RecentPage[]) => void
 }
 
@@ -205,8 +205,9 @@ export function ManualSearchPanel({ engineModel, searchIntent, onSearchIntentCon
                     className="btn btn--secondary"
                     onClick={() =>
                       onAskInChat(
-                        `${t('action.askSource')}\n${hit.manual_title}, ${t('ticket.pdfPage')} ${hit.pdf_page}\n${hit.quote}`,
+                        `${t('action.askSource')}\n${hit.manual_title}, ${t('ticket.pdfPage')} ${hit.pdf_page}`,
                         engineModel,
+                        hit.evidence_id,
                       )
                     }
                   >

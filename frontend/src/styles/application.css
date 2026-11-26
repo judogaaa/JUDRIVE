@@ -636,6 +636,10 @@ select {
   min-height: 0;
 }
 
+.context-return {
+  margin-bottom: 12px;
+}
+
 .diag-page__header {
   display: flex;
   align-items: flex-end;

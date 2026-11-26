@@ -15,15 +15,17 @@ interface CatalogDoc {
 
 interface ManualsViewProps {
   engineModel: string | null
+  chatEngineModel: string | null
   searchIntent?: ManualSearchIntent | null
   onSearchIntentConsumed?: () => void
-  onAskInChat?: (text: string, engine: string) => void
+  onAskInChat?: (text: string, engine: string, evidenceId: string) => void
   onBack?: () => void
+  backLabel?: string
 }
 
 const FAV_KEY = 'judrive-manual-fav'
 
-export function ManualsView({ engineModel, searchIntent, onSearchIntentConsumed, onAskInChat, onBack }: ManualsViewProps) {
+export function ManualsView({ engineModel, chatEngineModel, searchIntent, onSearchIntentConsumed, onAskInChat, onBack, backLabel }: ManualsViewProps) {
   const { t } = useI18n()
   const [engines, setEngines] = useState<{ engine_model: string; documents: CatalogDoc[] }[]>([])
   const [catalogLoading, setCatalogLoading] = useState(true)
@@ -118,7 +120,7 @@ export function ManualsView({ engineModel, searchIntent, onSearchIntentConsumed,
         </div>
         {onBack ? (
           <button type="button" className="btn btn--secondary" onClick={onBack}>
-            {t('action.backDiagnosis')}
+            {backLabel ? `← ${backLabel}` : t('action.backDiagnosis')}
           </button>
         ) : null}
       </header>
@@ -232,7 +234,7 @@ export function ManualsView({ engineModel, searchIntent, onSearchIntentConsumed,
         engineModel={(searchIntent?.engineModel ?? engine) || null}
         searchIntent={searchIntent}
         onSearchIntentConsumed={onSearchIntentConsumed}
-        onAskInChat={engine === engineModel ? onAskInChat : undefined}
+        onAskInChat={engine === chatEngineModel ? onAskInChat : undefined}
         onRecentChange={setRecent}
       />
       <SourceDrawer hit={open} onClose={() => setOpen(null)} onRecentChange={setRecent} />
