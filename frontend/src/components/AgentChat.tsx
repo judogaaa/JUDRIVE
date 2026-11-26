@@ -10,6 +10,7 @@ import {
 import type { DiagnoseResponse } from '../api/types'
 import { fetchEvidence, type ManualSearchHit } from '../api/manuals'
 import { useI18n } from '../i18n/I18nContext'
+import type { TranslationKey } from '../i18n/translations'
 import { SourceDrawer } from './SourceDrawer'
 import { TicketDraftCard } from './TicketDraftCard'
 import { VoiceCapture } from './VoiceCapture'
@@ -20,11 +21,7 @@ interface AgentChatProps {
   diagnoseResult?: DiagnoseResponse | null
 }
 
-const SUGGESTIONS = [
-  'Объясни результат диагностики и что делать дальше',
-  'Найди процедуру проверки по руководству',
-  'Подготовь черновик заявки с источниками',
-]
+const SUGGESTION_KEYS: TranslationKey[] = ['chat.suggest1', 'chat.suggest2', 'chat.suggest3']
 
 export function AgentChat({ vehicleId, sessionId, diagnoseResult }: AgentChatProps) {
   const { locale, t } = useI18n()
@@ -38,6 +35,13 @@ export function AgentChat({ vehicleId, sessionId, diagnoseResult }: AgentChatPro
   const [ticketId, setTicketId] = useState<string | null>(null)
   const [evidenceHit, setEvidenceHit] = useState<ManualSearchHit | null>(null)
   const [evidenceLoading, setEvidenceLoading] = useState(false)
+
+  const statusLine = useMemo(() => {
+    if (!diagnoseResult) return t('chat.contextEmpty')
+    if (diagnoseResult.status === 'normal') return t('chat.status.normal')
+    if (diagnoseResult.status === 'anomaly') return t('chat.status.anomaly')
+    return t('chat.status.check_failed')
+  }, [diagnoseResult, t])
 
   useEffect(() => {
     let cancelled = false
@@ -56,14 +60,14 @@ export function AgentChat({ vehicleId, sessionId, diagnoseResult }: AgentChatPro
       })
       .catch((err: unknown) => {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Не удалось открыть чат')
+          setError(err instanceof Error ? err.message : t('error.chatOpen'))
         }
       })
 
     return () => {
       cancelled = true
     }
-  }, [contextKey, vehicleId, sessionId])
+  }, [contextKey, vehicleId, sessionId, t])
 
   const send = async (text: string) => {
     if (!conversationId || !text.trim()) return
@@ -87,7 +91,7 @@ export function AgentChat({ vehicleId, sessionId, diagnoseResult }: AgentChatPro
         setDraft(reply.draft)
       }
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Ошибка агента')
+      setError(err instanceof Error ? err.message : t('error.agent'))
     } finally {
       setLoading(false)
     }
@@ -111,7 +115,7 @@ export function AgentChat({ vehicleId, sessionId, diagnoseResult }: AgentChatPro
       const row = await fetchEvidence(hit.evidence_id)
       setEvidenceHit({ ...row, score: 'score' in row ? Number(row.score) || 0 : 0 })
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Не удалось открыть источник')
+      setError(err instanceof Error ? err.message : t('error.source'))
     } finally {
       setEvidenceLoading(false)
     }
@@ -119,24 +123,24 @@ export function AgentChat({ vehicleId, sessionId, diagnoseResult }: AgentChatPro
 
   return (
     <section className="panel chat-panel">
-      <div className="panel__title" style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+      <div className="chat-panel__head">
         <MessageSquare size={18} aria-hidden />
-        <h2 style={{ margin: 0, font: 'inherit' }}>{t('chat.title')}</h2>
+        <div>
+          <h2 className="chat-panel__title">{t('chat.title')}</h2>
+          <p className="chat-panel__status">{statusLine}</p>
+        </div>
       </div>
-      <p className="panel__subtitle">
-        {diagnoseResult ? `ML: ${diagnoseResult.status}.` : null}
-      </p>
 
       <div className="chip-row">
-        {SUGGESTIONS.map((item) => (
+        {SUGGESTION_KEYS.map((key) => (
           <button
-            key={item}
+            key={key}
             type="button"
             className="chip-button"
             disabled={loading || !conversationId}
-            onClick={() => void send(item)}
+            onClick={() => void send(t(key))}
           >
-            {item}
+            {t(key)}
           </button>
         ))}
       </div>
@@ -149,7 +153,7 @@ export function AgentChat({ vehicleId, sessionId, diagnoseResult }: AgentChatPro
         ) : null}
         {messages.map((msg) => (
           <article key={msg.id} className={`chat-bubble chat-bubble--${msg.role}`}>
-            <p className="chat-bubble__role">{msg.role === 'user' ? 'Вы' : 'Механик'}</p>
+            <p className="chat-bubble__role">{msg.role === 'user' ? t('chat.roleUser') : t('chat.roleAgent')}</p>
             <p className="chat-bubble__text">{msg.content}</p>
             {msg.sources?.length ? (
               <ul className="chat-sources">
@@ -196,7 +200,11 @@ export function AgentChat({ vehicleId, sessionId, diagnoseResult }: AgentChatPro
       </form>
 
       <TicketDraftCard draft={draft} onConfirmed={(id) => setTicketId(id)} />
-      {ticketId ? <p className="ticket-draft__ok">Номер заявки: {ticketId}</p> : null}
+      {ticketId ? (
+        <p className="ticket-draft__ok">
+          {t('ticket.confirmedId')}: {ticketId}
+        </p>
+      ) : null}
 
       <SourceDrawer hit={evidenceHit} onClose={() => setEvidenceHit(null)} />
     </section>

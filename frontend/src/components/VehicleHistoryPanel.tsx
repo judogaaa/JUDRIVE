@@ -1,4 +1,6 @@
 import type { SessionSummary } from '../api/types'
+import { useI18n } from '../i18n/I18nContext'
+import { formatSessionDateTime } from '../lib/formatLocale'
 
 interface VehicleHistoryPanelProps {
   sessions: SessionSummary[]
@@ -6,24 +8,15 @@ interface VehicleHistoryPanelProps {
   onSelectSession: (sessionId: string) => void
 }
 
-function formatCheckedAt(value: string): string {
-  try {
-    return new Intl.DateTimeFormat('ru-RU', {
-      dateStyle: 'medium',
-      timeStyle: 'short',
-    }).format(new Date(value))
-  } catch {
-    return value
-  }
-}
-
 export function VehicleHistoryPanel({ sessions, activeSessionId, onSelectSession }: VehicleHistoryPanelProps) {
+  const { t, locale } = useI18n()
+
   return (
     <section className="panel" aria-labelledby="history-title">
       <h2 id="history-title" className="panel__title">
-        История проверок
+        {t('history.title')}
       </h2>
-      <p className="panel__subtitle">Сессии диагностики по выбранному транспорту.</p>
+      <p className="panel__subtitle">{t('history.subtitle')}</p>
       <ul className="history-list">
         {sessions.map((session) => {
           const active = session.session_id === activeSessionId
@@ -35,7 +28,7 @@ export function VehicleHistoryPanel({ sessions, activeSessionId, onSelectSession
                 onClick={() => onSelectSession(session.session_id)}
               >
                 <span className="history-item__id">{session.session_id}</span>
-                <span className="history-item__date">{formatCheckedAt(session.checked_at)}</span>
+                <span className="history-item__date">{formatSessionDateTime(locale, session.checked_at)}</span>
               </button>
             </li>
           )

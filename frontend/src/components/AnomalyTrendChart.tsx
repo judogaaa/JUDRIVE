@@ -42,11 +42,11 @@ export function AnomalyTrendChart({ points, height = 140 }: AnomalyTrendChartPro
           stroke="var(--border)"
         />
         {coords.length > 1 ? (
-          <polyline fill="none" stroke="var(--accent)" strokeWidth="2.5" points={polyline} />
+          <polyline fill="none" stroke="var(--text)" strokeWidth="2" points={polyline} />
         ) : null}
         {coords.map((c) => (
           <g key={c.p.session_id}>
-            <circle cx={c.x} cy={c.y} r={5} fill="var(--accent)" />
+            <circle cx={c.x} cy={c.y} r={4} fill="var(--text)" />
             <title>
               {c.p.session_id}: {c.p.anomaly_score ?? '—'} ({c.p.status})
             </title>

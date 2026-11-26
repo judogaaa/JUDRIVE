@@ -38,7 +38,7 @@ export function ChiefMechanicView({ onOpenDiagnosis }: ChiefMechanicViewProps) {
         if (!cancelled) setData(payload)
       })
       .catch((err: unknown) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Ошибка сводки')
+        if (!cancelled) setError(err instanceof Error ? err.message : t('error.dashboard'))
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -56,7 +56,7 @@ export function ChiefMechanicView({ onOpenDiagnosis }: ChiefMechanicViewProps) {
       </header>
 
       {error ? <p className="panel__error">{error}</p> : null}
-      {loading && !data ? <p className="panel__subtitle">Загрузка аналитики…</p> : null}
+      {loading && !data ? <p className="panel__subtitle">{t('chief.loading')}</p> : null}
 
       {data ? (
         <>
@@ -80,13 +80,13 @@ export function ChiefMechanicView({ onOpenDiagnosis }: ChiefMechanicViewProps) {
               icon={<AlertOctagon size={20} />}
               label={t('chief.cat.quarantineRec')}
               value={data.summary.quarantine}
-              hint="Рекомендация до решения специалиста или уже подтверждённая заявка"
+              hint={t('chief.quarantineCardHint')}
             />
           </section>
 
           <section className="panel">
-            <h2 className="panel__title">Очередь внимания</h2>
-            <p className="panel__subtitle">Сначала машины, которые нужно разобрать в первую очередь.</p>
+            <h2 className="panel__title">{t('chief.queueTitle')}</h2>
+            <p className="panel__subtitle">{t('chief.queueHint')}</p>
             <ul className="priority-queue">
               {data.priority_queue.slice(0, 12).map((row) => (
                 <li key={row.vehicle_id}>
@@ -97,7 +97,7 @@ export function ChiefMechanicView({ onOpenDiagnosis }: ChiefMechanicViewProps) {
           </section>
 
           <section className="panel chief-stats">
-            <h2 className="panel__title">Аналитика проверок</h2>
+            <h2 className="panel__title">{t('chief.analyticsTitle')}</h2>
             <p className="panel__subtitle">
               Всего проверок: {data.session_stats.total_sessions}. По последней проверке каждой машины: норма{' '}
               {data.session_stats.latest_by_status.normal ?? 0}, отклонение{' '}
@@ -105,15 +105,15 @@ export function ChiefMechanicView({ onOpenDiagnosis }: ChiefMechanicViewProps) {
               {data.session_stats.latest_by_status.check_failed ?? 0}.
             </p>
             <div className="stats-grid">
-              <StatBlock title="По статусу" items={data.session_stats.by_status} />
-              <StatBlock title="По двигателю (сессии)" items={data.session_stats.by_engine_model} />
-              <StatBlock title="Типы отклонений" items={data.session_stats.by_anomaly_type} />
+              <StatBlock title={t('chief.stat.status')} items={data.session_stats.by_status} />
+              <StatBlock title={t('chief.stat.engine')} items={data.session_stats.by_engine_model} />
+              <StatBlock title={t('chief.stat.anomaly')} items={data.session_stats.by_anomaly_type} />
             </div>
           </section>
 
           {data.early_warnings_fleet.length ? (
             <section className="panel">
-              <h2 className="panel__title">Ранние предупреждения</h2>
+              <h2 className="panel__title">{t('chief.warningsTitle')}</h2>
               <ul className="insight-warnings">
                 {data.early_warnings_fleet.slice(0, 15).map((w) => (
                   <li key={`${w.vehicle_id}-${w.code}`}>
@@ -130,11 +130,11 @@ export function ChiefMechanicView({ onOpenDiagnosis }: ChiefMechanicViewProps) {
           <section className="panel">
             <h2 className="panel__title">
               <Filter size={18} style={{ verticalAlign: 'text-bottom', marginRight: 6 }} aria-hidden />
-              Фильтры и список
+              {t('chief.filtersTitle')}
             </h2>
             <div className="chief-filters">
               <label className="field">
-                <span>Поиск</span>
+                <span>{t('diag.search')}</span>
                 <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                   <Search size={16} aria-hidden />
                   <input

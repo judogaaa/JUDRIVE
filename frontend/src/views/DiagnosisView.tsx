@@ -8,6 +8,7 @@ import { VehicleHistoryPanel } from '../components/VehicleHistoryPanel'
 import { VerdictCard } from '../components/VerdictCard'
 import { VoiceCapture } from '../components/VoiceCapture'
 import { useI18n } from '../i18n/I18nContext'
+import { formatSessionDateTime } from '../lib/formatLocale'
 
 interface DiagnosisViewProps {
   vehicles: VehicleSummary[]
@@ -18,17 +19,6 @@ interface DiagnosisViewProps {
   onSessionChange: (id: string) => void
 }
 
-function formatCheckedAt(value: string): string {
-  try {
-    return new Intl.DateTimeFormat('ru-RU', {
-      dateStyle: 'medium',
-      timeStyle: 'short',
-    }).format(new Date(value))
-  } catch {
-    return value
-  }
-}
-
 export function DiagnosisView({
   vehicles,
   fleetError,
@@ -37,7 +27,7 @@ export function DiagnosisView({
   onVehicleChange,
   onSessionChange,
 }: DiagnosisViewProps) {
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
   const [vehicleQuery, setVehicleQuery] = useState('')
   const [result, setResult] = useState<DiagnoseResponse | null>(null)
   const [loading, setLoading] = useState(false)
@@ -49,6 +39,11 @@ export function DiagnosisView({
   )
 
   const sessions = selectedVehicle?.sessions ?? []
+
+  const activeSession = useMemo(
+    () => sessions.find((s) => s.session_id === sessionId) ?? null,
+    [sessionId, sessions],
+  )
 
   const vehicleOptions = useMemo(() => {
     const q = vehicleQuery.trim().toLowerCase()
@@ -97,11 +92,13 @@ export function DiagnosisView({
       setResult(response)
     } catch (err: unknown) {
       if (gen !== requestGen.current) return
-      setError(err instanceof Error ? err.message : 'Неизвестная ошибка')
+      setError(err instanceof Error ? err.message : t('error.unknown'))
     } finally {
       if (gen === requestGen.current) setLoading(false)
     }
   }
+
+  const workflowStep = result ? 3 : loading ? 2 : vehicleId && sessionId ? 1 : 0
 
   return (
     <>
@@ -110,90 +107,135 @@ export function DiagnosisView({
         <p>{t('diag.subtitle')}</p>
       </header>
 
-      <div className="workspace">
-      <aside className="workspace-side">
-      <section className="panel diag-context">
-        {fleetError ? (
-          <p className="panel__error" role="alert">
-            {fleetError}
-          </p>
-        ) : (
-          <>
-            <div className="context-grid">
-              <label className="field">
-                <span>{t('diag.search')}</span>
-                <input
-                  value={vehicleQuery}
-                  onChange={(e) => setVehicleQuery(e.target.value)}
-                  placeholder="Фильтр списка…"
-                  aria-label="Фильтр транспорта"
-                />
-              </label>
-              <label className="field">
-                <span>{t('diag.vehicle')}</span>
-                <select value={vehicleId} onChange={(e) => onVehicleSelect(e.target.value)}>
-                  {vehicleOptions.map((v) => (
-                    <option key={v.vehicle_id} value={v.vehicle_id}>
-                      {v.vehicle_id} · {v.garage_no} · {v.engine_model}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="field">
-                <span>{t('diag.check')}</span>
-                <select value={sessionId} onChange={(e) => onSessionSelect(e.target.value)}>
-                  {sessions.map((s) => (
-                    <option key={s.session_id} value={s.session_id}>
-                      {s.session_id} · {formatCheckedAt(s.checked_at)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-
-            {selectedVehicle ? (
-              <div className="vehicle-meta" aria-label="Паспорт ТС">
-                <span>{selectedVehicle.make}</span>
-                <span>{selectedVehicle.model ?? '—'}</span>
-                <span>{selectedVehicle.vehicle_type}</span>
-                <span>{selectedVehicle.engine_model}</span>
-              </div>
+      {selectedVehicle && sessionId ? (
+        <div aria-label={t('diag.vehiclePassport')} className="vehicle-context-bar">
+          <div className="vehicle-context-bar__main">
+            <span className="vehicle-context-bar__plate">{vehicleId}</span>
+            <span className="vehicle-context-bar__line">
+              {t('diag.garage')} {selectedVehicle.garage_no} · {selectedVehicle.make}
+              {selectedVehicle.model ? ` ${selectedVehicle.model}` : ''} · {selectedVehicle.vehicle_type}
+            </span>
+            <span className="vehicle-context-bar__engine">
+              {t('diag.engine')}: {selectedVehicle.engine_model}
+            </span>
+          </div>
+          <div className="vehicle-context-bar__session">
+            <span className="vehicle-context-bar__session-id">{sessionId}</span>
+            {activeSession ? (
+              <span className="vehicle-context-bar__session-date">
+                {formatSessionDateTime(locale, activeSession.checked_at)}
+              </span>
             ) : null}
-
-            <button
-              type="button"
-              className="btn btn--primary btn--block"
-              disabled={loading || !vehicleId || !sessionId}
-              onClick={() => void runDiagnosis()}
-            >
-              <Play size={18} aria-hidden />
-              {loading ? t('diag.running') : t('diag.run')}
-            </button>
-            <VoiceCapture
-              disabled={loading || !vehicleId || !sessionId}
-              onText={(text) => {
-                if (isDiagnoseVoiceCommand(text)) void runDiagnosis()
-              }}
-            />
-          </>
-        )}
-      </section>
-
-      <VerdictCard result={result} loading={loading} error={error} />
-      {vehicleId ? (
-        <DiagnosisSideColumn
-          sessions={[...sessions].sort((a, b) => b.checked_at.localeCompare(a.checked_at))}
-          sessionId={sessionId}
-          engineModel={selectedVehicle?.engine_model ?? null}
-          onSessionSelect={onSessionSelect}
-        />
-      ) : null}
-      </aside>
-      {vehicleId && sessionId ? (
-        <div className="workspace-chat">
-          <AgentChat vehicleId={vehicleId} sessionId={sessionId} diagnoseResult={result} />
+          </div>
         </div>
       ) : null}
+
+      <ol className="diag-workflow" aria-label={t('diag.workflow')}>
+        <li className={workflowStep >= 1 ? 'diag-workflow__step diag-workflow__step--done' : 'diag-workflow__step'}>
+          {t('diag.step.select')}
+        </li>
+        <li
+          className={
+            workflowStep >= 2
+              ? workflowStep > 2
+                ? 'diag-workflow__step diag-workflow__step--done'
+                : 'diag-workflow__step diag-workflow__step--current'
+              : 'diag-workflow__step'
+          }
+        >
+          {t('diag.step.run')}
+        </li>
+        <li
+          className={
+            workflowStep >= 3
+              ? 'diag-workflow__step diag-workflow__step--done'
+              : workflowStep === 2
+                ? 'diag-workflow__step diag-workflow__step--current'
+                : 'diag-workflow__step'
+          }
+        >
+          {t('diag.step.review')}
+        </li>
+        <li className={result ? 'diag-workflow__step diag-workflow__step--current' : 'diag-workflow__step'}>
+          {t('diag.step.act')}
+        </li>
+      </ol>
+
+      <div className="workspace">
+        <aside className="workspace-side workspace-rail">
+          <section className="panel diag-context">
+            {fleetError ? (
+              <p className="panel__error" role="alert">
+                {fleetError}
+              </p>
+            ) : (
+              <>
+                <div className="context-grid">
+                  <label className="field">
+                    <span>{t('diag.search')}</span>
+                    <input
+                      value={vehicleQuery}
+                      onChange={(e) => setVehicleQuery(e.target.value)}
+                      placeholder={t('diag.filterPlaceholder')}
+                      aria-label={t('diag.search')}
+                    />
+                  </label>
+                  <label className="field">
+                    <span>{t('diag.vehicle')}</span>
+                    <select value={vehicleId} onChange={(e) => onVehicleSelect(e.target.value)}>
+                      {vehicleOptions.map((v) => (
+                        <option key={v.vehicle_id} value={v.vehicle_id}>
+                          {v.vehicle_id} · {v.garage_no} · {v.engine_model}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>{t('diag.check')}</span>
+                    <select value={sessionId} onChange={(e) => onSessionSelect(e.target.value)}>
+                      {sessions.map((s) => (
+                        <option key={s.session_id} value={s.session_id}>
+                          {s.session_id} · {formatSessionDateTime(locale, s.checked_at)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+
+                <button
+                  type="button"
+                  className="btn btn--primary btn--block"
+                  disabled={loading || !vehicleId || !sessionId}
+                  onClick={() => void runDiagnosis()}
+                >
+                  <Play size={18} aria-hidden />
+                  {loading ? t('diag.running') : t('diag.run')}
+                </button>
+                <VoiceCapture
+                  disabled={loading || !vehicleId || !sessionId}
+                  onText={(text) => {
+                    if (isDiagnoseVoiceCommand(text)) void runDiagnosis()
+                  }}
+                />
+              </>
+            )}
+          </section>
+
+          <VerdictCard result={result} loading={loading} error={error} vehicleId={vehicleId} />
+          {vehicleId ? (
+            <DiagnosisSideColumn
+              sessions={[...sessions].sort((a, b) => b.checked_at.localeCompare(a.checked_at))}
+              sessionId={sessionId}
+              engineModel={selectedVehicle?.engine_model ?? null}
+              onSessionSelect={onSessionSelect}
+            />
+          ) : null}
+        </aside>
+        {vehicleId && sessionId ? (
+          <div className="workspace-chat">
+            <AgentChat vehicleId={vehicleId} sessionId={sessionId} diagnoseResult={result} />
+          </div>
+        ) : null}
       </div>
     </>
   )
@@ -219,6 +261,6 @@ function DiagnosisSideColumn({
     <div className="diag-stack">
       <VehicleHistoryPanel sessions={sessions} activeSessionId={sessionId} onSelectSession={onSessionSelect} />
       <ManualSearchPanel engineModel={engineModel} />
-    </div>
+                </div>
   )
 }

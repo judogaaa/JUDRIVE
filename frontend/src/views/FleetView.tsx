@@ -38,13 +38,13 @@ export function FleetView({ vehicles, fleetError, onOpenDiagnosis }: FleetViewPr
       ) : (
         <section className="panel">
           <label className="field">
-            <span>Поиск по госномеру, гаражному номеру, модели или двигателю</span>
+            <span>{t('fleet.searchLabel')}</span>
             <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
               <Search size={18} style={{ color: 'var(--text-muted)', flexShrink: 0 }} aria-hidden />
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Например B418HK98 или ЯМЗ-536"
+                placeholder={t('fleet.searchPlaceholder')}
                 style={{ flex: 1 }}
               />
             </div>

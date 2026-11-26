@@ -24,7 +24,7 @@ export function WorkspaceShell({ view, onViewChange, themeMode, onThemeCycle, ch
   ]
   const ThemeIcon = themeMode === 'dark' ? Moon : Sun
   const themeLabel =
-    themeMode === 'system' ? 'Системная тема' : themeMode === 'dark' ? 'Тёмная тема' : 'Светлая тема'
+    themeMode === 'system' ? t('theme.system') : themeMode === 'dark' ? t('theme.dark') : t('theme.light')
 
   return (
     <div className="shell">

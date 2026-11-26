@@ -3,6 +3,7 @@ import { fetchVehicles } from './api/client'
 import type { VehicleSummary } from './api/types'
 import { WorkspaceShell, type AppView } from './components/shell/WorkspaceShell'
 import { useTheme } from './hooks/useTheme'
+import { useI18n } from './i18n/I18nContext'
 import { ChiefMechanicView } from './views/ChiefMechanicView'
 import { DiagnosisView } from './views/DiagnosisView'
 import { FleetView } from './views/FleetView'
@@ -14,6 +15,7 @@ function latestSessionId(vehicle: VehicleSummary): string {
 }
 
 export default function App() {
+  const { t } = useI18n()
   const { mode: themeMode, cycle: onThemeCycle } = useTheme()
   const [view, setView] = useState<AppView>('diagnosis')
   const [vehicles, setVehicles] = useState<VehicleSummary[]>([])
@@ -35,7 +37,7 @@ export default function App() {
       })
       .catch((err: unknown) => {
         if (cancelled) return
-        setFleetError(err instanceof Error ? err.message : 'Не удалось загрузить автопарк')
+        setFleetError(err instanceof Error ? err.message : t('error.fleet'))
       })
     return () => {
       cancelled = true
