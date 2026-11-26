@@ -14,12 +14,11 @@ export function FleetView({ vehicles, fleetError, onOpenDiagnosis }: FleetViewPr
   const [query, setQuery] = useState('')
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase()
+    const q = fold(query.trim())
     if (!q) return vehicles
     return vehicles.filter((v) => {
-      const hay = [v.vehicle_id, v.garage_no, v.make, v.model ?? '', v.engine_model, v.vehicle_type]
-        .join(' ')
-        .toLowerCase()
+      const model = v.model && v.model !== v.make ? v.model : ''
+      const hay = fold([v.vehicle_id, v.garage_no, v.make, model, v.engine_model, v.vehicle_type].join(' '))
       return hay.includes(q)
     })
   }, [query, vehicles])
@@ -76,9 +75,7 @@ export function FleetView({ vehicles, fleetError, onOpenDiagnosis }: FleetViewPr
                   >
                     <td>{v.vehicle_id}</td>
                     <td>{v.garage_no}</td>
-                    <td>
-                      {v.make} {v.model ?? '—'}
-                    </td>
+                    <td>{displayMake(v.make, v.model)}</td>
                     <td>{v.engine_model}</td>
                     <td>{v.sessions.length}</td>
                   </tr>
@@ -95,4 +92,20 @@ export function FleetView({ vehicles, fleetError, onOpenDiagnosis }: FleetViewPr
       )}
     </>
   )
+}
+
+function displayMake(make: string, model: string | null): string {
+  if (!model || model === make || model.startsWith(make)) return model || make
+  return `${make} ${model}`
+}
+
+function fold(value: string): string {
+  const map: Record<string, string> = {
+    а: 'a', в: 'b', е: 'e', к: 'k', м: 'm', н: 'h', о: 'o', р: 'p', с: 'c', т: 't', у: 'y', х: 'x',
+  }
+  return value
+    .toLowerCase()
+    .split('')
+    .map((ch) => map[ch] ?? ch)
+    .join('')
 }

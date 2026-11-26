@@ -115,28 +115,38 @@ export function DiagnosisView({
         </p>
       ) : (
         <section className="diag-toolbar" aria-label={t('diag.title')}>
-          <label className="field">
-            <span>{t('diag.search')}</span>
+          <div className="field vehicle-combo">
+            <span>{t('diag.vehicle')}</span>
             <input
               value={vehicleQuery}
               onChange={(e) => setVehicleQuery(e.target.value)}
-              placeholder={t('diag.filterPlaceholder')}
+              placeholder={selectedVehicle ? `${vehicleId} · ${selectedVehicle.engine_model}` : t('diag.filterPlaceholder')}
               aria-label={t('diag.search')}
+              role="combobox"
+              aria-expanded={vehicleQuery.trim().length > 0}
             />
-          </label>
-          <label className="field">
-            <span>{t('diag.vehicle')}</span>
-            <select value={vehicleId} onChange={(e) => onVehicleSelect(e.target.value)}>
-              {vehicleOptions.map((v) => (
-                <option key={v.vehicle_id} value={v.vehicle_id}>
-                  {v.vehicle_id} · {v.engine_model}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="field">
-            <span>{t('diag.engine')}</span>
-            <p className="diag-toolbar__value">{selectedVehicle?.engine_model ?? '—'}</p>
+            {vehicleQuery.trim() ? (
+              <ul className="vehicle-combo__list" role="listbox">
+                {vehicleOptions.slice(0, 8).map((v) => (
+                  <li key={v.vehicle_id}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onVehicleSelect(v.vehicle_id)
+                        setVehicleQuery('')
+                      }}
+                    >
+                      {v.vehicle_id} · {v.garage_no} · {v.make} {v.model ?? ''} · {v.engine_model}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            {selectedVehicle ? (
+              <p className="diag-toolbar__hint">
+                {t('diag.engine')}: {selectedVehicle.engine_model} · {t('diag.garage')} {selectedVehicle.garage_no}
+              </p>
+            ) : null}
           </div>
           <label className="field">
             <span>{t('diag.check')}</span>

@@ -57,6 +57,10 @@ frontend/src/{app,components,features,api,i18n,styles}, backend/app/{main,config
 Внутренние API группы: transport/session/history, fleet analytics, diagnostic/chat, draft/confirm/list ticket, source/page, voice/transcribe, health. Согласовать один формат DTO, ошибки и nullable; РУ источники и IDs не переводить. Локализация одним словарём. Голос — запись речи пользователя по кнопке, транскрипция сервером, редактируемый текст; не аудио двигателя. Постоянные журналы и индекс, отдельные контексты посетителей, лимиты/таймауты. Не предоставлять приложению произвольный shell/HTTP.
 
 
+## Кабинет главного механика
+
+`GET /api/fleet/dashboard` и `GET /api/fleet/vehicles/{id}/insight` требуют HttpOnly-сессию. Логин `POST /api/auth/login` сверяет имя и PBKDF2-хеш из окружения, ограничивает попытки и не имеет пароля по умолчанию. Диагностика, RAG и заявки остаются без этой сессии.
+
 ## Стартовые соглашения реализации
 
 Браузер работает только с нашим `/api` (Vite proxy в dev, один origin на стенде). Этап 01: `/api/health`, `/api/vehicles`, `POST /api/diagnose` с валидируемой парой IDs. `PDF_DIR=materials/manuals`, `DB_PATH=local-data/judrive.sqlite`, `FLEET_DATA_PATH=vendor/neurodvs_mock/data/vehicles.json` — пути относительно корня проекта либо абсолютные; не зависеть от случайной текущей директории. Заглушки используют свой `MOCK_DATA_PATH`. Не требовать ключ Groq и PDF для локальной загрузки парка и получения статусов на этапе 01; готовность AI/RAG проверять отдельно. Один worker ТОиР; локальный UUID и журнал разграничивают рестарты, не переписывать поставщика.

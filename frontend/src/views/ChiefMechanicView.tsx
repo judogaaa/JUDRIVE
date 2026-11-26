@@ -15,6 +15,8 @@ interface ChiefMechanicViewProps {
 
 export function ChiefMechanicView({ onOpenDiagnosis }: ChiefMechanicViewProps) {
   const { t } = useI18n()
+  const [authed, setAuthed] = useState<boolean | null>(null)
+  const [tab, setTab] = useState<'overview' | 'queue' | 'analytics' | 'warnings' | 'fleet'>('overview')
 
   const categoryLabel = (row: VehicleFleetRow) => {
     if (row.category === 'quarantine') {
@@ -31,6 +33,22 @@ export function ChiefMechanicView({ onOpenDiagnosis }: ChiefMechanicViewProps) {
 
   useEffect(() => {
     let cancelled = false
+    fetch('/api/auth/session', { credentials: 'include' })
+      .then((r) => r.json())
+      .then((body: { authenticated?: boolean }) => {
+        if (!cancelled) setAuthed(Boolean(body.authenticated))
+      })
+      .catch(() => {
+        if (!cancelled) setAuthed(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!authed) return
+    let cancelled = false
     setLoading(true)
     setError(null)
     fetchFleetDashboard(filters)
@@ -46,7 +64,15 @@ export function ChiefMechanicView({ onOpenDiagnosis }: ChiefMechanicViewProps) {
     return () => {
       cancelled = true
     }
-  }, [filters])
+  }, [filters, authed])
+
+  if (authed === null) {
+    return <p className="panel__subtitle">{t('chief.loading')}</p>
+  }
+
+  if (!authed) {
+    return <ChiefLogin onSuccess={() => setAuthed(true)} />
+  }
 
   return (
     <>
@@ -60,13 +86,47 @@ export function ChiefMechanicView({ onOpenDiagnosis }: ChiefMechanicViewProps) {
 
       {data ? (
         <>
-          <section className="chief-summary" aria-label={t('chief.summaryCategories')}>
+          <nav className="chief-tabs" aria-label={t('chief.title')}>
+            {(
+              [
+                ['overview', t('chief.tab.overview')],
+                ['queue', t('chief.tab.queue')],
+                ['analytics', t('chief.tab.analytics')],
+                ['warnings', t('chief.tab.warnings')],
+                ['fleet', t('chief.tab.fleet')],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                className={tab === id ? 'chip-button chip-button--on' : 'chip-button'}
+                onClick={() => setTab(id)}
+              >
+                {label}
+              </button>
+            ))}
+            <button
+              type="button"
+              className="chip-button"
+              onClick={() => {
+                void fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).then(() => setAuthed(false))
+              }}
+            >
+              {t('auth.logout')}
+            </button>
+          </nav>
+
+          <section className="chief-summary" hidden={tab !== 'overview'} aria-label={t('chief.summaryCategories')}>
             <SummaryCard
               tone="ok"
               icon={<CheckCircle2 size={20} />}
               label={t('chief.cat.normal')}
               value={data.summary.normal}
               hint={t('chief.hint.normal', { count: data.session_stats.latest_by_status.normal ?? 0 })}
+              onOpen={() => {
+                setFilters((prev) => ({ ...prev, category: 'normal' }))
+                setTab('fleet')
+              }}
             />
             <SummaryCard
               tone="warn"
@@ -77,6 +137,10 @@ export function ChiefMechanicView({ onOpenDiagnosis }: ChiefMechanicViewProps) {
                 anomaly: data.session_stats.latest_by_status.anomaly ?? 0,
                 failed: data.session_stats.latest_by_status.check_failed ?? 0,
               })}
+              onOpen={() => {
+                setFilters((prev) => ({ ...prev, category: 'attention' }))
+                setTab('fleet')
+              }}
             />
             <SummaryCard
               tone="danger"
@@ -84,10 +148,14 @@ export function ChiefMechanicView({ onOpenDiagnosis }: ChiefMechanicViewProps) {
               label={t('chief.cat.quarantineRec')}
               value={data.summary.quarantine}
               hint={t('chief.quarantineCardHint')}
+              onOpen={() => {
+                setFilters((prev) => ({ ...prev, category: 'quarantine' }))
+                setTab('fleet')
+              }}
             />
           </section>
 
-          <section className="panel">
+          <section className="panel" hidden={tab !== 'queue'}>
             <h2 className="panel__title">{t('chief.queueTitle')}</h2>
             <p className="panel__subtitle">{t('chief.queueHint')}</p>
             <ul className="priority-queue">
@@ -99,7 +167,7 @@ export function ChiefMechanicView({ onOpenDiagnosis }: ChiefMechanicViewProps) {
             </ul>
           </section>
 
-          <section className="panel chief-stats">
+          <section className="panel chief-stats" hidden={tab !== 'analytics'}>
             <h2 className="panel__title">{t('chief.analyticsTitle')}</h2>
             <p className="panel__subtitle">
               {t('chief.analytics.intro', {
@@ -110,14 +178,21 @@ export function ChiefMechanicView({ onOpenDiagnosis }: ChiefMechanicViewProps) {
               })}
             </p>
             <div className="stats-grid">
-              <StatBlock title={t('chief.stat.status')} items={data.session_stats.by_status} />
+              <StatBlock
+                title={t('chief.stat.status')}
+                items={{
+                  [t('verdict.normal.title')]: data.session_stats.by_status.normal ?? 0,
+                  [t('verdict.anomaly.title')]: data.session_stats.by_status.anomaly ?? 0,
+                  [t('verdict.failed.title')]: data.session_stats.by_status.check_failed ?? 0,
+                }}
+              />
               <StatBlock title={t('chief.stat.engine')} items={data.session_stats.by_engine_model} />
               <StatBlock title={t('chief.stat.anomaly')} items={data.session_stats.by_anomaly_type} />
             </div>
           </section>
 
           {data.early_warnings_fleet.length ? (
-            <section className="panel">
+            <section className="panel" hidden={tab !== 'warnings'}>
               <h2 className="panel__title">{t('chief.warningsTitle')}</h2>
               <ul className="insight-warnings">
                 {data.early_warnings_fleet.slice(0, 15).map((w) => (
@@ -132,7 +207,7 @@ export function ChiefMechanicView({ onOpenDiagnosis }: ChiefMechanicViewProps) {
             </section>
           ) : null}
 
-          <section className="panel">
+          <section className="panel" hidden={tab !== 'fleet'}>
             <h2 className="panel__title">
               <Filter size={18} style={{ verticalAlign: 'text-bottom', marginRight: 6 }} aria-hidden />
               {t('chief.filtersTitle')}
@@ -238,22 +313,76 @@ function SummaryCard({
   hint,
   tone,
   icon,
+  onOpen,
 }: {
   label: string
   value: number
   hint: string
   tone: 'ok' | 'warn' | 'danger'
   icon: ReactNode
+  onOpen: () => void
 }) {
   return (
-    <article className={`summary-card summary-card--${tone}`}>
+    <button type="button" className={`summary-card summary-card--${tone}`} onClick={onOpen}>
       <span className="summary-card__icon" aria-hidden>
         {icon}
       </span>
       <p className="summary-card__value">{value}</p>
       <p className="summary-card__label">{label}</p>
       <p className="summary-card__hint">{hint}</p>
-    </article>
+    </button>
+  )
+}
+
+function ChiefLogin({ onSuccess }: { onSuccess: () => void }) {
+  const { t } = useI18n()
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  const submit = async () => {
+    setBusy(true)
+    setError(null)
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      })
+      if (!response.ok) {
+        setError(response.status === 503 ? t('auth.unavailable') : t('auth.error'))
+        return
+      }
+      onSuccess()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <section className="panel auth-card">
+      <h1>{t('auth.title')}</h1>
+      <p className="panel__subtitle">{t('chief.subtitle')}</p>
+      <label className="field">
+        <span>{t('auth.user')}</span>
+        <input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" />
+      </label>
+      <label className="field">
+        <span>{t('auth.password')}</span>
+        <input
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          autoComplete="current-password"
+        />
+      </label>
+      {error ? <p className="panel__error">{error}</p> : null}
+      <button type="button" className="btn btn--primary" disabled={busy || !username || !password} onClick={() => void submit()}>
+        {t('auth.submit')}
+      </button>
+    </section>
   )
 }
 

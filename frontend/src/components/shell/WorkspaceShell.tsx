@@ -25,10 +25,10 @@ export function WorkspaceShell({ view, onViewChange, themeMode, onThemeChange, c
 
   const NAV: { id: AppView; label: string; icon: typeof Activity }[] = [
     { id: 'diagnosis', label: t('nav.diagnosis'), icon: Activity },
-    { id: 'manuals', label: t('nav.manuals'), icon: BookOpen },
-    { id: 'chief', label: t('nav.chief'), icon: LayoutDashboard },
     { id: 'fleet', label: t('nav.fleet'), icon: Bus },
+    { id: 'manuals', label: t('nav.manuals'), icon: BookOpen },
     { id: 'tickets', label: t('nav.tickets'), icon: ClipboardList },
+    { id: 'chief', label: t('nav.chief'), icon: LayoutDashboard },
   ]
 
   useEffect(() => {

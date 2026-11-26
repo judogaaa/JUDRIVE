@@ -28,6 +28,11 @@ class Settings(BaseSettings):
     groq_stt_timeout_s: float = 45.0
     agent_max_tool_steps: int = 4
 
+    chief_username: str | None = None
+    chief_password_hash: str | None = None
+    session_secret: str | None = None
+    cookie_secure: bool = False
+
 
 @lru_cache
 def get_settings() -> Settings:

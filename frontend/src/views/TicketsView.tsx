@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
+import { createConversation, sendChatMessage } from '../api/chat'
 import { fetchTickets, type TicketSubmission } from '../api/tickets'
 import { useI18n } from '../i18n/I18nContext'
 import { formatSessionDateTime } from '../lib/formatLocale'
@@ -22,6 +23,10 @@ export function TicketsView({ filterVehicleId }: TicketsViewProps) {
   const [tickets, setTickets] = useState<TicketSubmission[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [query, setQuery] = useState('')
+  const [openId, setOpenId] = useState<string | null>(null)
+  const [review, setReview] = useState<string | null>(null)
+  const [reviewing, setReviewing] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -42,6 +47,35 @@ export function TicketsView({ filterVehicleId }: TicketsViewProps) {
     }
   }, [filterVehicleId])
 
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return tickets
+    return tickets.filter((row) =>
+      [row.ticket_id, row.vehicle_id, row.session_id, row.submit_status, parseConclusion(row.payload_snapshot)]
+        .join(' ')
+        .toLowerCase()
+        .includes(q),
+    )
+  }, [query, tickets])
+
+  const explain = async (row: TicketSubmission) => {
+    setReviewing(true)
+    setReview(null)
+    try {
+      const conv = await createConversation(row.vehicle_id, row.session_id)
+      const reply = await sendChatMessage(
+        conv.conversation_id,
+        'Разбери эту заявку: какие работы и в каком порядке проверить по руководству этого двигателя. Не придумывай статус ремонта.',
+        locale,
+      )
+      setReview(reply.reply)
+    } catch (err: unknown) {
+      setReview(err instanceof Error ? err.message : t('error.agent'))
+    } finally {
+      setReviewing(false)
+    }
+  }
+
   return (
     <>
       <header className="page-header">
@@ -58,16 +92,20 @@ export function TicketsView({ filterVehicleId }: TicketsViewProps) {
 
       {!loading && !error ? (
         <section className="panel">
-          {tickets.length === 0 ? (
+          <label className="field">
+            <span>{t('fleet.searchLabel')}</span>
+            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t('fleet.searchPlaceholder')} />
+          </label>
+          {visible.length === 0 ? (
             <p className="panel__subtitle">{t('tickets.empty')}</p>
           ) : (
             <div className="ticket-journal">
-              {tickets.map((row) => (
+              {visible.map((row) => (
                 <article key={row.local_id} className="ticket-row">
-                  <div className="ticket-row__head">
+                  <button type="button" className="ticket-row__head" onClick={() => setOpenId(row.local_id)}>
                     <span className="ticket-row__id">{row.ticket_id ?? '—'}</span>
                     <span className="ticket-row__meta">{formatSessionDateTime(locale, row.created_at)}</span>
-                  </div>
+                  </button>
                   <p className="ticket-row__meta">
                     {row.vehicle_id} · {row.session_id} · {row.submit_status}
                   </p>
@@ -75,6 +113,21 @@ export function TicketsView({ filterVehicleId }: TicketsViewProps) {
                     <p>{parseConclusion(row.payload_snapshot)}</p>
                   ) : null}
                   {row.error_detail ? <p className="panel__error">{row.error_detail}</p> : null}
+                  {openId === row.local_id ? (
+                    <div className="ticket-detail">
+                      <button
+                        type="button"
+                        className="btn btn--secondary"
+                        onClick={() => void navigator.clipboard.writeText(row.ticket_id ?? row.local_id)}
+                      >
+                        {row.ticket_id ?? row.local_id}
+                      </button>
+                      <button type="button" className="btn btn--secondary" disabled={reviewing} onClick={() => void explain(row)}>
+                        {reviewing ? t('chat.processing') : t('tickets.review')}
+                      </button>
+                      {review ? <p>{review}</p> : null}
+                    </div>
+                  ) : null}
                 </article>
               ))}
             </div>

@@ -55,6 +55,32 @@ export function AgentChat({ vehicleId, sessionId, diagnoseResult, onDiagnoseComm
   }, [diagnoseResult, t])
 
   useEffect(() => {
+    if (!diagnoseResult) return
+    const id = `ml:${diagnoseResult.vehicle_id}:${diagnoseResult.session_id}:${diagnoseResult.status}`
+    const statusKey =
+      diagnoseResult.status === 'normal'
+        ? 'chat.status.normal'
+        : diagnoseResult.status === 'anomaly'
+          ? 'chat.status.anomaly'
+          : 'chat.status.check_failed'
+    const lines = [
+      t(statusKey),
+      diagnoseResult.engine_model ? `${t('verdict.engine')}: ${diagnoseResult.engine_model}` : '',
+      diagnoseResult.status === 'check_failed' ? t('verdict.failed.action') : '',
+      diagnoseResult.status === 'anomaly' && diagnoseResult.anomaly_title
+        ? `${t('verdict.type')}: ${diagnoseResult.anomaly_type} — ${diagnoseResult.anomaly_title}`
+        : '',
+      diagnoseResult.status !== 'check_failed' && diagnoseResult.confidence != null
+        ? `${t('verdict.confidence')}: ${diagnoseResult.confidence}`
+        : '',
+    ].filter(Boolean)
+    setMessages((prev) => {
+      const rest = prev.filter((msg) => !msg.id.startsWith('ml:'))
+      return [...rest, { id, role: 'assistant', content: lines.join('\n') }]
+    })
+  }, [diagnoseResult, t])
+
+  useEffect(() => {
     contextRef.current = contextKey
     const epoch = ++sendGen.current
     setConversationId(null)

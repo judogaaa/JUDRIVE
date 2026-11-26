@@ -2,11 +2,13 @@ from contextlib import asynccontextmanager
 import json
 
 import httpx
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
 from app.agent.orchestrator import AgentOrchestrator
+from app.auth.chief_session import clear_session, login as chief_login, require_chief, session_ok
+from app.rag.catalog import MANUAL_SPECS
 from app.config import get_settings
 from app.rag.catalog import SPECS_BY_ID
 from app.rag.service import ManualRagService
@@ -93,6 +95,44 @@ async def diagnose(body: DiagnoseRequest) -> DiagnoseResponse:
 
     result.engine_model = fleet.session_engine(body.vehicle_id, body.session_id)
     return result
+
+
+def _chief_guard(request: Request) -> None:
+    require_chief(request, settings)
+
+
+@app.post(f"{settings.api_prefix}/auth/login")
+async def auth_login(request: Request, response: Response, body: dict):
+    username = str(body.get("username") or "")
+    password = str(body.get("password") or "")
+    chief_login(request, response, settings, username, password)
+    return {"ok": True}
+
+
+@app.post(f"{settings.api_prefix}/auth/logout")
+async def auth_logout(response: Response):
+    clear_session(response, settings)
+    return {"ok": True}
+
+
+@app.get(f"{settings.api_prefix}/auth/session")
+async def auth_session(request: Request):
+    return {"authenticated": session_ok(request, settings)}
+
+
+@app.get(f"{settings.api_prefix}/manuals/catalog")
+async def manuals_catalog():
+    groups: dict[str, list[dict[str, str | int]]] = {}
+    for spec in MANUAL_SPECS:
+        for engine in spec.engine_models:
+            groups.setdefault(engine, []).append(
+                {
+                    "doc_id": spec.doc_id,
+                    "title": spec.manual_title,
+                    "pages": spec.expected_pages,
+                }
+            )
+    return {"engines": [{"engine_model": engine, "documents": docs} for engine, docs in groups.items()]}
 
 
 @app.get(f"{settings.api_prefix}/manuals/status")
@@ -190,6 +230,7 @@ async def list_submitted_tickets(vehicle_id: str | None = None):
 
 @app.get(f"{settings.api_prefix}/fleet/dashboard")
 async def fleet_dashboard(
+    _: None = Depends(_chief_guard),
     category: str | None = None,
     engine_model: str | None = None,
     vehicle_type: str | None = None,
@@ -204,7 +245,7 @@ async def fleet_dashboard(
 
 
 @app.get(f"{settings.api_prefix}/fleet/vehicles/{{vehicle_id}}/insight")
-async def fleet_vehicle_insight(vehicle_id: str):
+async def fleet_vehicle_insight(vehicle_id: str, _: None = Depends(_chief_guard)):
     insight = fleet_analytics.vehicle_insight(vehicle_id)
     if insight is None:
         raise HTTPException(status_code=404, detail="Транспорт не найден")

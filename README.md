@@ -12,7 +12,7 @@ AI-powered engine diagnostics and intelligent fleet management platform.
 
 Требования: Python 3.11+ (проверено на 3.14), Node.js LTS, UTF-8 в терминале Windows.
 
-1. Скопируйте `.env.example` в `.env`; для чата добавьте `GROQ_API_KEY` (только локально, файл в `.gitignore`).
+1. Скопируйте `.env.example` в `.env`; для чата добавьте `GROQ_API_KEY` (только локально, файл в `.gitignore`). Кабинет главного механика: `CHIEF_USERNAME`, `CHIEF_PASSWORD_HASH` (`python scripts/hash_chief_password.py`), `SESSION_SECRET`. Пароль в Git не кладётся. На HTTPS задайте `COOKIE_SECURE=true`.
 2. **PDF (этап 02):** положите шесть оригиналов в `materials/manuals/` (папка в `.gitignore`) по [docs/SOURCES.md](docs/SOURCES.md). Быстрое копирование, если файлы уже в `Documents`:
 
 ```powershell

@@ -7,8 +7,10 @@ from fastapi.testclient import TestClient
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend"))
 
+from app.auth.chief_session import hash_password  # noqa: E402
 from app.config import get_settings  # noqa: E402
 from app.main import app  # noqa: E402
+from app.main import settings as api_settings  # noqa: E402
 from app.services.analytics import FleetAnalyticsService
 from app.services.fleet import FleetService
 from app.storage.repository import AppRepository
@@ -18,7 +20,19 @@ settings = get_settings()
 
 @pytest.fixture()
 def client() -> TestClient:
-    return TestClient(app)
+    api_settings.chief_username = "mechanic"
+    api_settings.chief_password_hash = hash_password("correct-horse-1", "testsalt")
+    api_settings.session_secret = "test-session-secret"
+    api_settings.cookie_secure = False
+    http = TestClient(app)
+    denied = http.get("/api/fleet/dashboard")
+    assert denied.status_code == 401
+    logged = http.post(
+        "/api/auth/login",
+        json={"username": "mechanic", "password": "correct-horse-1"},
+    )
+    assert logged.status_code == 200
+    return http
 
 
 def test_dashboard_counts_sum_to_fifty():

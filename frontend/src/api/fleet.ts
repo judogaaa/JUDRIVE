@@ -91,13 +91,15 @@ export async function fetchFleetDashboard(filters: FleetDashboardFilters = {}): 
   if (filters.vehicle_type) params.set('vehicle_type', filters.vehicle_type)
   if (filters.q) params.set('q', filters.q)
   const query = params.toString()
-  const response = await fetch(`/api/fleet/dashboard${query ? `?${query}` : ''}`)
+  const response = await fetch(`/api/fleet/dashboard${query ? `?${query}` : ''}`, { credentials: 'include' })
   if (!response.ok) throw i18nError('error.dashboardHttp', response.status)
   return (await response.json()) as FleetDashboard
 }
 
 export async function fetchVehicleInsight(vehicleId: string): Promise<VehicleInsight> {
-  const response = await fetch(`/api/fleet/vehicles/${encodeURIComponent(vehicleId)}/insight`)
+  const response = await fetch(`/api/fleet/vehicles/${encodeURIComponent(vehicleId)}/insight`, {
+    credentials: 'include',
+  })
   if (!response.ok) throw i18nError('error.insight', response.status)
   return (await response.json()) as VehicleInsight
 }

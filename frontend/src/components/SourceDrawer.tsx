@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ExternalLink, X } from 'lucide-react'
+import { ExternalLink, Maximize2, Minus, Plus, X } from 'lucide-react'
 import * as pdfjs from 'pdfjs-dist'
 import type { ManualSearchHit } from '../api/manuals'
 import { pdfSourceUrl } from '../api/manuals'
@@ -20,6 +20,8 @@ export function SourceDrawer({ hit, onClose }: SourceDrawerProps) {
   const { t } = useI18n()
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const [renderError, setRenderError] = useState<string | null>(null)
+  const [scale, setScale] = useState(1.15)
+  const [full, setFull] = useState(false)
 
   useEffect(() => {
     if (!hit || !canvasRef.current) return
@@ -30,7 +32,7 @@ export function SourceDrawer({ hit, onClose }: SourceDrawerProps) {
         const loadingTask = pdfjs.getDocument({ url: pdfSourceUrl(hit.doc_id, hit.pdf_page) })
         const pdf = await loadingTask.promise
         const page = await pdf.getPage(hit.pdf_page)
-        const viewport = page.getViewport({ scale: 1.2 })
+        const viewport = page.getViewport({ scale })
         const canvas = canvasRef.current
         if (!canvas || cancelled) return
         const context = canvas.getContext('2d')
@@ -48,12 +50,12 @@ export function SourceDrawer({ hit, onClose }: SourceDrawerProps) {
     return () => {
       cancelled = true
     }
-  }, [hit, t])
+  }, [hit, scale, t])
 
   if (!hit) return null
 
   return (
-    <div className="source-drawer" role="dialog" aria-modal="true">
+    <div className={full ? 'source-drawer source-drawer--full' : 'source-drawer'} role="dialog" aria-modal="true">
       <div className="source-drawer__backdrop" onClick={onClose} />
       <div className="source-drawer__panel">
         <header className="source-drawer__header">
@@ -67,6 +69,17 @@ export function SourceDrawer({ hit, onClose }: SourceDrawerProps) {
           </button>
         </header>
         <blockquote className="source-drawer__quote">{hit.quote}</blockquote>
+        <div className="source-drawer__tools">
+          <button type="button" className="icon-btn" onClick={() => setScale((s) => Math.max(0.8, Number((s - 0.15).toFixed(2))))} aria-label="-">
+            <Minus size={16} />
+          </button>
+          <button type="button" className="icon-btn" onClick={() => setScale((s) => Math.min(2.2, Number((s + 0.15).toFixed(2))))} aria-label="+">
+            <Plus size={16} />
+          </button>
+          <button type="button" className="icon-btn" onClick={() => setFull((v) => !v)} aria-label="PDF">
+            <Maximize2 size={16} />
+          </button>
+        </div>
         <div className="source-drawer__canvas-wrap">
           <canvas ref={canvasRef} />
         </div>
