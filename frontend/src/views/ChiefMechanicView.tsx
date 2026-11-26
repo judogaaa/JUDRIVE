@@ -66,39 +66,27 @@ export function ChiefMechanicView({ onOpenDiagnosis }: ChiefMechanicViewProps) {
               icon={<CheckCircle2 size={20} />}
               label={t('chief.cat.normal')}
               value={data.summary.normal}
-              hint={`Последние ML: normal ${data.session_stats.latest_by_status.normal ?? 0}`}
+              hint={`Последняя проверка без отклонений: ${data.session_stats.latest_by_status.normal ?? 0}`}
             />
             <SummaryCard
               tone="warn"
               icon={<AlertTriangle size={20} />}
               label={t('chief.cat.attention')}
               value={data.summary.attention}
-              hint={`ML последняя сессия: ${data.session_stats.latest_by_status.anomaly ?? 0} anomaly · ${data.session_stats.latest_by_status.check_failed ?? 0} failed`}
+              hint={`Отклонения: ${data.session_stats.latest_by_status.anomaly ?? 0} · сбой записи: ${data.session_stats.latest_by_status.check_failed ?? 0}`}
             />
             <SummaryCard
               tone="danger"
               icon={<AlertOctagon size={20} />}
               label={t('chief.cat.quarantineRec')}
               value={data.summary.quarantine}
-              hint="High + обоснование или заявка"
+              hint="Рекомендация до решения специалиста или уже подтверждённая заявка"
             />
-          </section>
-
-          <section className="panel chief-stats">
-            <h2 className="panel__title">Статистика сессий (195)</h2>
-            <p className="panel__subtitle">
-              Исходы ML по всем проверкам, не путать с категориями парка. Последняя сессия на ТС: 25 / 23 / 2.
-            </p>
-            <div className="stats-grid">
-              <StatBlock title="По статусу" items={data.session_stats.by_status} />
-              <StatBlock title="По двигателю (сессии)" items={data.session_stats.by_engine_model} />
-              <StatBlock title="Типы отклонений" items={data.session_stats.by_anomaly_type} />
-            </div>
           </section>
 
           <section className="panel">
             <h2 className="panel__title">Очередь внимания</h2>
-            <p className="panel__subtitle">Сортировка по priority_score без LLM.</p>
+            <p className="panel__subtitle">Сначала машины, которые нужно разобрать в первую очередь.</p>
             <ul className="priority-queue">
               {data.priority_queue.slice(0, 12).map((row) => (
                 <li key={row.vehicle_id}>
@@ -106,6 +94,21 @@ export function ChiefMechanicView({ onOpenDiagnosis }: ChiefMechanicViewProps) {
                 </li>
               ))}
             </ul>
+          </section>
+
+          <section className="panel chief-stats">
+            <h2 className="panel__title">Аналитика проверок</h2>
+            <p className="panel__subtitle">
+              Всего проверок: {data.session_stats.total_sessions}. По последней проверке каждой машины: норма{' '}
+              {data.session_stats.latest_by_status.normal ?? 0}, отклонение{' '}
+              {data.session_stats.latest_by_status.anomaly ?? 0}, сбой записи{' '}
+              {data.session_stats.latest_by_status.check_failed ?? 0}.
+            </p>
+            <div className="stats-grid">
+              <StatBlock title="По статусу" items={data.session_stats.by_status} />
+              <StatBlock title="По двигателю (сессии)" items={data.session_stats.by_engine_model} />
+              <StatBlock title="Типы отклонений" items={data.session_stats.by_anomaly_type} />
+            </div>
           </section>
 
           {data.early_warnings_fleet.length ? (

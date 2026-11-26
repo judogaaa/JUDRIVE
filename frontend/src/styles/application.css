@@ -177,8 +177,9 @@ a:focus-visible {
 .shell-main {
   flex: 1;
   min-width: 0;
-  padding: clamp(1rem, 3vw, 1.5rem);
-  max-width: 1200px;
+  width: 100%;
+  padding: clamp(0.75rem, 1.6vw, 1.25rem);
+  max-width: none;
 }
 
 .icon-btn {
@@ -352,10 +353,42 @@ a:focus-visible {
   margin-top: 1rem;
 }
 
+.workspace {
+  display: grid;
+  gap: 1rem;
+  align-items: start;
+}
+
+@media (min-width: 1100px) {
+  .workspace {
+    grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+    min-height: calc(100vh - 120px);
+  }
+
+  .workspace-chat {
+    position: sticky;
+    top: 72px;
+    display: flex;
+    flex-direction: column;
+    min-height: calc(100vh - 140px);
+  }
+
+  .workspace-chat .chat-log {
+    flex: 1;
+    max-height: none;
+  }
+
+  .workspace-chat .chat-compose {
+    position: sticky;
+    bottom: 0;
+    background: var(--surface);
+    padding-top: 0.5rem;
+  }
+}
+
 @media (min-width: 960px) {
   .diag-layout {
-    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
-    align-items: start;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

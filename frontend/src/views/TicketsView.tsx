@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { fetchTickets, type TicketSubmission } from '../api/tickets'
+import { useI18n } from '../i18n/I18nContext'
 
 interface TicketsViewProps {
   filterVehicleId?: string
@@ -24,6 +25,7 @@ function parseConclusion(snapshot: string | null): string | null {
 }
 
 export function TicketsView({ filterVehicleId }: TicketsViewProps) {
+  const { t } = useI18n()
   const [tickets, setTickets] = useState<TicketSubmission[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -50,11 +52,8 @@ export function TicketsView({ filterVehicleId }: TicketsViewProps) {
   return (
     <>
       <header className="page-header">
-        <h1>Журнал заявок</h1>
-        <p>
-          Отправленные заявки после подтверждения механиком
-          {filterVehicleId ? ` по ${filterVehicleId}` : ''}. Дубликаты по паре ТС/сессия блокируются backend.
-        </p>
+        <h1>{t('tickets.title')}</h1>
+        <p>{t('tickets.subtitle')}</p>
       </header>
 
       {loading ? <p className="panel__subtitle">Загрузка…</p> : null}
@@ -67,7 +66,7 @@ export function TicketsView({ filterVehicleId }: TicketsViewProps) {
       {!loading && !error ? (
         <section className="panel">
           {tickets.length === 0 ? (
-            <p className="panel__subtitle">Пока нет подтверждённых заявок. Подготовьте черновик в чате на вкладке «Диагностика».</p>
+            <p className="panel__subtitle">{t('tickets.empty')}</p>
           ) : (
             <div className="ticket-journal">
               {tickets.map((row) => (

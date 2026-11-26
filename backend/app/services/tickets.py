@@ -28,6 +28,11 @@ class TicketService:
         draft = self._repo.get_draft(draft_id)
         if not draft:
             return {"status": "error", "message": "Черновик не найден"}
+        if draft["status"] == "unknown":
+            return {
+                "status": "unknown",
+                "message": "Исход предыдущей отправки неизвестен. Повтор запрещён до ручной проверки.",
+            }
         if draft["status"] != "draft":
             return {"status": "error", "message": f"Черновик в статусе {draft['status']}"}
         if draft["confirm_nonce"] != confirm_nonce:
@@ -37,7 +42,13 @@ class TicketService:
         vehicle_id = draft["vehicle_id"]
         session_id = draft["session_id"]
 
-        if self._repo.has_submitted_ticket(vehicle_id, session_id):
+        blocking = self._repo.has_blocking_submission(vehicle_id, session_id)
+        if blocking and blocking["submit_status"] == "unknown":
+            return {
+                "status": "unknown",
+                "message": "Исход отправки неизвестен. Повторная автоотправка запрещена.",
+            }
+        if blocking and blocking["submit_status"] in {"created", "sending"}:
             existing = next(
                 (
                     row
@@ -48,14 +59,18 @@ class TicketService:
             )
             return {
                 "status": "duplicate",
-                "message": "Заявка по этой паре уже отправлялась.",
+                "message": "Заявка по этой паре уже отправлялась или отправка ещё выполняется.",
                 "ticket_id": existing["ticket_id"] if existing else None,
             }
+
+        if not self._repo.claim_draft_sending(draft_id, confirm_nonce):
+            return {"status": "error", "message": "Черновик уже обрабатывается или устарел"}
 
         diag = await self._mock_ml.diagnose(vehicle_id, session_id)
         diag.engine_model = self._fleet.session_engine(vehicle_id, session_id)
         ok, reason = can_create_ticket(diag)
         if not ok:
+            self._repo.set_draft_status(draft_id, "refused")
             self._repo.record_submission(
                 draft_id,
                 vehicle_id,
@@ -68,18 +83,21 @@ class TicketService:
             return {"status": "refused", "message": reason}
 
         if diagnosis_hash(diag) != draft["diagnosis_hash"]:
+            self._repo.set_draft_status(draft_id, "stale")
             return {
                 "status": "stale",
                 "message": "Диагностика изменилась с момента черновика. Подготовьте заявку заново.",
             }
 
         if payload.get("anomaly_type") != diag.anomaly_type:
-            return {"status": "refused", "message": "anomaly_type не совпадает с актуальной диагностикой"}
+            self._repo.set_draft_status(draft_id, "refused")
+            return {"status": "refused", "message": "Код отклонения не совпадает с актуальной диагностикой"}
 
         try:
             result = await self._mock_toir.create_ticket(payload)
         except httpx.HTTPStatusError as exc:
             detail = exc.response.text
+            self._repo.set_draft_status(draft_id, "failed")
             self._repo.record_submission(
                 draft_id,
                 vehicle_id,
@@ -91,6 +109,7 @@ class TicketService:
             )
             return {"status": "failed", "message": "Ошибка Mock ТОиР", "detail": detail}
         except httpx.HTTPError:
+            self._repo.set_draft_status(draft_id, "unknown")
             self._repo.record_submission(
                 draft_id,
                 vehicle_id,

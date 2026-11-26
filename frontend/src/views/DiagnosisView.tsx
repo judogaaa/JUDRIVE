@@ -59,15 +59,22 @@ export function DiagnosisView({
     })
   }, [vehicleQuery, vehicles])
 
+  const requestGen = useMemo(() => ({ current: 0 }), [])
+
   const resetVerdict = useCallback(() => {
+    requestGen.current += 1
     setResult(null)
     setError(null)
-  }, [])
+    setLoading(false)
+  }, [requestGen])
 
   const onVehicleSelect = (nextId: string) => {
     onVehicleChange(nextId)
     const vehicle = vehicles.find((v) => v.vehicle_id === nextId)
-    if (vehicle?.sessions[0]) onSessionChange(vehicle.sessions[0].session_id)
+    if (vehicle) {
+      const latest = [...vehicle.sessions].sort((a, b) => b.checked_at.localeCompare(a.checked_at))[0]
+      if (latest) onSessionChange(latest.session_id)
+    }
     resetVerdict()
   }
 
@@ -78,16 +85,21 @@ export function DiagnosisView({
 
   const runDiagnosis = async () => {
     if (!vehicleId || !sessionId) return
+    const gen = ++requestGen.current
+    const pair = `${vehicleId}:${sessionId}`
     setLoading(true)
     setError(null)
     setResult(null)
     try {
       const response = await fetchDiagnosis(vehicleId, sessionId)
+      if (gen !== requestGen.current) return
+      if (`${response.vehicle_id}:${response.session_id}` !== pair) return
       setResult(response)
     } catch (err: unknown) {
+      if (gen !== requestGen.current) return
       setError(err instanceof Error ? err.message : 'Неизвестная ошибка')
     } finally {
-      setLoading(false)
+      if (gen === requestGen.current) setLoading(false)
     }
   }
 
@@ -98,6 +110,8 @@ export function DiagnosisView({
         <p>{t('diag.subtitle')}</p>
       </header>
 
+      <div className="workspace">
+      <aside className="workspace-side">
       <section className="panel diag-context">
         {fleetError ? (
           <p className="panel__error" role="alert">
@@ -107,7 +121,7 @@ export function DiagnosisView({
           <>
             <div className="context-grid">
               <label className="field">
-                <span>Поиск и госномер</span>
+                <span>{t('diag.search')}</span>
                 <input
                   value={vehicleQuery}
                   onChange={(e) => setVehicleQuery(e.target.value)}
@@ -116,7 +130,7 @@ export function DiagnosisView({
                 />
               </label>
               <label className="field">
-                <span>Транспорт</span>
+                <span>{t('diag.vehicle')}</span>
                 <select value={vehicleId} onChange={(e) => onVehicleSelect(e.target.value)}>
                   {vehicleOptions.map((v) => (
                     <option key={v.vehicle_id} value={v.vehicle_id}>
@@ -126,7 +140,7 @@ export function DiagnosisView({
                 </select>
               </label>
               <label className="field">
-                <span>Сессия проверки</span>
+                <span>{t('diag.check')}</span>
                 <select value={sessionId} onChange={(e) => onSessionSelect(e.target.value)}>
                   {sessions.map((s) => (
                     <option key={s.session_id} value={s.session_id}>
@@ -166,19 +180,20 @@ export function DiagnosisView({
       </section>
 
       <VerdictCard result={result} loading={loading} error={error} />
-
-      <div className="diag-layout">
-        {vehicleId ? (
-          <DiagnosisSideColumn
-            sessions={sessions}
-            sessionId={sessionId}
-            engineModel={selectedVehicle?.engine_model ?? null}
-            onSessionSelect={onSessionSelect}
-          />
-        ) : null}
-        {vehicleId && sessionId ? (
+      {vehicleId ? (
+        <DiagnosisSideColumn
+          sessions={[...sessions].sort((a, b) => b.checked_at.localeCompare(a.checked_at))}
+          sessionId={sessionId}
+          engineModel={selectedVehicle?.engine_model ?? null}
+          onSessionSelect={onSessionSelect}
+        />
+      ) : null}
+      </aside>
+      {vehicleId && sessionId ? (
+        <div className="workspace-chat">
           <AgentChat vehicleId={vehicleId} sessionId={sessionId} diagnoseResult={result} />
-        ) : null}
+        </div>
+      ) : null}
       </div>
     </>
   )

@@ -8,6 +8,11 @@ import { DiagnosisView } from './views/DiagnosisView'
 import { FleetView } from './views/FleetView'
 import { TicketsView } from './views/TicketsView'
 
+function latestSessionId(vehicle: VehicleSummary): string {
+  const sessions = [...vehicle.sessions].sort((a, b) => b.checked_at.localeCompare(a.checked_at))
+  return sessions[0]?.session_id ?? ''
+}
+
 export default function App() {
   const { mode: themeMode, cycle: onThemeCycle } = useTheme()
   const [view, setView] = useState<AppView>('diagnosis')
@@ -23,8 +28,9 @@ export default function App() {
         if (cancelled) return
         setVehicles(list)
         if (list.length > 0) {
-          setVehicleId(list[0].vehicle_id)
-          setSessionId(list[0].sessions[0]?.session_id ?? '')
+          const first = list[0]
+          setVehicleId(first.vehicle_id)
+          setSessionId(latestSessionId(first))
         }
       })
       .catch((err: unknown) => {
@@ -39,7 +45,7 @@ export default function App() {
   const openDiagnosisForVehicle = (id: string, sessionOverride?: string) => {
     setVehicleId(id)
     const vehicle = vehicles.find((v) => v.vehicle_id === id)
-    setSessionId(sessionOverride ?? vehicle?.sessions[0]?.session_id ?? '')
+    setSessionId(sessionOverride ?? (vehicle ? latestSessionId(vehicle) : ''))
     setView('diagnosis')
   }
 

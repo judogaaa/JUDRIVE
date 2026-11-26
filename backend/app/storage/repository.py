@@ -144,6 +144,41 @@ class AppRepository:
             )
             conn.commit()
 
+    def claim_draft_sending(self, draft_id: str, confirm_nonce: str) -> bool:
+        """Атомарно переводит черновик draft → sending до вызова ТОиР."""
+        with self._connect() as conn:
+            cur = conn.execute(
+                """
+                UPDATE ticket_drafts
+                SET status = 'sending', updated_at = ?
+                WHERE draft_id = ? AND confirm_nonce = ? AND status = 'draft'
+                """,
+                (_now(), draft_id, confirm_nonce),
+            )
+            conn.commit()
+            return cur.rowcount == 1
+
+    def set_draft_status(self, draft_id: str, status: str) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                "UPDATE ticket_drafts SET status = ?, updated_at = ? WHERE draft_id = ?",
+                (status, _now(), draft_id),
+            )
+            conn.commit()
+
+    def has_blocking_submission(self, vehicle_id: str, session_id: str) -> sqlite3.Row | None:
+        with self._connect() as conn:
+            return conn.execute(
+                """
+                SELECT * FROM ticket_submissions
+                WHERE vehicle_id = ? AND session_id = ?
+                  AND submit_status IN ('created', 'unknown', 'sending')
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (vehicle_id, session_id),
+            ).fetchone()
+
     def has_submitted_ticket(self, vehicle_id: str, session_id: str) -> bool:
         with self._connect() as conn:
             row = conn.execute(

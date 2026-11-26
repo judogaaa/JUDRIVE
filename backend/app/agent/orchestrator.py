@@ -5,7 +5,7 @@ import json
 
 from fastapi import HTTPException
 
-from app.agent.groq_client import GroqClient, SYSTEM_PROMPT
+from app.agent.groq_client import GroqClient
 from app.agent.locale import agent_language_instruction, normalize_locale
 from app.agent.guardrails import sanitize_user_message
 from app.agent.tools import TOOL_DEFINITIONS, ToolRuntime
@@ -135,7 +135,6 @@ class AgentOrchestrator:
             "sources": runtime.sources,
             "draft": runtime.draft,
             "usage": usage,
-            "system_prompt_note": SYSTEM_PROMPT[:120] + "…",
         }
 
     def get_conversation_messages(self, conversation_id: str) -> list[dict]:

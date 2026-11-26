@@ -42,6 +42,15 @@ export type TranslationKey =
   | 'chief.cat.quarantine'
   | 'chief.cat.quarantineRec'
   | 'chief.cat.quarantineConfirmed'
+  | 'diag.search'
+  | 'diag.vehicle'
+  | 'diag.check'
+  | 'diag.sideTitle'
+  | 'fleet.title'
+  | 'fleet.subtitle'
+  | 'tickets.title'
+  | 'tickets.subtitle'
+  | 'tickets.empty'
 
 const ru: Record<TranslationKey, string> = {
   'app.caption': 'Цифровой механик',
@@ -51,10 +60,13 @@ const ru: Record<TranslationKey, string> = {
   'nav.tickets': 'Заявки',
   'theme.cycle': 'Тема',
   'diag.title': 'Диагностика',
-  'diag.subtitle':
-    'Выберите транспорт и сессию, получите вердикт ML, уточните в чате и подтвердите заявку при необходимости.',
+  'diag.subtitle': 'Выберите машину и проверку. Спросите механика в чате. Заявку отправляет только кнопка подтверждения.',
   'diag.run': 'Получить результат диагностики',
-  'diag.running': 'Запрос к Mock ML…',
+  'diag.running': 'Получаем результат…',
+  'diag.search': 'Поиск',
+  'diag.vehicle': 'Машина',
+  'diag.check': 'Проверка',
+  'diag.sideTitle': 'Контекст',
   'chat.title': 'Чат с цифровым механиком',
   'chat.placeholder': 'Вопрос или команда механика…',
   'chat.send': 'Отправить',
@@ -76,6 +88,11 @@ const ru: Record<TranslationKey, string> = {
   'chief.cat.quarantine': 'Карантин',
   'chief.cat.quarantineRec': 'Рекомендация карантина',
   'chief.cat.quarantineConfirmed': 'Карантин (подтверждено)',
+  'fleet.title': 'Автопарк',
+  'fleet.subtitle': 'Все машины. Нажмите строку, чтобы открыть диагностику.',
+  'tickets.title': 'Заявки',
+  'tickets.subtitle': 'Отправленные заявки после вашего подтверждения.',
+  'tickets.empty': 'Пока нет подтверждённых заявок. Подготовьте черновик в чате.',
 }
 
 const uz: Record<TranslationKey, string> = {

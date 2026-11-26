@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Search } from 'lucide-react'
 import type { VehicleSummary } from '../api/types'
+import { useI18n } from '../i18n/I18nContext'
 
 interface FleetViewProps {
   vehicles: VehicleSummary[]
@@ -9,6 +10,7 @@ interface FleetViewProps {
 }
 
 export function FleetView({ vehicles, fleetError, onOpenDiagnosis }: FleetViewProps) {
+  const { t } = useI18n()
   const [query, setQuery] = useState('')
 
   const filtered = useMemo(() => {
@@ -25,8 +27,8 @@ export function FleetView({ vehicles, fleetError, onOpenDiagnosis }: FleetViewPr
   return (
     <>
       <header className="page-header">
-        <h1>Автопарк</h1>
-        <p>50 машин и 195 сессий из синтетического набора. Выберите ТС для диагностики.</p>
+        <h1>{t('fleet.title')}</h1>
+        <p>{t('fleet.subtitle')}</p>
       </header>
 
       {fleetError ? (
