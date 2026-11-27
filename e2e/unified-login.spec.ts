@@ -54,3 +54,57 @@ for (const width of [1440, 390]) {
     expect(consoleErrors).toEqual([])
   })
 }
+
+test('restricted production demo has a usable screen and onboarding on each login', async ({ page }) => {
+  await page.addInitScript(() => {
+    if (!localStorage.getItem('judrive-test-seeded-onboarding')) {
+      localStorage.setItem('judrive-test-seeded-onboarding', '1')
+      localStorage.setItem('judrive-onboarding', JSON.stringify({ version: 1, status: 'completed', step: 6, acknowledged: true }))
+    }
+  })
+  await page.route('**/api/vehicles', route => route.fulfill({
+    status: 403, contentType: 'application/json', body: JSON.stringify({ detail: 'Недоступно в деморежиме' }),
+  }))
+  const signIn = async () => {
+    await page.getByLabel('Имя').fill('123')
+    await page.getByLabel('Пароль', { exact: true }).fill('123')
+    await page.getByRole('button', { name: 'Войти' }).click()
+    await expect(page.getByRole('dialog', { name: 'Знакомство с JUDRIVE' })).toBeVisible()
+    await page.getByRole('button', { name: 'Пропустить' }).click()
+  }
+
+  await page.goto('/')
+  await signIn()
+  const unavailable = page.getByText('Данные автопарка и диагностика недоступны в публичном демо.', { exact: false })
+  await expect(unavailable).toBeVisible()
+  await expect(page.locator('.panel__error')).toHaveCount(0)
+  await expect(page.locator('.workspace-dashboard__stats')).toHaveCount(0)
+  for (const section of ['Диагностика', 'Автопарк']) {
+    await openNav(page, section)
+    await expect(page.getByRole('heading', { name: section, exact: true })).toBeVisible()
+    await expect(unavailable).toBeVisible()
+    await expect(page.locator('.panel__error')).toHaveCount(0)
+  }
+  await page.reload()
+  await expect(unavailable).toBeVisible()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await page.getByRole('button', { name: 'Пройти обучение заново' }).click()
+  await expect(page.getByRole('dialog')).toBeVisible()
+  await page.getByRole('button', { name: 'Пропустить' }).click()
+  await page.locator('.shell-toolbar').getByRole('button', { name: 'Выйти' }).click()
+  await signIn()
+  await expect(unavailable).toBeVisible()
+})
+
+test('unexpected fleet failure still offers retry', async ({ page }) => {
+  await page.route('**/api/vehicles', route => route.fulfill({
+    status: 503, contentType: 'application/json', body: JSON.stringify({ detail: 'Сервис временно недоступен' }),
+  }))
+  await page.goto('/')
+  await page.getByLabel('Имя').fill('123')
+  await page.getByLabel('Пароль', { exact: true }).fill('123')
+  await page.getByRole('button', { name: 'Войти' }).click()
+  await page.getByRole('button', { name: 'Пропустить' }).click()
+  await expect(page.getByRole('alert')).toContainText('Сервис временно недоступен')
+  await expect(page.getByRole('button', { name: 'Повторить' })).toBeVisible()
+})

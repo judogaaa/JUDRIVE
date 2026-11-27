@@ -5,6 +5,16 @@ import { i18nError } from '../lib/i18nError'
 const READ_TIMEOUT_MS = 20_000
 const DIAGNOSIS_TIMEOUT_MS = 45_000
 
+export class ApiResponseError extends Error {
+  readonly status: number
+
+  constructor(status: number, message: string) {
+    super(message)
+    this.status = status
+    this.name = 'ApiResponseError'
+  }
+}
+
 async function parseError(response: Response): Promise<never> {
   let detail: string | undefined
   try {
@@ -13,8 +23,7 @@ async function parseError(response: Response): Promise<never> {
   } catch {
     /* non-JSON gateway/error page */
   }
-  if (detail) throw new Error(detail)
-  throw i18nError('error.http', response.status)
+  throw new ApiResponseError(response.status, detail ?? i18nError('error.http', response.status).message)
 }
 
 function timedSignal(ms: number): AbortSignal {

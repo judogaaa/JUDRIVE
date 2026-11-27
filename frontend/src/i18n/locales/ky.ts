@@ -412,6 +412,7 @@ export const ky: Record<TranslationKey, string> = {
   'ticket.priorityAction.high': 'Каттамга чыгардан мурда текшериңиз.',
   'nav.dashboard': "Башкы бет",
   'dashboard.demoNote': "Ачык демо. Жабык нускамалар, чат, үн жана өтүнмөлөр башкы механик үчүн.",
+  'dashboard.demoFleetUnavailable': "Ачык демодо автопарктын маалыматтары жана диагностика жеткиликсиз. Аларды колдонуу үчүн чыгып, башкы механиктин аккаунту менен кириңиз. Окутуу жана жардам азыр жеткиликтүү.",
   'dashboard.recentChecks': "Акыркы текшерүүлөр",
   'auth.demoLabel': "Демо",
   'dashboard.checks': "Текшерүүлөр",

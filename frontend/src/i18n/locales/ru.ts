@@ -412,6 +412,7 @@ export const ru: Record<TranslationKey, string> = {
   'ticket.priorityAction.high': 'Дефектовка до выпуска в рейс.',
   'nav.dashboard': "Главная",
   'dashboard.demoNote': "Публичное демо. Закрытые руководства, чат, голос и заявки доступны главному механику.",
+  'dashboard.demoFleetUnavailable': "Данные автопарка и диагностика недоступны в публичном демо. Чтобы работать с ними, выйдите и войдите под учётной записью главного механика. Обучение и помощь доступны сейчас.",
   'dashboard.recentChecks': "Последние проверки",
   'auth.demoLabel': "Демо",
   'dashboard.checks': "Проверки",

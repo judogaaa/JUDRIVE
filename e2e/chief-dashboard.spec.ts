@@ -36,6 +36,8 @@ test.describe('Chief mechanic auth and filters', () => {
     await page.getByLabel('Пароль', { exact: true }).fill(creds.password)
     await page.getByRole('button', { name: 'Войти' }).click()
 
+    await expect(page.getByRole('dialog', { name: 'Знакомство с JUDRIVE' })).toBeVisible()
+    await page.getByRole('button', { name: 'Пропустить' }).click()
     await expect(page.getByRole('heading', { name: 'Главная', exact: true })).toBeVisible()
     await openNav(page, /Главный механик/)
     await expect(page.getByRole('heading', { name: 'Главный механик' })).toBeVisible({ timeout: 15_000 })
