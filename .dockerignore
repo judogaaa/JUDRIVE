@@ -13,13 +13,13 @@ vendor/neurodvs_mock/data
 e2e/storage-state.json
 local-pdfs
 output
-*.sqlite*
-*.db
-*.db-*
+**/*.sqlite*
+**/*.db
+**/*.db-*
 *.hocr
 *.alto.xml
 **/data/index
-**/*.pdf
+**/*.[Pp][Dd][Ff]
 *.zip
 **/*.key
 **/*.pem

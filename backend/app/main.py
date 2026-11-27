@@ -4,9 +4,10 @@ import json
 from time import monotonic
 
 import httpx
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from starlette.datastructures import UploadFile
 
 from app.agent.orchestrator import AgentOrchestrator
 from app.auth.chief_session import clear_session, login as chief_login, require_chief, session_ok
@@ -26,7 +27,7 @@ from app.services.analytics import FleetAnalyticsService, diagnosis_review_prior
 from app.services.fleet import FleetService
 from app.services.mock_clients import MockMlClient, MockMlResponseError, MockToirClient
 from app.services.tickets import TicketService
-from app.services.voice import VoiceService
+from app.services.voice import VoiceService, read_voice_form
 from app.services.usage_budget import UsageBudget
 from app.services.gigachat import GigaChatAPI, GigaChatAPIError
 from app.agent.locale import normalize_locale
@@ -142,9 +143,9 @@ async def _provider_available() -> bool:
     try:
         async with asyncio.timeout(4):
             models = await gigachat_api.request_json("GET", "/v1/models", timeout_s=3)
-        available = any(
-            isinstance(model, dict) and model.get("id") == settings.gigachat_model
-            for model in (models.get("data") or [])
+        catalogue = models.get("data")
+        available = isinstance(catalogue, list) and any(
+            isinstance(model, dict) and model.get("id") == settings.gigachat_model for model in catalogue
         )
     except (GigaChatAPIError, httpx.HTTPError, TimeoutError):
         available = False
@@ -233,7 +234,8 @@ async def auth_logout(response: Response):
 
 
 @app.get(f"{settings.api_prefix}/auth/session")
-async def auth_session(request: Request):
+async def auth_session(request: Request, response: Response):
+    response.headers["Cache-Control"] = "private, no-store"
     return {"authenticated": session_ok(request, get_settings())}
 
 
@@ -254,7 +256,7 @@ async def manuals_catalog():
 
 @app.get(f"{settings.api_prefix}/manuals/status", dependencies=[Depends(_chief_guard)])
 async def manuals_status():
-    status = rag_service.status()
+    status = await asyncio.to_thread(rag_service.status)
     return {key: status[key] for key in ("index_current", "documents", "pages", "missing_files")}
 
 
@@ -290,7 +292,7 @@ async def get_source_evidence(evidence_id: str, response: Response, engine_model
     engine = _document_engine(engine_model, vehicle_id, session_id)
     if evidence_id.split(":")[0] not in allowed_doc_ids(engine):
         raise HTTPException(status_code=404, detail="Источник недоступен")
-    evidence = rag_service.get_evidence(evidence_id)
+    evidence = await asyncio.to_thread(rag_service.get_evidence, evidence_id)
     if not evidence or evidence["doc_id"] not in allowed_doc_ids(engine) or not rag_service.resolve_pdf_path(evidence["doc_id"]):
         raise HTTPException(status_code=404, detail="Источник недоступен")
     response.headers["Cache-Control"] = "private, no-store"
@@ -340,12 +342,25 @@ async def conversation_send(conversation_id: str, body: ChatMessageRequest, resp
     )
 
 
-@app.post(f"{settings.api_prefix}/voice/transcribe", dependencies=[Depends(_chief_guard)])
-async def voice_transcribe(
-    file: UploadFile = File(...),
-    locale: str = Form(default="ru"),
-):
-    return await voice_service.transcribe(file, language=normalize_locale(locale))
+@app.post(
+    f"{settings.api_prefix}/voice/transcribe",
+    dependencies=[Depends(_chief_guard)],
+    openapi_extra={"requestBody": {"required": True, "content": {"multipart/form-data": {"schema": {
+        "type": "object", "required": ["file"], "properties": {
+            "file": {"type": "string", "format": "binary"}, "locale": {"type": "string", "default": "ru"},
+        },
+    }}}}},
+)
+async def voice_transcribe(request: Request):
+    form = await read_voice_form(request)
+    try:
+        file = form.get("file")
+        locale = form.get("locale", "ru")
+        if not isinstance(file, UploadFile) or not isinstance(locale, str):
+            raise HTTPException(status_code=422, detail="Требуется аудиофайл")
+        return await voice_service.transcribe(file, language=normalize_locale(locale))
+    finally:
+        await form.close()
 
 
 @app.get(f"{settings.api_prefix}/tickets/drafts/{{draft_id}}", dependencies=[Depends(_chief_guard)])

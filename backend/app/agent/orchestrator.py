@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import asyncio
 import json
 import logging
 import re
@@ -102,7 +103,7 @@ class AgentOrchestrator:
         if not content:
             raise HTTPException(status_code=400, detail="Пустое сообщение")
 
-        attached = self._rag.get_evidence(evidence_id) if evidence_id else None
+        attached = await asyncio.to_thread(self._rag.get_evidence, evidence_id) if evidence_id else None
         if evidence_id and (not attached or attached["doc_id"] not in allowed_doc_ids(conv["engine_model"])):
             raise HTTPException(status_code=422, detail="Источник недоступен для выбранного двигателя")
 

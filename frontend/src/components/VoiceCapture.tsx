@@ -75,7 +75,8 @@ export function VoiceCapture({ onText, disabled, compact }: VoiceCaptureProps) {
         return
       }
       streamRef.current = stream
-      const recorder = new MediaRecorder(stream, { mimeType: preferMimeType() })
+      const mimeType = preferMimeType()
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined)
       const chunks: BlobPart[] = []
       recorder.ondataavailable = (event) => {
         if (event.data.size > 0) chunks.push(event.data)
@@ -143,9 +144,8 @@ export function VoiceCapture({ onText, disabled, compact }: VoiceCaptureProps) {
   )
 }
 
-function preferMimeType(): string {
-  if (typeof MediaRecorder === 'undefined') return 'audio/webm'
-  if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) return 'audio/webm;codecs=opus'
-  if (MediaRecorder.isTypeSupported('audio/webm')) return 'audio/webm'
-  return 'audio/mp4'
+function preferMimeType(): string | undefined {
+  if (typeof MediaRecorder.isTypeSupported !== 'function') return
+  return ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus']
+    .find((mimeType) => MediaRecorder.isTypeSupported(mimeType))
 }

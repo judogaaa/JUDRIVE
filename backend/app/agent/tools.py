@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from dataclasses import dataclass, field
 from typing import Any
@@ -94,7 +95,7 @@ class ToolRuntime:
         if name == "get_vehicle_history":
             return self._get_vehicle_history()
         if name == "search_manuals":
-            return self._search_manuals(arguments.get("query", ""))
+            return await asyncio.to_thread(self._search_manuals, arguments.get("query", ""))
         if name == "prepare_defect_ticket":
             return await self._prepare_ticket(arguments)
         return {"error": f"Неизвестный инструмент: {name}"}

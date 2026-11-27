@@ -3038,7 +3038,7 @@ select {
   }
 
   .diag-result {
-    order: 1;
+    order: -1;
   }
 
   .diag-chat {

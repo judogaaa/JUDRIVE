@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import AsyncGenerator
 import logging
 import time
 from typing import Any, Callable
@@ -7,7 +8,9 @@ from typing import Any, Callable
 import httpx
 
 from app.services.usage_budget import BudgetExceeded
-from fastapi import HTTPException, UploadFile
+from fastapi import HTTPException, Request
+from starlette.datastructures import FormData, UploadFile
+from starlette.formparsers import MultiPartException, MultiPartParser
 
 from app.agent.locale import LOCALE_LABELS
 from app.services.gigachat import GigaChatAPI, GigaChatAPIError, GigaChatRateLimitError
@@ -15,6 +18,7 @@ from app.services.gigachat import GigaChatAPI, GigaChatAPIError, GigaChatRateLim
 logger = logging.getLogger(__name__)
 
 MAX_AUDIO_BYTES = 8 * 1024 * 1024
+MAX_AUDIO_REQUEST_BYTES = MAX_AUDIO_BYTES + 16 * 1024
 MIME_ALIASES = {
     "audio/webm": ("audio/webm", "speech.webm"),
     "audio/mp4": ("audio/mp4", "speech.mp4"),
@@ -29,6 +33,40 @@ MIME_ALIASES = {
     "audio/mp3": ("audio/mp3", "speech.mp3"),
     "audio/opus": ("audio/opus", "speech.opus"),
 }
+
+
+class _VoiceRequestTooLarge(MultiPartException):
+    pass
+
+
+async def read_voice_form(request: Request) -> FormData:
+    content_type = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+    if content_type != "multipart/form-data":
+        raise HTTPException(status_code=415, detail="Ожидается аудиофайл")
+
+    try:
+        declared_size = int(request.headers.get("content-length", "0"))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Некорректный размер запроса") from exc
+    if declared_size > MAX_AUDIO_REQUEST_BYTES:
+        raise HTTPException(status_code=413, detail="Аудио слишком большое (макс. 8 МБ)")
+
+    async def bounded_stream() -> AsyncGenerator[bytes, None]:
+        received = 0
+        async for chunk in request.stream():
+            received += len(chunk)
+            if received > MAX_AUDIO_REQUEST_BYTES:
+                raise _VoiceRequestTooLarge("Audio request too large")
+            yield chunk
+
+    try:
+        return await MultiPartParser(
+            request.headers, bounded_stream(), max_files=1, max_fields=1, max_part_size=32,
+        ).parse()
+    except _VoiceRequestTooLarge as exc:
+        raise HTTPException(status_code=413, detail="Аудио слишком большое (макс. 8 МБ)") from exc
+    except MultiPartException as exc:
+        raise HTTPException(status_code=400, detail="Некорректная форма загрузки аудио") from exc
 
 
 def _container_matches(filename: str, data: bytes) -> bool:
@@ -142,8 +180,12 @@ class VoiceService:
                 self._on_usage({**usage, "latency_ms": int((time.perf_counter() - started) * 1000)})
 
             choices = result.get("choices")
-            message = choices[0].get("message", {}) if isinstance(choices, list) and choices else {}
-            text = str(message.get("content") or "").strip() if isinstance(message, dict) else ""
+            choice = choices[0] if isinstance(choices, list) and choices else None
+            message = choice.get("message") if isinstance(choice, dict) else None
+            transcript = message.get("content") if isinstance(message, dict) else None
+            if not isinstance(transcript, str):
+                raise GigaChatAPIError(502, "Invalid GigaChat transcription response")
+            text = transcript.strip()
             if not text:
                 raise HTTPException(status_code=422, detail="Речь не распознана — повторите или введите текст")
             return {"text": text, "language": language}

@@ -144,7 +144,7 @@ class ManualSearch:
     def get_page(self, page_id: str) -> sqlite3.Row | None:
         return self._conn.execute(
             """
-            SELECT p.page_id, p.doc_id, p.pdf_page, p.raw_text, p.extraction, d.manual_title, d.filename
+            SELECT p.page_id, p.doc_id, p.pdf_page, p.raw_text, p.extraction, d.manual_title, d.filename, d.file_sha256
             FROM pages p
             JOIN documents d ON d.doc_id = p.doc_id
             WHERE p.page_id = ?

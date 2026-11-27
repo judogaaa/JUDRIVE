@@ -9,7 +9,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Iterator
 
-from app.rag.catalog import MANUAL_SPECS, ManualSpec
+from app.rag.catalog import MANUAL_SPECS, SPECS_BY_ID
 from app.rag.extract import extract_pdf_pages, extraction_profile
 from app.rag.normalize import normalize_for_fts
 
@@ -105,6 +105,19 @@ class ManualIndexer:
     def missing_files(self) -> list[str]:
         return [spec.filename for spec in MANUAL_SPECS if not (self._pdf_dir / spec.filename).is_file()]
 
+    def document_matches_index(self, doc_id: str, expected_hash: str) -> bool:
+        spec = SPECS_BY_ID.get(doc_id)
+        if not spec:
+            return False
+        try:
+            return _file_sha256(self._pdf_dir / spec.filename) == expected_hash
+        except FileNotFoundError:
+            return False
+
+    @staticmethod
+    def has_index(conn: sqlite3.Connection) -> bool:
+        return conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='index_meta'").fetchone() is not None
+
     def is_index_current(self) -> bool:
         if self.missing_files():
             return False
@@ -112,7 +125,8 @@ class ManualIndexer:
         if not self._db_path.is_file():
             return False
         with self._connection() as conn:
-            conn.executescript(SCHEMA_SQL)
+            if not self.has_index(conn):
+                return False
             row = conn.execute(
                 "SELECT value FROM index_meta WHERE key = 'corpus_sha256'",
             ).fetchone()
@@ -213,7 +227,8 @@ class ManualIndexer:
             return status
 
         with self._connection() as conn:
-            conn.executescript(SCHEMA_SQL)
+            if not self.has_index(conn):
+                return status | {"documents": 0, "pages": 0}
             status["documents"] = conn.execute("SELECT COUNT(*) AS c FROM documents").fetchone()["c"]
             status["pages"] = conn.execute("SELECT COUNT(*) AS c FROM pages").fetchone()["c"]
         return status

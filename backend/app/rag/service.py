@@ -122,9 +122,13 @@ class ManualRagService:
         }
 
     def get_evidence(self, page_id: str, *, full_text: bool = False) -> dict | None:
+        if not self._indexer._db_path.is_file():
+            return None
         with self._connection() as conn:
+            if not self._indexer.has_index(conn):
+                return None
             row = ManualSearch(conn).get_page(page_id)
-        if not row:
+        if not row or not self._indexer.document_matches_index(row["doc_id"], row["file_sha256"]):
             return None
         return {
             "evidence_id": row["page_id"],

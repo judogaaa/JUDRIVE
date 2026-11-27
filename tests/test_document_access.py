@@ -64,3 +64,54 @@ def test_confirm_http_rejects_identity_overrides(auth_client, monkeypatch):
                      {"warning_acknowledged": "true"}):
         assert auth_client.post(url, json=base | override).status_code == 422
     assert auth_client.post(url, json=base | {"acknowledge": False}).status_code == 400
+
+
+def test_audio_requires_session_before_parsing_multipart(auth_client):
+    unauthenticated = TestClient(main.app)
+    response = unauthenticated.post(
+        "/api/voice/transcribe", content=b"invalid multipart",
+        headers={"Content-Type": "multipart/form-data"},
+    )
+    assert response.status_code == 401
+    assert auth_client.post("/api/voice/transcribe", content=b"raw").status_code == 415
+
+
+@pytest.mark.parametrize("chunked", [False, True])
+def test_audio_enforces_request_limit_without_reaching_provider(auth_client, monkeypatch, chunked):
+    from app.services import voice
+
+    monkeypatch.setattr(voice, "MAX_AUDIO_REQUEST_BYTES", 512)
+    boundary = "judrive-test"
+    head = (f"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"sample.wav\"\r\n"
+            "Content-Type: audio/wav\r\n\r\n").encode()
+    parts = (head, b"\0" * 600, f"\r\n--{boundary}--\r\n".encode())
+    request = auth_client.build_request(
+        "POST", "/api/voice/transcribe", content=iter(parts) if chunked else b"".join(parts),
+        headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+    )
+    assert ("content-length" not in request.headers) == chunked
+    response = auth_client.send(request)
+    assert response.status_code == 413
+
+
+def test_evidence_is_not_served_after_its_pdf_changes(auth_client, tmp_path, monkeypatch):
+    from app.rag.service import ManualRagService
+    from synthetic_manuals import generate
+
+    directory = tmp_path / "pdf"
+    generate(directory)
+    rag = ManualRagService(tmp_path / "index.sqlite", directory)
+    rag.ensure_index()
+    monkeypatch.setattr(main, "rag_service", rag)
+    params = {"engine_model": "ЯМЗ-236М2"}
+    url = "/api/sources/evidence/y236-re:p0033"
+    assert auth_client.get(url, params=params).status_code == 200
+
+    path = rag.resolve_pdf_path("y236-re")
+    assert path is not None
+    with path.open("ab") as handle:
+        handle.write(b"\n% revised file bytes\n")
+    assert rag.get_evidence("y236-re:p0033") is None
+    assert auth_client.get(url, params=params).status_code == 404
+    assert not rag.status()["index_current"]
+    assert rag.get_evidence("y236-rk:p0269") is not None
