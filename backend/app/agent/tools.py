@@ -130,7 +130,7 @@ class ToolRuntime:
         if not isinstance(query, str) or not query.strip() or len(query) > 500:
             return {"status": "invalid_query", "message": "Пустой запрос"}
         result = self.rag.search(self.engine_model, query.strip(), limit=AGENT_SEARCH_LIMIT)
-        if result["status"] == "conflict":
+        if result["status"] in {"conflict", "potential_conflict"}:
             self.conflict = result
         if result.get("results"):
             for hit in result["results"]:

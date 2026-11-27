@@ -9,6 +9,7 @@ export interface ManualSearchHit {
   score: number
   extraction: string
   applicability?: string | null
+  condition?: string | null
 }
 
 export interface ManualSearchResponse {

@@ -2043,6 +2043,26 @@ select {
   line-height: 1.45;
 }
 
+.manual-result__condition {
+  margin: -2px 0 8px;
+  color: var(--text-subtle);
+  font-size: 0.76rem;
+  line-height: 1.4;
+}
+
+.manual-refusal--potential {
+  border-left-color: var(--warn);
+  background: var(--warn-soft);
+}
+
+.history-item__condition {
+  display: block;
+  color: var(--text-subtle);
+  font-size: 0.68rem;
+  line-height: 1.3;
+  margin-top: 2px;
+}
+
 .manual-error {
   margin-top: 12px;
 }

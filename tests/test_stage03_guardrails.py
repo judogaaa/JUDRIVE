@@ -126,8 +126,8 @@ async def _pipeline_b418(rag):
     assert diag["anomaly_type"] == "F01"
 
     search = await runtime.execute("search_manuals", {"query": "тепловые зазоры клапанного механизма"})
-    assert search["status"] in {"ok", "conflict"}
-    if search["status"] == "conflict":
+    assert search["status"] in {"ok", "conflict", "potential_conflict"}
+    if search["status"] in {"conflict", "potential_conflict"}:
         assert len({row["doc_id"] for row in search["conflicting_sources"]}) >= 2
     evidence_ids = [h["evidence_id"] for h in search["results"][:2]]
     assert evidence_ids
