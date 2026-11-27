@@ -483,7 +483,6 @@ export function ChiefLogin({ onSuccess }: { onSuccess: () => void }) {
           }}
         >
           <h1>{t('auth.title')}</h1>
-          <p className="panel__subtitle">{t('chief.subtitle')}</p>
           <p className="auth-hint" role="note">
             {t('auth.user')}: <strong>123</strong>
             <span aria-hidden> · </span>
