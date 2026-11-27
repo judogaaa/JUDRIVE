@@ -110,7 +110,40 @@ def locate(roots, entries):
     return found
 
 
-def audit(settings, manifest):
+FAULT_PATH = "vendor/neurodvs_mock/data/fault_types.json"
+FAULT_ORIGINAL = "e4218c040cc6eccbd1822158c405d5be6e6c01cd"
+FAULT_SHA = "021bf7ffc72a659774bc23b43b21a5e26d47f9326fcd6bd2899e31589bb5fe35"
+
+
+def historical_fault(entry):
+    return entry.get("repository_path") == FAULT_PATH and entry["sha256"] == FAULT_SHA
+
+
+def archive_required(entries, found, candidate_files=()):
+    return any(name not in found and not (
+        "repository_path" in entry and (name in candidate_files or historical_fault(entry))
+    ) for name, entry in entries.items())
+
+
+def candidate_materials(repo, entries, found):
+    for name, entry in entries.items():
+        if name in found or "repository_path" not in entry:
+            continue
+        path = repo / entry["repository_path"]
+        if path.resolve().is_relative_to(repo.resolve()) and matches(path, entry):
+            found[name] = path
+        elif historical_fault(entry):
+            # The verified candidate inherits the original Git blob. Keep it out of the published tree.
+            original = subprocess.run(
+                ["git", "show", f"{FAULT_ORIGINAL}:{FAULT_PATH}"], cwd=repo,
+                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            )
+            if (original.returncode == 0 and len(original.stdout) == entry["bytes"]
+                    and hashlib.sha256(original.stdout).hexdigest() == entry["sha256"]):
+                found[name] = original.stdout
+
+
+def audit(settings, manifest, candidate_files=()):
     for args in (
         ("uname", "-srmo"), ("nproc",), ("free", "-h"), ("df", "-h", "/opt"),
         ("docker", "version", "--format", "{{.Server.Version}}"),
@@ -138,14 +171,18 @@ def audit(settings, manifest):
     entries = materials(manifest)
     found = locate(roots, entries)
     archive = manifest["archive"]
-    archive_available = bool(locate(roots, {archive["filename"]: archive})) if len(entries) != len(found) else False
+    needs_archive = archive_required(entries, found, candidate_files)
+    archive_available = bool(locate(roots, {archive["filename"]: archive})) if needs_archive else False
     for name, item in entries.items():
-        print("MATCH" if name in found else "BLOCKED", name, item["bytes"], item["sha256"], flush=True)
+        source = "MATCH" if name in found else (
+            "CANDIDATE" if "repository_path" in item and (name in candidate_files or historical_fault(item)) else "BLOCKED"
+        )
+        print(source, name, item["bytes"], item["sha256"], flush=True)
     print("configured credentials:", bool(settings.get("GIGACHAT_CREDENTIALS")), flush=True)
     print("configured scope:", settings.get("GIGACHAT_SCOPE") if settings.get("GIGACHAT_SCOPE") in SCOPES else "unconfirmed", flush=True)
     print("configured archive URL:", bool(settings.get("JUDRIVE_MANUALS_URL")), flush=True)
     print("JUDRIVE_AUDIT_JSON " + json.dumps({
-        "missing_materials": len(entries) != len(found),
+        "archive_required": needs_archive,
         "configured_url": bool(settings.get("JUDRIVE_MANUALS_URL")),
         "approved_archive": archive_available,
         "configured_key": bool(settings.get("GIGACHAT_CREDENTIALS")),
@@ -179,6 +216,7 @@ class HTTPSRedirects(HTTPRedirectHandler):
 def fill_materials(root, staging, settings, config, manifest):
     entries = materials(manifest)
     found = locate(source_roots(settings), entries)
+    candidate_materials(root / "repo", entries, found)
     archive = staging / "organizer.zip"
     if len(found) != len(entries) and not archive.exists():
         original = manifest["archive"]
@@ -204,7 +242,11 @@ def fill_materials(root, staging, settings, config, manifest):
     for name, item in entries.items():
         target = root / ("pdf" if name.endswith(".pdf") else "fleet") / name
         if name in found:
-            shutil.copyfile(found[name], target)
+            source = found[name]
+            if isinstance(source, bytes):
+                target.write_bytes(source)
+            else:
+                shutil.copyfile(source, target)
         elif item.get("archive_path"):
             target.write_bytes(read_archive_member(archive, item["archive_path"], item))
         else:
@@ -458,7 +500,7 @@ def main(encoded_manifest, config=None):
         if sys.version_info < (3, 10):
             raise Blocked("На VPS нужен Python 3.10+")
         if args.audit:
-            audit(settings, manifest)
+            audit(settings, manifest, (config or {}).get("candidate_files", ()))
         elif args.stop_run_id:
             stop(args.stop_run_id)
         else:

@@ -122,10 +122,6 @@ if ($StopRunId) {
     return
 }
 
-Require-Success (Invoke-Runner @('--audit') @{}) 'VPS read-only audit'
-if ($AuditOnly) { return }
-if ($null -eq $script:JudriveAudit) { throw 'VPS audit returned no inventory' }
-
 $sha = (& git -C $repo rev-parse HEAD | Select-Object -Last 1).Trim()
 Require-Success $LASTEXITCODE 'git rev-parse'
 if ($sha -notmatch '^[a-f0-9]{40}$') { throw 'Expected an exact Git commit' }
@@ -133,8 +129,25 @@ $dirty = & git -C $repo status --porcelain --untracked-files=no
 Require-Success $LASTEXITCODE 'git status'
 if ($dirty) { throw 'Use a clean checkout of the published candidate' }
 
+$manifestData = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($manifest)) | ConvertFrom-Json
+$candidateFiles = @(
+    foreach ($entry in $manifestData.included_mock_files) {
+        $name = Split-Path -Leaf $entry.repository_path
+        if ($name -notin @('vehicles.json','fault_types.json')) { continue }
+        $path = Join-Path $repo $entry.repository_path
+        if ((Test-Path -LiteralPath $path -PathType Leaf) -and
+            (Get-Item -LiteralPath $path).Length -eq $entry.bytes -and
+            (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash -eq $entry.sha256) {
+            $name
+        }
+    }
+)
+Require-Success (Invoke-Runner @('--audit') @{candidate_files = $candidateFiles}) 'VPS read-only audit'
+if ($AuditOnly) { return }
+if ($null -eq $script:JudriveAudit) { throw 'VPS audit returned no inventory' }
+
 $values = @{}
-if ($script:JudriveAudit.missing_materials -and -not $ArchivePath -and -not $script:JudriveAudit.configured_url -and -not $script:JudriveAudit.approved_archive) {
+if ($script:JudriveAudit.archive_required -and -not $ArchivePath -and -not $script:JudriveAudit.configured_url -and -not $script:JudriveAudit.approved_archive) {
     $asset = Read-Host 'Approved organizer ZIP path or direct HTTPS URL (blank stops)'
     if (-not $asset) { throw 'BLOCKED: approved archive is required' }
     if ($asset -match '^https://') { $values.archive_url = $asset }
@@ -165,7 +178,7 @@ function Send-PrivateFile([string]$Path, [string]$RemoteName) {
 
 $secure = $null
 try {
-    if ($ArchivePath -and $script:JudriveAudit.missing_materials) { Send-PrivateFile $ArchivePath 'organizer.zip' }
+    if ($ArchivePath -and $script:JudriveAudit.archive_required) { Send-PrivateFile $ArchivePath 'organizer.zip' }
     if ($AudioPath) { Send-PrivateFile $AudioPath 'speech' }
     if ($CaBundle) { Send-PrivateFile $CaBundle 'ca.pem' }
     if ($PromptKey -or -not $script:JudriveAudit.configured_key) {
