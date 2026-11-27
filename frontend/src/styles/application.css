@@ -119,6 +119,7 @@ svg {
   font-size: 1.02rem;
   font-weight: 750;
   letter-spacing: 0.06em;
+  white-space: nowrap;
   line-height: 1.1;
 }
 
@@ -4202,4 +4203,26 @@ select {
 
 .shell-nav-mobile[data-demo] {
   --nav-columns: 3;
+}
+
+@media (max-width: 420px) {
+  .shell-brand {
+    gap: 8px;
+  }
+
+  .shell-toolbar {
+    flex-wrap: nowrap;
+    gap: 5px;
+  }
+
+  .shell-toolbar .menu-trigger {
+    width: 40px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .shell-toolbar .menu-trigger span,
+  .shell-toolbar .menu-trigger svg:last-child {
+    display: none;
+  }
 }

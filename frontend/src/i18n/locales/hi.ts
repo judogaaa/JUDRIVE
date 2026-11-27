@@ -4,7 +4,7 @@ export const hi: Record<TranslationKey, string> = {
   'app.caption': 'डिजिटल मैकेनिक',
   'nav.diagnosis': 'निदान',
   'nav.chief': 'प्रमुख मैकेनिक',
-  'auth.title': 'मुख्य इनपुट मैकेनिक',
+  'auth.title': 'JUDRIVE में प्रवेश',
   'auth.user': 'नाम',
   'auth.password': 'पासवर्ड',
   'auth.submit': 'लॉग इन करें',

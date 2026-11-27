@@ -4,7 +4,7 @@ export const uz: Record<TranslationKey, string> = {
   'app.caption': 'Raqamli mexanik',
   'nav.diagnosis': 'Diagnostika',
   'nav.chief': 'Bosh mexanik',
-  'auth.title': 'Bosh mexanik kirishi',
+  'auth.title': 'JUDRIVE tizimiga kirish',
   'auth.user': 'Ism',
   'auth.password': 'Parol',
   'auth.submit': 'Kirish',

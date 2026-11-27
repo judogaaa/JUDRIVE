@@ -15,7 +15,7 @@ test.describe('Chief mechanic auth and filters', () => {
 
     await page.addInitScript(() => localStorage.setItem('judrive-onboarding', JSON.stringify({ version: 1, status: 'completed', step: 6, acknowledged: true })))
     await page.goto('/')
-    await expect(page.getByRole('heading', { name: 'Вход главного механика' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Вход в JUDRIVE' })).toBeVisible()
 
     await page.getByLabel('Имя').fill(user)
     await page.getByLabel('Пароль', { exact: true }).fill('wrong-password-e2e')

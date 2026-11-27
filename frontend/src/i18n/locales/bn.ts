@@ -4,7 +4,7 @@ export const bn: Record<TranslationKey, string> = {
   'app.caption': 'ডিজিটাল মেকানিক',
   'nav.diagnosis': 'ডায়াগনস্টিকস',
   'nav.chief': 'প্রধান মেকানিক',
-  'auth.title': 'প্রধান ইনপুট মেকানিক',
+  'auth.title': 'JUDRIVE-এ প্রবেশ',
   'auth.user': 'নাম',
   'auth.password': 'পাসওয়ার্ড',
   'auth.submit': 'লগইন করুন',

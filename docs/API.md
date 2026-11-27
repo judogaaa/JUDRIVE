@@ -6,7 +6,7 @@ API обслуживается под `/api` того же origin, что и и�
 | --- | --- |
 | Общий | `GET /api/live`, `GET /api/ready`, `GET /api/health`, вход, выход и состояние сессии |
 | Главный механик и разрешённое демо | `GET /api/vehicles`, `GET /api/vehicles/{vehicle_id}/diagnosis-history`, `POST /api/diagnose` |
-| Главный механик | `/api/manuals/*`, `/api/sources/*`, `/api/conversations/*`, `POST /api/voice/transcribe`, `/api/tickets/*`, `/api/fleet/*` |
+| Главный механик | `/api/manuals/*`, `/api/sources/*`, `/api/conversations/*`, `POST /api/voice/transcribe`, `GET /api/tickets`, `/api/tickets/drafts/*`, `/api/fleet/*` |
 
 `POST /api/auth/login` принимает JSON `username` и `password` и возвращает роль `demo` или `chief`. Браузер передаёт HttpOnly-cookie при следующих запросах. `GET /api/auth/session` возвращает `authenticated` и `role`. `POST /api/auth/logout` удаляет cookie. Пять неверных попыток ограничивают новые попытки с того же клиентского адреса на 15 минут. Используйте доверенную настройку прокси приложения для определения адреса клиента. Анонимный запрос к рабочему API получает `401` при настроенном доступе, а запрос демосессии на закрытый маршрут получает `403`.
 

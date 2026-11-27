@@ -80,6 +80,7 @@ export function WorkspaceShell({ view, onViewChange, themeMode, onThemeChange, m
             <button
               type="button"
               className="menu-trigger"
+              aria-label={localeLabels[locale]}
               aria-haspopup="listbox"
               aria-expanded={langOpen}
               aria-controls={langId}

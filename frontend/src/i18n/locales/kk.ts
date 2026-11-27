@@ -4,7 +4,7 @@ export const kk: Record<TranslationKey, string> = {
   'app.caption': 'Сандық механик',
   'nav.diagnosis': 'Диагностика',
   'nav.chief': 'Бастық механик',
-  'auth.title': 'Негізгі кіріс механик',
+  'auth.title': 'JUDRIVE жүйесіне кіру',
   'auth.user': 'Аты',
   'auth.password': 'Құпия сөз',
   'auth.submit': 'Жүйеге кіру',

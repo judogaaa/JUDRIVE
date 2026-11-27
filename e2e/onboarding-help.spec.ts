@@ -158,7 +158,7 @@ test.describe('Help center and onboarding restart', () => {
   test('chief still requires authentication after help', async ({ page, context }) => {
     await context.clearCookies()
     await page.goto('/')
-    await expect(page.getByRole('heading', { name: 'Вход главного механика' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Вход в JUDRIVE' })).toBeVisible()
     await expect(page.locator('.shell')).toHaveCount(0)
   })
 })

@@ -4,7 +4,7 @@ export const tg: Record<TranslationKey, string> = {
   'app.caption': 'Рақамӣ механик',
   'nav.diagnosis': 'Диагностика',
   'nav.chief': 'Сардор механик',
-  'auth.title': 'Вуруди асосӣ механик',
+  'auth.title': 'Вуруд ба JUDRIVE',
   'auth.user': 'Ном',
   'auth.password': 'Рамз',
   'auth.submit': 'Воридшавӣ',

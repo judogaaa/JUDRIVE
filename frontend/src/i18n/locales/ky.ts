@@ -4,7 +4,7 @@ export const ky: Record<TranslationKey, string> = {
   'app.caption': 'Санариптик механик',
   'nav.diagnosis': 'Диагностика',
   'nav.chief': 'Башкы механик',
-  'auth.title': 'Негизги киргизүү механик',
+  'auth.title': 'JUDRIVE тутумуна кирүү',
   'auth.user': 'аты',
   'auth.password': 'Сырсөз',
   'auth.submit': 'Кирүү',

@@ -28,6 +28,12 @@ for (const width of [1440, 390]) {
     await expect(page.getByRole('heading', { name: 'Главная', exact: true })).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Последние проверки' })).toBeVisible()
     await expect(page.locator('.workspace-dashboard__stats')).toContainText('50')
+    const titleHeight = await page.locator('.shell-brand__title').evaluate((node) => ({
+      rendered: node.getBoundingClientRect().height,
+      line: Number.parseFloat(getComputedStyle(node).lineHeight),
+    }))
+    expect(titleHeight.rendered).toBeLessThanOrEqual(titleHeight.line + 1)
+    expect((await page.locator('.shell-toolbar').boundingBox())!.height).toBeLessThanOrEqual(42)
     await page.screenshot({ path: testInfo.outputPath('dashboard.png') })
     expect(await noOverflow()).toBeLessThanOrEqual(1)
 

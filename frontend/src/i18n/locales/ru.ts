@@ -4,7 +4,7 @@ export const ru: Record<TranslationKey, string> = {
   'app.caption': 'Цифровой механик',
   'nav.diagnosis': 'Диагностика',
   'nav.chief': 'Главный механик',
-  'auth.title': 'Вход главного механика',
+  'auth.title': 'Вход в JUDRIVE',
   'auth.user': 'Имя',
   'auth.password': 'Пароль',
   'auth.submit': 'Войти',
