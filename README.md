@@ -102,3 +102,5 @@ docker compose ps
 ## Лицензии компонентов
 
 Шрифт Manrope распространяется по SIL Open Font License 1.1. Уведомление входит в дистрибутив приложения. [Лицензия Manrope](frontend/public/fonts/OFL.txt)
+
+[Изолированная LIVE-приёмка на VPS](docs/LIVE_VPS.md)
