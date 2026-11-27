@@ -117,6 +117,7 @@ def test_gigachat_agent_uses_native_function_call_protocol():
     assert trace[0]["tool"] == "search_manuals"
     assert api.requests[0]["function_call"] == "auto"
     assert api.requests[0]["functions"][0]["name"] == "search_manuals"
+    assert "additionalProperties" not in api.requests[0]["functions"][0]["parameters"]
     assert "tools" not in api.requests[0]
     second_messages = api.requests[1]["messages"]
     assert second_messages[-2]["role"] == "assistant"
