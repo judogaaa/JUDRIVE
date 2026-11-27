@@ -36,6 +36,7 @@ test('reviewed voice command launches diagnosis in all seven languages, question
     await page.goto('/')
     await page.evaluate(code => localStorage.setItem('judrive-locale', code), locale)
     await page.reload()
+    await page.locator('.shell-nav, .shell-nav-mobile').getByRole('button', { name: labels['nav.diagnosis'], exact: true }).click()
     if (locale === 'bn') await page.setViewportSize({ width: 390, height: 844 })
     const voice = page.locator('.voice-box')
     await expect.poll(() => page.evaluate(() => typeof navigator.mediaDevices?.getUserMedia)).toBe('function')

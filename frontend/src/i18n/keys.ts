@@ -408,3 +408,10 @@ export type TranslationKey =
   | 'error.agentBusy'
   | 'error.agentUnavailable'
   | 'chat.sourcesTitle'
+
+  | 'nav.dashboard'
+  | 'dashboard.demoNote'
+  | 'dashboard.recentChecks'
+  | 'auth.demoLabel'
+  | 'dashboard.checks'
+  | 'dashboard.emptyChecks'

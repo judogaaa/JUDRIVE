@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
 
 from app.agent.evidence import has_node_procedure, operating_prohibition, quantities_supported
 from app.agent.guardrails import apply_engine_context, can_create_ticket, diagnosis_hash
-from app.rag.conflicts import valve_temperature_conflict
+from app.rag.conflicts import valve_temperature_review
 from app.schemas.diagnose import DiagnoseResponse
 from app.services.tickets import TicketService
 from app.storage.repository import AppRepository
@@ -84,16 +84,19 @@ def test_warning_requires_ack_and_changed_priority_is_saved(tmp_path):
 
 def test_conflicting_conditions_need_both_documents_and_same_engine():
     rows = {
-        "y236-re:p0031": dict(doc_id="y236-re", quote="Зазоры регулируют на холодном двигателе."),
-        "y236-rk:p0269": dict(doc_id="y236-rk", quote="Зазоры регулируют не ранее чем через 15 минут."),
-        "y236-rk:p0276": dict(doc_id="y236-rk", quote="Ремень проверяют не ранее чем через 15 минут."),
+        "y236-re:p0031": dict(doc_id="y236-re", quote="Зазоры регулируют менее чем через 15 минут после остановки."),
+        "y236-rk:p0269": dict(doc_id="y236-rk", quote="Зазоры регулируют не ранее чем через 15 минут после остановки."),
+        "y236-rk:p0276": dict(doc_id="y236-rk", quote="Ремень проверяют не ранее чем через 15 минут после остановки."),
     }
     load = lambda page, **_: rows.get(page)
-    assert [hit["doc_id"] for hit in valve_temperature_conflict("ЯМЗ-236М2", "зазор", load)] == ["y236-re", "y236-rk"]
-    assert not valve_temperature_conflict("ЯМЗ-536", "зазор", load)
-    assert not valve_temperature_conflict("ЯМЗ-236М2", "генератор", load)
+    review = lambda engine, query: valve_temperature_review(engine, query, load)
+    result = review("ЯМЗ-236М2", "зазор")
+    assert result["status"] == "conflict"
+    assert [hit["doc_id"] for hit in result["sources"]] == ["y236-re", "y236-rk"]
+    assert review("ЯМЗ-536", "зазор")["status"] == "none"
+    assert review("ЯМЗ-236М2", "генератор")["status"] == "none"
     rows["y236-rk:p0269"]["quote"] = "Зазоры проверяют не ранее чем через 15 минут."
-    assert not valve_temperature_conflict("ЯМЗ-236М2", "зазор", load)
+    assert review("ЯМЗ-236М2", "зазор")["status"] == "none"
 
 
 def test_procedure_needs_node_and_measurement_needs_same_unit():

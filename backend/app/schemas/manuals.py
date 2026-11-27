@@ -17,6 +17,8 @@ class ManualSearchHit(BaseModel):
     quote: str
     score: float
     extraction: str
+    applicability: str | None = None
+    condition: str | None = None
 
 
 class ManualSearchResponse(BaseModel):

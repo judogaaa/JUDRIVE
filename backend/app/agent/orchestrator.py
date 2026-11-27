@@ -251,9 +251,19 @@ class AgentOrchestrator:
                 # An unreferenced synthesis is not presented as a verified manual answer.
                 reply = insufficient_evidence_reply(loc)
         if runtime.conflict:
-            sources = runtime.conflict["conflicting_sources"]
+            sources = list(runtime.conflict["conflicting_sources"])
             excerpts = [f'«{hit["quote"]}» [{hit["evidence_id"]}]' for hit in sources]
             reply = "\n\n".join([runtime.conflict["message"], *excerpts])
+            if runtime.draft:
+                draft_ids = {ref["evidence_id"] for ref in runtime.draft["resolved_evidence"]}
+                seen = {hit["evidence_id"] for hit in sources}
+                for hit in runtime.sources:
+                    if hit["evidence_id"] in draft_ids and hit["evidence_id"] not in seen:
+                        sources.append(hit)
+                        seen.add(hit["evidence_id"])
+                if loc == "ru":
+                    citations = " ".join(f"[{eid}]" for eid in sorted(draft_ids))
+                    reply += "\n\nПодготовлен черновик только на проверку, без регулировки и спорных нормативов. " + citations
         draft_id = runtime.draft["draft_id"] if runtime.draft else None
         self._repo.add_chat_turn(
             conversation_id,

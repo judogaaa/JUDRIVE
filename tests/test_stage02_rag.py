@@ -34,9 +34,15 @@ def test_manual_index_available(synthetic_rag: ManualRagService):
 def test_valve_clearance_page_33_34(synthetic_rag: ManualRagService):
     synthetic_rag.ensure_index()
     result = synthetic_rag.search("ЯМЗ-236М2", "тепловые зазоры клапанного механизма", limit=8)
-    assert result["status"] == "conflict"
+    assert result["status"] == "potential_conflict"
     assert {hit["pdf_page"] for hit in result["conflicting_sources"]} == {31, 269, 276}
     assert "сама по себе не подтверждает охлаждение" in result["message"]
+    assert "менее 15" in result["message"]
+    assert "не ранее 15" in result["message"]
+    by_id = {hit["evidence_id"]: hit for hit in result["conflicting_sources"]}
+    assert "ЯМЗ-238КМ2" in by_id["y236-re:p0031"]["applicability"]
+    assert "холодный двигатель ИЛИ менее 15" in by_id["y236-re:p0031"]["condition"]
+    assert "не ранее, чем через 15 мин" in by_id["y236-rk:p0269"]["quote"]
     pages = {hit["pdf_page"] for hit in result["results"]}
     assert pages.intersection({33, 34})
     assert all(hit["doc_id"].startswith("y236") for hit in result["results"])

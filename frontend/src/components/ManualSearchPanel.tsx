@@ -107,7 +107,7 @@ export function ManualSearchPanel({ engineModel, isVisible = true, chatTargetLab
     onSearchIntentConsumed?.()
   }, [onSearchIntentConsumed, runSearch, searchIntent])
 
-  const refusal = payload && !['ok', 'conflict'].includes(payload.status)
+  const refusal = payload && !['ok', 'conflict', 'potential_conflict'].includes(payload.status)
   const canOfferGeneral = refusal && payload?.status === 'not_found' && query.trim() !== GENERAL_INSPECTION_QUERY
 
   return (
@@ -194,9 +194,11 @@ export function ManualSearchPanel({ engineModel, isVisible = true, chatTargetLab
         </div>
       ) : null}
 
-      {payload?.status === 'conflict' && (
-        <p className="manual-refusal" role="status">{payload.message}</p>
-      )}
+      {payload?.status === 'conflict' || payload?.status === 'potential_conflict' ? (
+        <p className={payload.status === 'potential_conflict' ? 'manual-refusal manual-refusal--potential' : 'manual-refusal'} role="status">
+          {payload.message}
+        </p>
+      ) : null}
       {payload && (payload.results.length || payload.conflicting_sources?.length) ? (
         <ul className="manual-results">
           {[...new Map([...(payload.conflicting_sources ?? []), ...payload.results]
@@ -207,6 +209,8 @@ export function ManualSearchPanel({ engineModel, isVisible = true, chatTargetLab
                 <span className="manual-result__page">PDF {hit.pdf_page}</span>
               </div>
               <blockquote className="manual-result__quote">{hit.quote}</blockquote>
+              {hit.condition ? <p className="manual-result__condition">{hit.condition}</p> : null}
+              {hit.applicability ? <p className="manual-result__note">{hit.applicability}</p> : null}
               <div className="message-actions">
                 <button type="button" className="ghost-button" onClick={() => setActive(hit)}>
                   {t('manual.openSource')}

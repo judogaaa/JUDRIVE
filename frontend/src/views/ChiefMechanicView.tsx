@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { AlertOctagon, AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Filter, Search } from 'lucide-react'
 import {
   fetchFleetDashboard,
@@ -17,8 +17,6 @@ interface ChiefMechanicViewProps {
 
 export function ChiefMechanicView({ onOpenDiagnosis, onOpenTickets }: ChiefMechanicViewProps) {
   const { t } = useI18n()
-  const logoutInFlight = useRef(false)
-  const [authed, setAuthed] = useState<boolean | null>(null)
   const [tab, setTab] = useState<'overview' | 'queue' | 'analytics' | 'warnings' | 'fleet'>('overview')
 
   const categoryLabel = (row: VehicleFleetRow) => {
@@ -49,22 +47,6 @@ export function ChiefMechanicView({ onOpenDiagnosis, onOpenTickets }: ChiefMecha
 
   useEffect(() => {
     let cancelled = false
-    fetch('/api/auth/session', { credentials: 'include' })
-      .then((r) => r.json())
-      .then((body: { authenticated?: boolean }) => {
-        if (!cancelled) setAuthed(Boolean(body.authenticated))
-      })
-      .catch(() => {
-        if (!cancelled) setAuthed(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  useEffect(() => {
-    if (!authed) return
-    let cancelled = false
     // oxlint-disable-next-line react/set-state-in-effect -- Synchronize the loading and error indicators with the dashboard request.
     setLoading(true)
     setError(null)
@@ -75,7 +57,7 @@ export function ChiefMechanicView({ onOpenDiagnosis, onOpenTickets }: ChiefMecha
       .catch((err: unknown) => {
         if (cancelled) return
         if (err instanceof Error && err.message.endsWith(':401')) {
-          setAuthed(false)
+          window.dispatchEvent(new Event('judrive-auth-change'))
           return
         }
         setError(resolveErrorMessage(t, err, 'error.dashboard'))
@@ -86,7 +68,7 @@ export function ChiefMechanicView({ onOpenDiagnosis, onOpenTickets }: ChiefMecha
     return () => {
       cancelled = true
     }
-  }, [appliedFilters, authed, t, revision])
+  }, [appliedFilters, t, revision])
 
   const openCategory = (category: string) => {
     const next = { category }
@@ -94,30 +76,6 @@ export function ChiefMechanicView({ onOpenDiagnosis, onOpenTickets }: ChiefMecha
     setAppliedFilters(next)
     setPage(0)
     setTab('fleet')
-  }
-
-  const logout = async () => {
-    if (logoutInFlight.current) return
-    logoutInFlight.current = true
-    try {
-      const response = await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
-      if (!response.ok) throw new Error()
-      setData(null)
-      setAuthed(false)
-      window.dispatchEvent(new Event('judrive-auth-change'))
-    } catch {
-      setError(t('error.network'))
-    } finally {
-      logoutInFlight.current = false
-    }
-  }
-
-  if (authed === null) {
-    return <p className="panel__subtitle">{t('chief.loading')}</p>
-  }
-
-  if (!authed) {
-    return <ChiefLogin onSuccess={() => setAuthed(true)} />
   }
 
   const pageCount = data ? Math.max(1, Math.ceil(data.vehicles.length / PAGE_SIZE)) : 1
@@ -163,13 +121,7 @@ export function ChiefMechanicView({ onOpenDiagnosis, onOpenTickets }: ChiefMecha
                 {label}
               </button>
             ))}
-            <button
-              type="button"
-              className="chip-button"
-              onClick={() => void logout()}
-            >
-              {t('auth.logout')}
-            </button>
+
           </nav>
 
           <section className="chief-summary" hidden={tab !== 'overview'} aria-label={t('chief.summaryCategories')}>
@@ -437,77 +389,6 @@ function SummaryCard({
       <p className="summary-card__label">{label}</p>
       <p className="summary-card__hint">{hint}</p>
     </button>
-  )
-}
-
-export function ChiefLogin({ onSuccess }: { onSuccess: () => void }) {
-  const { t } = useI18n()
-  const [username, setUsername] = useState('')
-  const [password, setPassword] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
-
-  const submit = async () => {
-    setBusy(true)
-    setError(null)
-    try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
-      })
-      if (!response.ok) {
-        if (response.status === 503) setError(t('auth.unavailable'))
-        else if (response.status === 429) setError(t('auth.locked'))
-        else setError(t('auth.error'))
-        return
-      }
-      onSuccess()
-      window.dispatchEvent(new Event('judrive-auth-change'))
-    } catch {
-      setError(t('auth.error'))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <div className="auth-screen">
-      <section className="panel auth-card">
-        <form
-          className="auth-card__form"
-          onSubmit={(event) => {
-            event.preventDefault()
-            if (!busy && username && password) void submit()
-          }}
-        >
-          <h1>{t('auth.title')}</h1>
-          <p className="panel__subtitle">{t('chief.subtitle')}</p>
-          <label className="field">
-            <span>{t('auth.user')}</span>
-            <input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" />
-          </label>
-          <label className="field">
-            <span>{t('auth.password')}</span>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
-            />
-          </label>
-          {error ? <p className="panel__error">{error}</p> : null}
-          <button
-            type="submit"
-            className="btn btn--primary"
-            disabled={busy || !username || !password}
-          >
-            {t('auth.submit')}
-          </button>
-        </form>
-      </section>
-    </div>
   )
 }
 

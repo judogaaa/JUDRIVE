@@ -1,0 +1,17 @@
+# Invoked only by scripts/live_vps.py with a unique project and fresh directories.
+services:
+  backend:
+    env_file: !override
+      - ${JUDRIVE_ACCEPT_ENV:?Use the LIVE acceptance runner}
+    environment:
+      COOKIE_SECURE: "false"
+      GIGACHAT_CA_BUNDLE: ${JUDRIVE_ACCEPT_CA:-}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/api/live', timeout=5)"]
+    volumes:
+      - ./scripts:/acceptance/scripts:ro
+      - ./docs:/acceptance/docs:ro
+      - ${JUDRIVE_ACCEPT_INPUT:?Use the LIVE acceptance runner}:/acceptance/input:ro
+  web:
+    image: ${JUDRIVE_ACCEPT_WEB_IMAGE:?Use the LIVE acceptance runner}
+    ports: !override ["127.0.0.1:${JUDRIVE_ACCEPT_PORT:?Use the LIVE acceptance runner}:80"]

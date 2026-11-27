@@ -2,17 +2,20 @@ name: Verification
 on:
   push:
   pull_request:
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
   offline:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: '22'
           cache: npm
@@ -22,7 +25,7 @@ jobs:
       - run: python -m pip install -r backend/requirements.txt -r tests/requirements-dev.txt
       - name: Check release tree for private artifacts
         run: |
-          if git ls-files | rg -i '(^|/)\.env$|\.(pdf|sqlite3?|db|pem|key)([.-]|$)|^vendor/neurodvs_mock/data/|^e2e/storage-state\.json$'; then
+          if git ls-files | rg -i '(^|/)\.env($|\.(local|prod|production|development)$)|\.(pdf|sqlite3?|db|pem|key|bak|bundle)([.-]|$)|^(local-data|materials|data/index|vendor/neurodvs_mock/data)/|^e2e/storage-state\.json$'; then
             exit 1
           fi
       - run: python -m pytest -q
@@ -37,10 +40,23 @@ jobs:
   compose:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
       - run: python -m pip install -r backend/requirements.txt -r tests/requirements-dev.txt
       - run: sudo apt-get update && sudo apt-get install -y fonts-dejavu-core
       - run: bash scripts/verify_compose.sh
+  windows-runner:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Validate Windows PowerShell 5.1 runner
+        shell: powershell
+        run: |
+          if ($PSVersionTable.PSVersion.Major -ne 5) { throw 'Expected Windows PowerShell 5.1' }
+          $parseErrors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path scripts/Invoke-JudriveLive.ps1), [ref]$null, [ref]$parseErrors
+          )
+          if ($parseErrors) { throw ($parseErrors -join [Environment]::NewLine) }

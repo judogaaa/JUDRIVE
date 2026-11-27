@@ -7,7 +7,7 @@ const LAST_STEP = ONBOARDING_STEPS.length - 1
 
 type OnboardingState = {
   version: number
-  status: 'in_progress' | 'completed'
+  status: 'in_progress' | 'completed' | 'dismissed'
   step: number
   acknowledged: boolean
 }
@@ -20,6 +20,7 @@ function readState(): OnboardingState {
     if (!raw) return INITIAL
     const parsed = JSON.parse(raw) as Partial<OnboardingState>
     if (parsed.version !== VERSION) return INITIAL
+    if (parsed.status === 'dismissed') return { ...INITIAL, status: 'dismissed' }
     // Previously skipped or corrupt completion is not an acknowledgement.
     if (parsed.status === 'completed' && parsed.step === LAST_STEP && parsed.acknowledged === true) {
       return { ...INITIAL, status: 'completed', step: LAST_STEP, acknowledged: true }
@@ -35,7 +36,7 @@ function readState(): OnboardingState {
 
 export function useOnboarding() {
   const [state, setState] = useState<OnboardingState>(readState)
-  const open = state.status !== 'completed'
+  const open = state.status === 'in_progress'
 
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)) } catch { /* in-memory fallback */ }
@@ -49,5 +50,7 @@ export function useOnboarding() {
   const complete = useCallback(() => setState((current) => current.step === LAST_STEP && current.acknowledged
     ? { ...current, status: 'completed' } : current), [])
 
-  return { open, state, lastStep: LAST_STEP, start, next, back, setAcknowledged, complete }
+  const skip = useCallback(() => setState({ ...INITIAL, status: 'dismissed' }), [])
+
+  return { open, state, skip, lastStep: LAST_STEP, start, next, back, setAcknowledged, complete }
 }

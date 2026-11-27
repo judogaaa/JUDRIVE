@@ -1,10 +1,10 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
-import { Activity, BookOpen, Bus, Check, ChevronDown, CircleHelp, ClipboardList, Globe, LayoutDashboard, Monitor, Moon, Sun, Truck } from 'lucide-react'
+import { Activity, BookOpen, Bus, Check, ChevronDown, CircleHelp, ClipboardList, Globe, LayoutDashboard, LogOut, Monitor, Moon, Sun, Truck } from 'lucide-react'
 import type { ThemeMode } from '../../hooks/useTheme'
 import { useI18n } from '../../i18n/I18nContext'
 import type { LocaleCode } from '../../i18n/translations'
 
-export type AppView = 'diagnosis' | 'chief' | 'fleet' | 'tickets' | 'manuals' | 'help'
+export type AppView = 'dashboard' | 'diagnosis' | 'chief' | 'fleet' | 'tickets' | 'manuals' | 'help'
 
 interface WorkspaceShellProps {
   view: AppView
@@ -12,10 +12,13 @@ interface WorkspaceShellProps {
   themeMode: ThemeMode
   onThemeChange: (mode: ThemeMode) => void
   modalOpen?: boolean
+  chief: boolean
+  onLogout: () => void
+  loggingOut: boolean
   children: ReactNode
 }
 
-export function WorkspaceShell({ view, onViewChange, themeMode, onThemeChange, modalOpen, children }: WorkspaceShellProps) {
+export function WorkspaceShell({ view, onViewChange, themeMode, onThemeChange, modalOpen, chief, onLogout, loggingOut, children }: WorkspaceShellProps) {
   const { t, locale, setLocale, locales, localeLabels } = useI18n()
   const [langOpen, setLangOpen] = useState(false)
   const [themeOpen, setThemeOpen] = useState(false)
@@ -25,12 +28,15 @@ export function WorkspaceShell({ view, onViewChange, themeMode, onThemeChange, m
   const themeId = useId()
 
   const NAV: { id: AppView; label: string; icon: typeof Activity }[] = [
+    { id: 'dashboard', label: t('nav.dashboard'), icon: LayoutDashboard },
     { id: 'diagnosis', label: t('nav.diagnosis'), icon: Activity },
     { id: 'fleet', label: t('nav.fleet'), icon: Bus },
     { id: 'manuals', label: t('nav.manuals'), icon: BookOpen },
     { id: 'tickets', label: t('nav.tickets'), icon: ClipboardList },
     { id: 'chief', label: t('nav.chief'), icon: LayoutDashboard },
   ]
+
+  const visibleNav = chief ? NAV : NAV.filter(({ id }) => id === 'dashboard' || id === 'diagnosis' || id === 'fleet')
 
   useEffect(() => {
     const onPointer = (event: MouseEvent) => {
@@ -74,6 +80,7 @@ export function WorkspaceShell({ view, onViewChange, themeMode, onThemeChange, m
             <button
               type="button"
               className="menu-trigger"
+              aria-label={localeLabels[locale]}
               aria-haspopup="listbox"
               aria-expanded={langOpen}
               aria-controls={langId}
@@ -148,6 +155,11 @@ export function WorkspaceShell({ view, onViewChange, themeMode, onThemeChange, m
             ) : null}
           </div>
 
+          <button type="button" className="icon-btn" aria-label={t('auth.logout')} title={t('auth.logout')}
+            onClick={onLogout} disabled={loggingOut}>
+            <LogOut size={18} aria-hidden />
+          </button>
+
           <button
             type="button"
             className="icon-btn shell-help-mobile"
@@ -161,8 +173,8 @@ export function WorkspaceShell({ view, onViewChange, themeMode, onThemeChange, m
         </div>
       </header>
 
-      <nav className="shell-nav-mobile" aria-label={t('common.sections')}>
-        {NAV.map(({ id, label, icon: Icon }) => (
+      <nav className="shell-nav-mobile" data-demo={!chief || undefined} aria-label={t('common.sections')}>
+        {visibleNav.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
             type="button"
@@ -178,7 +190,7 @@ export function WorkspaceShell({ view, onViewChange, themeMode, onThemeChange, m
 
       <div className="shell-body">
         <nav className="shell-nav" aria-label={t('common.sections')}>
-          {NAV.map(({ id, label, icon: Icon }) => (
+          {visibleNav.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
               type="button"

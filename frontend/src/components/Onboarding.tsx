@@ -10,6 +10,7 @@ interface OnboardingProps {
   acknowledged: boolean
   onNext: () => void
   onBack: () => void
+  onSkip: () => void
   onAcknowledge: (value: boolean) => void
   onStart: () => void
 }
@@ -20,6 +21,7 @@ export function Onboarding({
   acknowledged,
   onNext,
   onBack,
+  onSkip,
   onAcknowledge,
   onStart,
 }: OnboardingProps) {
@@ -129,6 +131,7 @@ export function Onboarding({
         ) : null}
 
         <footer className="onboarding__actions">
+          <button type="button" className="btn btn--secondary" onClick={onSkip}>{t('onboarding.skip')}</button>
           <div className="onboarding__nav">
             {step > 0 ? (
               <button type="button" className="btn btn--secondary" onClick={onBack}>

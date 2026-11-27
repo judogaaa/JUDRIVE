@@ -7,7 +7,10 @@ import { useOnboarding } from './hooks/useOnboarding'
 import { useTheme } from './hooks/useTheme'
 import { useI18n } from './i18n/I18nContext'
 import { HelpView } from './views/HelpView'
-import { ChiefLogin, ChiefMechanicView } from './views/ChiefMechanicView'
+import { DashboardView } from './views/DashboardView'
+import { readRole, type SessionRole } from './api/auth'
+import { LoginView } from './views/LoginView'
+import { ChiefMechanicView } from './views/ChiefMechanicView'
 import { DiagnosisView } from './views/DiagnosisView'
 import { FleetView } from './views/FleetView'
 import { ManualsView } from './views/ManualsView'
@@ -21,10 +24,76 @@ type VehicleTarget = { vehicleId: string; sessionId: string; engineModel: string
 export default function App() {
   const { t } = useI18n()
   const { mode: themeMode, setMode: setThemeMode } = useTheme()
+  const [role, setRole] = useState<SessionRole | null | undefined>(undefined)
+  const [logoutError, setLogoutError] = useState(false)
+  const [loggingOut, setLoggingOut] = useState(false)
+  const authSequence = useRef(0)
+
+  useEffect(() => {
+    let cancelled = false
+    const check = async () => {
+      const revision = ++authSequence.current
+      try {
+        const response = await fetch('/api/auth/session', { cache: 'no-store', signal: AbortSignal.timeout(10_000) })
+        if (!response.ok) throw new Error()
+        const session = readRole(await response.json())
+        if (!cancelled && revision === authSequence.current) setRole(session)
+      } catch {
+        // A temporary connection problem does not terminate an existing session.
+        if (!cancelled && revision === authSequence.current) setRole((current) => current ?? null)
+      }
+    }
+    void check()
+    const recheck = () => { void check() }
+    window.addEventListener('focus', recheck)
+    window.addEventListener('judrive-auth-change', recheck)
+    return () => {
+      cancelled = true
+      window.removeEventListener('focus', recheck)
+      window.removeEventListener('judrive-auth-change', recheck)
+    }
+  }, [])
+
+  const logout = async () => {
+    setLoggingOut(true)
+    setLogoutError(false)
+    try {
+      const response = await fetch('/api/auth/logout', { method: 'POST', signal: AbortSignal.timeout(10_000) })
+      if (!response.ok) throw new Error()
+      ++authSequence.current
+      setRole(null)
+    } catch {
+      setLogoutError(true)
+    } finally {
+      setLoggingOut(false)
+    }
+  }
+
+  if (!role) {
+    return <LoginView checking={role === undefined} themeMode={themeMode} onThemeChange={setThemeMode}
+      onSuccess={(next) => { ++authSequence.current; setRole(next) }} />
+  }
+
+  return <Workspace key={role} role={role} themeMode={themeMode} setThemeMode={setThemeMode}
+    onLogout={() => void logout()} loggingOut={loggingOut} logoutError={logoutError ? t('error.network') : null} />
+}
+
+type WorkspaceProps = {
+  role: SessionRole
+  themeMode: ReturnType<typeof useTheme>['mode']
+  setThemeMode: ReturnType<typeof useTheme>['setMode']
+  onLogout: () => void
+  loggingOut: boolean
+  logoutError: string | null
+}
+
+function Workspace({ role, themeMode, setThemeMode, onLogout, loggingOut, logoutError }: WorkspaceProps) {
+  const { t } = useI18n()
+  const chief = role === 'chief'
   const onboarding = useOnboarding()
   const helpDestination = useRef<string | null>(null)
-  const [view, setView] = useState<AppView>('diagnosis')
-  const [visited, setVisited] = useState<AppView[]>(['diagnosis'])
+  const [view, setView] = useState<AppView>('dashboard')
+  const [visited, setVisited] = useState<AppView[]>(['dashboard'])
   const [diagnosisOrigin, setDiagnosisOrigin] = useState<AppView | null>(null)
   const [manualOrigin, setManualOrigin] = useState<AppView | null>(null)
   const [manualEngine, setManualEngine] = useState<string | null>(null)
@@ -32,27 +101,12 @@ export default function App() {
   const [manualRevision, setManualRevision] = useState(0)
   const scrollPositions = useRef<Partial<Record<AppView, number>>>({})
   const navigate = (next: AppView) => {
-    if (next === view) return
+    if (next === view || !chief && (next === 'chief' || next === 'manuals' || next === 'tickets')) return
     scrollPositions.current[view] = window.scrollY
     setVisited((current) => current.includes(next) ? current : [...current, next])
     setView(next)
   }
-  const [authenticated, setAuthenticated] = useState<boolean | null>(null)
-  useEffect(() => {
-    const request = new AbortController()
-    const checkSession = () => fetch('/api/auth/session', { signal: request.signal, cache: 'no-store' })
-      .then((response) => response.json())
-      .then((body) => { if (!request.signal.aborted) setAuthenticated(body.authenticated === true) })
-      .catch(() => { if (!request.signal.aborted) setAuthenticated(false) })
-    void checkSession()
-    window.addEventListener('judrive-auth-change', checkSession)
-    window.addEventListener('focus', checkSession)
-    return () => {
-      window.removeEventListener('judrive-auth-change', checkSession)
-      window.removeEventListener('focus', checkSession)
-      request.abort()
-    }
-  }, [view])
+  const [fleetLoaded, setFleetLoaded] = useState(false)
   const [vehicles, setVehicles] = useState<VehicleSummary[]>([])
   const [fleetError, setFleetError] = useState<string | null>(null)
   const [fleetRevision, setFleetRevision] = useState(0)
@@ -122,19 +176,12 @@ export default function App() {
   }
 
   useEffect(() => {
-    if (authenticated !== true) {
-      // oxlint-disable-next-line react/set-state-in-effect -- Clear protected fleet state as soon as authentication changes.
-      setVehicles([])
-      setVehicleId('')
-      setSessionId('')
-      setFleetError(null)
-      return
-    }
     let cancelled = false
     fetchVehicles()
       .then((list) => {
         if (cancelled) return
         setVehicles(list)
+        setFleetLoaded(true)
         setFleetError(null)
         // Initial selection only. Changing language must not reset the mechanic's context.
         if (!selectionRef.current.vehicleId && list.length > 0) {
@@ -150,7 +197,7 @@ export default function App() {
     return () => {
       cancelled = true
     }
-  }, [authenticated, fleetRevision])
+  }, [fleetRevision])
 
   const retryFleet = () => {
     setFleetError(null)
@@ -173,14 +220,16 @@ export default function App() {
 
   return (
     <>
-      <WorkspaceShell modalOpen={onboarding.open} view={view} onViewChange={navigate} themeMode={themeMode} onThemeChange={setThemeMode}>
-        {authenticated === false && ['diagnosis', 'fleet', 'manuals', 'tickets'].includes(view) && (
-          <details className="panel" open={view !== 'diagnosis'}>
-            <summary>{t('auth.submit')}</summary>
-            <ChiefLogin onSuccess={() => setAuthenticated(true)} />
-          </details>
+      <WorkspaceShell modalOpen={onboarding.open} view={view} onViewChange={navigate} themeMode={themeMode}
+        onThemeChange={setThemeMode} chief={chief} onLogout={onLogout} loggingOut={loggingOut}>
+        {logoutError && <p role="alert" className="panel__error">{logoutError}</p>}
+        {view === 'dashboard' && (
+          <DashboardView vehicles={vehicles} fleetLoaded={fleetLoaded} chief={chief} fleetError={fleetError} onRetry={retryFleet}
+            onNavigate={navigate} onOpenDiagnosis={openDiagnosisForVehicle}
+            onOpenTicket={openTicketsForVehicle}
+            onOpenChat={() => { helpDestination.current = 'diagnosis-chat'; navigate('diagnosis') }} />
         )}
-        <div hidden={view !== 'diagnosis'}>
+        {visited.includes('diagnosis') && <div hidden={view !== 'diagnosis'}>
           {diagnosisOrigin && diagnosisOrigin !== 'diagnosis' && (
             <button type="button" className="btn btn--secondary context-return" onClick={() => navigate(diagnosisOrigin)}>
               ← {t(`nav.${diagnosisOrigin}`)}
@@ -188,7 +237,7 @@ export default function App() {
           )}
           <DiagnosisView
             vehicles={vehicles}
-            documentsAuthorized={authenticated === true}
+            documentsAuthorized={chief}
             fleetError={fleetError}
             onRetryFleet={retryFleet}
             vehicleId={vehicleId}
@@ -205,9 +254,10 @@ export default function App() {
             onChatIntentConsumed={() => setChatIntent(null)}
             onOpenTicket={(ticketId) => openTicketsForVehicle(vehicleId, ticketId)}
           />
-        </div>
+        </div>}
         {view === 'help' ? (
           <HelpView
+            chief={chief}
             onNavigate={(target, topic) => {
               const destinations: Record<string, string> = {
                 chat: 'diagnosis-chat', voice: 'diagnosis-chat', history: 'diagnosis-history',
@@ -220,7 +270,7 @@ export default function App() {
             onThemeChange={setThemeMode}
           />
         ) : null}
-        {authenticated && visited.includes('manuals') ? (
+        {chief && visited.includes('manuals') ? (
           <div hidden={view !== 'manuals'}>
             <ManualsView
               key={manualRevision}
@@ -239,7 +289,7 @@ export default function App() {
             />
           </div>
         ) : null}
-        {visited.includes('chief') ? (
+        {chief && visited.includes('chief') ? (
           <div hidden={view !== 'chief'}>
             <ChiefMechanicView
               onOpenDiagnosis={openDiagnosisForVehicle}
@@ -253,15 +303,15 @@ export default function App() {
               vehicles={vehicles}
               fleetError={fleetError}
               onRetryFleet={retryFleet}
-              onOpenManuals={(vehicle) => openManuals({ engineModel: vehicle.engine_model, query: '' }, {
+              onOpenManuals={chief ? (vehicle) => openManuals({ engineModel: vehicle.engine_model, query: '' }, {
                 vehicleId: vehicle.vehicle_id, sessionId: latestSessionId(vehicle), engineModel: vehicle.engine_model,
-              })}
+              }) : undefined}
               onOpenDiagnosis={openDiagnosisForVehicle}
-              onOpenTickets={openTicketsForVehicle}
+              onOpenTickets={chief ? openTicketsForVehicle : undefined}
             />
           </div>
         ) : null}
-        {authenticated && visited.includes('tickets') ? (
+        {chief && visited.includes('tickets') ? (
           <div hidden={view !== 'tickets'}>
             <TicketsView
               isVisible={view === 'tickets'}
@@ -281,6 +331,7 @@ export default function App() {
         acknowledged={onboarding.state.acknowledged}
         onNext={onboarding.next}
         onBack={onboarding.back}
+        onSkip={onboarding.skip}
         onAcknowledge={onboarding.setAcknowledged}
         onStart={() => {
           if (onboarding.state.step !== onboarding.lastStep || !onboarding.state.acknowledged) return

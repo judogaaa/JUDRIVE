@@ -124,7 +124,7 @@ class TicketService:
                 raise ValueError("manual index not current")
             if (diag.anomaly_type == "F01"
                     and not inspection_only(payload.get("operations", []), payload.get("spare_parts", []))
-                    and self._rag.search(diag.engine_model, "тепловые зазоры клапанов").get("status") == "conflict"):
+                    and self._rag.search(diag.engine_model, "тепловые зазоры клапанов").get("status") in {"conflict", "potential_conflict"}):
                 raise ValueError("manual procedure conflict")
             ids = []
             for ref in payload.get("references", []):

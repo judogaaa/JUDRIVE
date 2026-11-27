@@ -142,7 +142,12 @@ def test_gigachat_agent_uses_native_function_call_protocol():
     assert usage["total_tokens"] == 31
 
 
-def test_gigachat_voice_uploads_attaches_and_deletes_file():
+@pytest.mark.parametrize(("mime", "extension", "provider_mime"), [
+    ("audio/wav", "wav", "audio/wav"),
+    ("audio/mpeg", "mp3", "audio/mpeg"),
+    ("audio/mp3", "mp3", "audio/mpeg"),
+])
+def test_gigachat_voice_uploads_attaches_and_deletes_file(mime, extension, provider_mime):
     class FakeAPI:
         configured = True
 
@@ -169,18 +174,21 @@ def test_gigachat_voice_uploads_attaches_and_deletes_file():
     usage = []
     service = VoiceService(api, "GigaChat-3-Ultra", 90, on_usage=usage.append)
     audio = io.BytesIO()
-    with wave.open(audio, "wb") as wav:
-        wav.setparams((1, 2, 8000, 0, "NONE", "not compressed"))
-        wav.writeframes(b"\x00\x00" * 800)
+    if extension == "wav":
+        with wave.open(audio, "wb") as wav:
+            wav.setparams((1, 2, 8000, 0, "NONE", "not compressed"))
+            wav.writeframes(b"\x00\x00" * 800)
+    else:
+        audio.write(b"ID3" + b"\x00" * 32)
     audio.seek(0)
-    upload = UploadFile(file=audio, filename="ignored-name.wav", headers=Headers({"content-type": "audio/wav"}))
+    upload = UploadFile(file=audio, filename=f"ignored-name.{extension}", headers=Headers({"content-type": mime}))
 
     async def scenario():
         return await service.transcribe(upload, language="ru")
 
     result = asyncio.run(scenario())
     assert result == {"text": "Проверьте клапанный механизм.", "language": "ru"}
-    assert api.upload == ("speech.wav", audio.getvalue(), "audio/wav")
+    assert api.upload == (f"speech.{extension}", audio.getvalue(), provider_mime)
     assert api.request["messages"][0]["attachments"] == ["audio-file-id"]
     assert api.request["function_call"] == "auto"
     assert api.deleted == ["audio-file-id"]
@@ -540,3 +548,19 @@ def test_malformed_function_arguments_never_reach_the_tool(arguments):
     client = GigaChatAgentClient(API(), "test-model", max_tokens=64, timeout_s=1)
     with pytest.raises(GigaChatAPIError, match="invalid function arguments"):
         asyncio.run(client.run_with_tools([{"role": "user", "content": "Диагностика"}], [], unexpected_tool))
+
+
+def test_production_function_properties_have_required_descriptions():
+    from app.agent.gigachat_client import gigachat_functions
+    from app.agent.tools import TOOL_DEFINITIONS
+
+    functions = gigachat_functions(TOOL_DEFINITIONS)
+    for function in functions:
+        for name, parameter in function["parameters"]["properties"].items():
+            description = parameter.get("description")
+            assert isinstance(description, str) and description.strip(), (function["name"], name)
+
+    ticket = next(function for function in functions if function["name"] == "prepare_defect_ticket")
+    properties = ticket["parameters"]["properties"]
+    assert properties["operations"]["minItems"] == 1
+    assert properties["evidence_ids"]["minItems"] == 1

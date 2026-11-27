@@ -85,7 +85,7 @@ async def run(*, validate_only: bool = False) -> int:
         if not reply:
             print("FAIL: API ответил без текста")
             return 1
-        print(f"Completion: OK; model={settings.gigachat_model}; reply={reply[:120]!r}")
+        print(f"Completion: OK; model={settings.gigachat_model}")
         print(
             "Usage:",
             f"prompt={usage.get('prompt_tokens', 0)}",

@@ -7,6 +7,7 @@ test.beforeAll(() => loadDotEnv())
 test.describe('Final UX audit — diagnosis workspace', () => {
   test('vehicle picker opens all 50 without a query, searches layouts and clears', async ({ page }) => {
     await page.goto('/')
+    await openNav(page, 'Диагностика')
     await expect(page.locator('.vehicle-picker__trigger')).toBeVisible()
 
     await page.locator('.vehicle-picker__trigger').click()
@@ -39,6 +40,7 @@ test.describe('Final UX audit — diagnosis workspace', () => {
 
   test('vehicle picker supports keyboard-only selection', async ({ page }) => {
     await page.goto('/')
+    await openNav(page, 'Диагностика')
     const trigger = page.locator('.vehicle-picker__trigger')
     await expect(trigger).toContainText('P456AT178')
     await trigger.focus()
@@ -189,6 +191,7 @@ test.describe('Final UX audit — diagnosis workspace', () => {
     let fail = true
     await page.route('**/api/vehicles', (route) => (fail ? route.abort('failed') : route.continue()))
     await page.goto('/')
+    await openNav(page, 'Диагностика')
     const error = page.locator('.panel__error').first()
     await expect(error).toContainText('Нет связи с сервером')
     await expect(error).not.toContainText('@i18n')
@@ -242,6 +245,7 @@ test.describe('Final UX audit — diagnosis workspace', () => {
     ]) {
       await page.setViewportSize(viewport)
       await page.goto('/')
+      await openNav(page, 'Диагностика')
       await page.getByLabel('Проверка').waitFor()
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
       expect(overflow, `overflow at ${viewport.width}px`).toBeLessThanOrEqual(1)
@@ -323,7 +327,7 @@ test.describe('Final UX audit — fleet, tickets and chief', () => {
     const secret = process.env.SESSION_SECRET
     test.skip(!secret, 'SESSION_SECRET is required for signed-session check')
     const exp = Math.floor(Date.now() / 1000) + 3600
-    const payload = `chief:${exp}`
+    const payload = `v2:chief:${exp}`
     const signature = createHmac('sha256', secret).update(payload).digest('hex')
     await context.addCookies([
       {

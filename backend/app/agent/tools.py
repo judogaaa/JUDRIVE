@@ -54,10 +54,10 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "conclusion": {"type": "string"},
-                    "urgency": {"type": "string", "enum": ["low", "medium", "high"]},
-                    "operations": {"type": "array", "items": {"type": "string"}, "minItems": 1},
-                    "spare_parts": {"type": "array", "items": {"type": "string"}},
+                    "conclusion": {"type": "string", "description": "Краткое заключение по подтвержденным фактам диагностики."},
+                    "urgency": {"type": "string", "enum": ["low", "medium", "high"], "description": "Обоснованная срочность заявки: low, medium или high."},
+                    "operations": {"type": "array", "items": {"type": "string"}, "minItems": 1, "description": "Непустой список работ, подтвержденных применимыми источниками."},
+                    "spare_parts": {"type": "array", "items": {"type": "string"}, "description": "Подтвержденные запчасти или пустой список."},
                     "evidence_ids": {
                         "type": "array",
                         "items": {"type": "string"},
@@ -130,12 +130,50 @@ class ToolRuntime:
         if not isinstance(query, str) or not query.strip() or len(query) > 500:
             return {"status": "invalid_query", "message": "Пустой запрос"}
         result = self.rag.search(self.engine_model, query.strip(), limit=AGENT_SEARCH_LIMIT)
-        if result["status"] == "conflict":
+        if result["status"] in {"conflict", "potential_conflict"}:
             self.conflict = result
         if result.get("results"):
             for hit in result["results"]:
                 self.sources.append(hit)
+        if self.conflict:
+            return {**result, "ticket_policy": self._inspection_guidance()}
         return result
+
+    def _inspection_guidance(self) -> dict[str, Any]:
+        """Offer only a server-verified inspection alternative to disputed work."""
+        policy: dict[str, Any] = {
+            "mode": "inspection_only",
+            "rule": (
+                "При расхождении источников нельзя предлагать регулировку, ремонт, запчасти, "
+                "числовые нормативы или условия ожидания. Для черновика используй проверенный "
+                "candidate, если он есть; иначе найди применимый источник или откажись."
+            ),
+        }
+        if (not self.conflict or self.analysis_only or self.diagnosis is None
+                or self.diagnosis.anomaly_type != "F01" or not can_create_ticket(self.diagnosis)[0]):
+            return policy
+
+        disputed = {hit.get("evidence_id") for hit in self.conflict["conflicting_sources"]}
+        operation = "Проверить тепловые зазоры клапанного механизма"
+        for hit in self.sources:
+            eid = hit.get("evidence_id")
+            if not isinstance(eid, str) or eid in disputed or hit.get("applicability"):
+                continue
+            resolved, errors = resolve_evidence_ids(self.rag, [eid])
+            if (errors or not references_allowed_for_engine(resolved, self.engine_model)
+                    or not has_node_procedure(self.rag, resolved, self.diagnosis.anomaly_type)
+                    or not inspection_only([operation], [])
+                    or unsupported_claims(self.rag, resolved, [operation])):
+                continue
+            policy["candidate"] = {
+                "conclusion": "Требуется проверка клапанного механизма.",
+                "urgency": diagnosis_review_priority(self.fleet, self.diagnosis) or "medium",
+                "operations": [operation],
+                "spare_parts": [],
+                "evidence_ids": [eid],
+            }
+            break
+        return policy
 
     async def _prepare_ticket(self, args: dict[str, Any]) -> dict[str, Any]:
         if self.analysis_only:
@@ -181,7 +219,11 @@ class ToolRuntime:
         if self.diagnosis.anomaly_type == "F01" and not self.conflict:
             await self.execute("search_manuals", {"query": "тепловые зазоры клапанов"})
         if self.conflict and not inspection_only(operations, spare_parts):
-            return {"status": "refused", "message": "Источники расходятся. Допустим только осмотр без спорных нормативов."}
+            return {
+                "status": "refused",
+                "message": "Источники расходятся. Допустим только осмотр без спорных нормативов.",
+                "ticket_policy": self._inspection_guidance(),
+            }
         missing = unsupported_claims(self.rag, resolved, operations + spare_parts)
         if missing:
             return {"status": "refused", "message": "Работы или запчасти не подтверждены указанными страницами. Уточните формулировку по тексту источника.", "unsupported": missing}

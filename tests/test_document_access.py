@@ -47,7 +47,7 @@ def test_document_scope_and_physical_pdf(auth_client, synthetic_rag, monkeypatch
     assert auth_client.get("/api/sources/pdf/z5234-rk", params=engine).status_code == 404
     assert auth_client.get("/api/sources/evidence/z5234-rk:p0012", params=engine).status_code == 404
     assert auth_client.post("/api/manuals/search", json=foreign | {"query": "зажигание"}).status_code == 404
-    assert auth_client.post("/api/manuals/search", json=engine | {"query": "тепловые зазоры"}).json()["status"] == "conflict"
+    assert auth_client.post("/api/manuals/search", json=engine | {"query": "тепловые зазоры"}).json()["status"] == "potential_conflict"
     assert not ({"pdf_dir", "db_path"} & auth_client.get("/api/manuals/status").json().keys())
 
 

@@ -6,7 +6,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
 
-from app.rag.conflicts import VALVE_CONFLICT_GUIDANCE, valve_temperature_conflict
+from app.rag.conflicts import valve_temperature_review
 from app.rag.catalog import SPECS_BY_ID, allowed_doc_ids, known_engine_models
 from app.rag.indexer import ManualIndexer
 from app.rag.search import ManualSearch
@@ -85,8 +85,8 @@ class ManualRagService:
         with self._connection() as conn:
             hits = ManualSearch(conn).search(engine_model, query, limit=limit)
 
-        conflict = valve_temperature_conflict(engine_model, query, self.get_evidence)
-        if not hits and not conflict:
+        review = valve_temperature_review(engine_model, query, self.get_evidence)
+        if review["status"] == "none" and not hits:
             manuals = [SPECS_BY_ID[d].manual_title for d in allowed_doc_ids(engine_model)]
             return {
                 "status": "not_found",
@@ -101,9 +101,18 @@ class ManualRagService:
                 "results": [],
             }
 
+        if review["status"] != "none":
+            status = review["status"]
+            message = review["message"]
+            conflict = review["sources"]
+        else:
+            status = "ok"
+            message = None
+            conflict = []
+
         return {
-            "status": "conflict" if conflict else "ok",
-            "message": VALVE_CONFLICT_GUIDANCE if conflict else None,
+            "status": status,
+            "message": message,
             "conflicting_sources": conflict,
             "engine_model": engine_model,
             "query": query,

@@ -32,6 +32,7 @@ export function chiefCredentials(): { user: string; password: string } | null {
 }
 
 export async function selectVehicleSession(page: Page, vehicleId: string, sessionId: string) {
+  if (!await page.locator('.vehicle-picker__trigger').isVisible()) await openNav(page, 'Диагностика')
   await page.locator('.vehicle-picker__trigger').click()
   const combo = page.getByRole('combobox', { name: 'Поиск' })
   await combo.fill(vehicleId)
@@ -44,5 +45,6 @@ export async function runDiagnosis(page: Page) {
 }
 
 export async function openNav(page: Page, label: RegExp | string) {
-  await page.getByRole('button', { name: label, exact: typeof label === 'string' }).click()
+  const button = page.getByRole('button', { name: label, exact: typeof label === 'string' })
+  await page.locator('.shell-nav button, .shell-nav-mobile button, .shell-help-mobile').and(button).click()
 }

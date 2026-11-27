@@ -15,9 +15,15 @@ CASES = [
         "name": "клапанные зазоры ЯМЗ-236М2",
         "engine": "ЯМЗ-236М2",
         "query": "тепловые зазоры клапанного механизма",
-        "expect_status": "conflict",
+        "expect_status": "potential_conflict",
         "expect_pages": {33, 34},
         "expect_conflict_sources": {"y236-re:p0031", "y236-rk:p0269", "y236-rk:p0276"},
+        "expect_message_contains": (
+            "менее 15",
+            "не ранее 15",
+            "сама по себе не подтверждает охлаждение",
+            "ЯМЗ-238КМ2",
+        ),
         "expect_manual_contains": "236-3902150",
         "forbidden_doc_prefix": "z",
     },
@@ -94,6 +100,10 @@ def main() -> int:
         if case.get("expect_conflict_sources"):
             evidence = {item["evidence_id"] for item in result.get("conflicting_sources", [])}
             ok = ok and evidence == case["expect_conflict_sources"]
+        if case.get("expect_message_contains"):
+            message = result.get("message") or ""
+            if not all(fragment in message for fragment in case["expect_message_contains"]):
+                ok = False
         if case.get("expect_pages") and not case["expect_pages"].intersection(pages):
             ok = False
         if case.get("expect_manual_contains"):

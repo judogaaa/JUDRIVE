@@ -45,6 +45,7 @@ class Settings(BaseSettings):
     gigachat_ca_bundle: Path | None = None
     agent_max_tool_steps: int = 4
 
+    demo_fleet_sha256: str = Field(default="", pattern=r"^(?:[a-f0-9]{64})?$")
     chief_username: str | None = None
     chief_password_hash: str | None = None
     session_secret: str | None = None

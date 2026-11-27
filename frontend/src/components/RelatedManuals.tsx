@@ -26,8 +26,10 @@ export function RelatedManuals({ engineModel, query, vehicleId, sessionId }: { e
       <h3 className="panel__title"><BookOpen size={17} aria-hidden /> {t('verdict.related.title')}</h3>
       <p className="panel__subtitle">{t('verdict.related.hint')}</p>
       {!data && !error && <p className="panel__subtitle">{t('manual.searching')}</p>}
-      {data?.status === 'conflict' && <p className="manual-refusal">{data.message}</p>}
-      {error || (data && !['ok', 'conflict', 'not_found'].includes(data.status)) ? (
+      {data?.status === 'conflict' || data?.status === 'potential_conflict' ? (
+        <p className={data.status === 'potential_conflict' ? 'manual-refusal manual-refusal--potential' : 'manual-refusal'}>{data.message}</p>
+      ) : null}
+      {error || (data && !['ok', 'conflict', 'potential_conflict', 'not_found'].includes(data.status)) ? (
         <>
           {locale === 'ru' && data?.message ? <p className="panel__subtitle">{data.message}</p> : null}
           <button type="button" className="btn btn--secondary" onClick={() => setRetry((n) => n + 1)}>
@@ -38,11 +40,12 @@ export function RelatedManuals({ engineModel, query, vehicleId, sessionId }: { e
         <p className="panel__subtitle">{locale === 'ru' ? data.message || t('manual.refusalTitle') : t('manual.refusalTitle')}</p>
       ) : (
         <ul className="history-list" style={{ marginTop: '0.75rem' }}>
-          {(data?.status === "conflict" ? data.conflicting_sources : data?.results.slice(0, 3))?.map((hit) => (
+          {(data?.status === 'conflict' || data?.status === 'potential_conflict' ? data.conflicting_sources : data?.results.slice(0, 3))?.map((hit) => (
             <li key={hit.evidence_id}>
               <button type="button" className="history-item" onClick={() => setOpened(hit)}>
                 <span className="history-item__id">{hit.manual_title}</span>
                 <span className="history-item__date">{t('source.pdfPage', { page: hit.pdf_page })} <ChevronRight size={14} aria-hidden /></span>
+                {hit.condition ? <span className="history-item__condition">{hit.condition}</span> : null}
               </button>
             </li>
           ))}

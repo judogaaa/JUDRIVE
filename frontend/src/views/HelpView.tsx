@@ -7,12 +7,13 @@ import type { LocaleCode } from '../i18n/translations'
 
 interface HelpViewProps {
   onNavigate: (view: Exclude<HelpTarget, 'settings'>, topic: string) => void
+  chief: boolean
   onRestartOnboarding: () => void
   themeMode: ThemeMode
   onThemeChange: (mode: ThemeMode) => void
 }
 
-export function HelpView({ onNavigate, onRestartOnboarding, themeMode, onThemeChange }: HelpViewProps) {
+export function HelpView({ chief, onNavigate, onRestartOnboarding, themeMode, onThemeChange }: HelpViewProps) {
   const { locale, setLocale, locales, localeLabels, t } = useI18n()
   const [query, setQuery] = useState('')
 
@@ -94,11 +95,11 @@ export function HelpView({ onNavigate, onRestartOnboarding, themeMode, onThemeCh
                     themeMode={themeMode}
                     onThemeChange={onThemeChange}
                   />
-                ) : (
+                ) : chief || (card.target === 'diagnosis' || card.target === 'fleet') && !['chat', 'voice'].includes(card.id) ? (
                   <button type="button" className="btn btn--secondary" onClick={() => { if (card.target !== 'settings') onNavigate(card.target, card.id) }}>
                     {t('help.open')}
                   </button>
-                )}
+                ) : <p>{t('dashboard.demoNote')}</p>}
               </div>
             </details>
           )
