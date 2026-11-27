@@ -484,6 +484,11 @@ export function ChiefLogin({ onSuccess }: { onSuccess: () => void }) {
         >
           <h1>{t('auth.title')}</h1>
           <p className="panel__subtitle">{t('chief.subtitle')}</p>
+          <p className="auth-hint" role="note">
+            {t('auth.user')}: <strong>123</strong>
+            <span aria-hidden> · </span>
+            {t('auth.password')}: <strong>123</strong>
+          </p>
           <label className="field">
             <span>{t('auth.user')}</span>
             <input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" />

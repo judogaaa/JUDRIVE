@@ -2959,6 +2959,27 @@ select {
   gap: 12px;
 }
 
+.auth-entry .auth-screen {
+  min-height: 0;
+  padding: 0;
+}
+
+.auth-hint {
+  margin: 0;
+  padding: 9px 11px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 9px;
+  background: var(--surface-muted);
+  color: var(--text-muted);
+  font-size: 0.84rem;
+  text-align: center;
+}
+
+.auth-hint strong {
+  color: var(--text);
+  letter-spacing: 0.08em;
+}
+
 /* ——— Shared small components ——— */
 
 .copy-action {

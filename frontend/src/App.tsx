@@ -175,10 +175,9 @@ export default function App() {
     <>
       <WorkspaceShell modalOpen={onboarding.open} view={view} onViewChange={navigate} themeMode={themeMode} onThemeChange={setThemeMode}>
         {authenticated === false && ['diagnosis', 'fleet', 'manuals', 'tickets'].includes(view) && (
-          <details className="panel" open={view !== 'diagnosis'}>
-            <summary>{t('auth.submit')}</summary>
+          <div className="auth-entry">
             <ChiefLogin onSuccess={() => setAuthenticated(true)} />
-          </details>
+          </div>
         )}
         <div hidden={view !== 'diagnosis'}>
           {diagnosisOrigin && diagnosisOrigin !== 'diagnosis' && (
