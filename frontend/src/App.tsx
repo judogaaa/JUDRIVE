@@ -25,6 +25,21 @@ export default function App() {
   const { t } = useI18n()
   const { mode: themeMode, setMode: setThemeMode } = useTheme()
   const [role, setRole] = useState<SessionRole | null | undefined>(undefined)
+  // The invitation fragment is never sent to the web server as part of a URL.
+  const [juryToken, setJuryToken] = useState(() => new URLSearchParams(window.location.hash.slice(1)).get('jury'))
+  useEffect(() => {
+    const clearFragment = () => window.history.replaceState(null, '', window.location.pathname + window.location.search)
+    if (juryToken && window.location.hash.startsWith('#jury=')) clearFragment()
+    const receiveInvitation = () => {
+      const token = new URLSearchParams(window.location.hash.slice(1)).get('jury')
+      if (token) {
+        setJuryToken(token)
+        clearFragment()
+      }
+    }
+    window.addEventListener('hashchange', receiveInvitation)
+    return () => window.removeEventListener('hashchange', receiveInvitation)
+  }, [juryToken])
   const [logoutError, setLogoutError] = useState(false)
   const [loggingOut, setLoggingOut] = useState(false)
   const authSequence = useRef(0)
@@ -69,8 +84,8 @@ export default function App() {
     }
   }
 
-  if (!role) {
-    return <LoginView checking={role === undefined} themeMode={themeMode} onThemeChange={setThemeMode}
+  if (!role || (role === 'demo' && juryToken)) {
+    return <LoginView checking={role === undefined} juryToken={juryToken} themeMode={themeMode} onThemeChange={setThemeMode}
       onSuccess={(next) => { resetOnboardingForLogin(); ++authSequence.current; setRole(next) }} />
   }
 

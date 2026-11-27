@@ -48,9 +48,21 @@ def _sign(settings: Settings, payload: str) -> str:
     return hmac.new(settings.session_secret.encode("utf-8"), payload.encode("utf-8"), hashlib.sha256).hexdigest()
 
 
-def issue_session(response: Response, settings: Settings, role: SessionRole) -> None:
-    exp = int(time.time()) + SESSION_SECONDS
-    payload = f"v2:{role}:{exp}"
+def _jury_active(settings: Settings) -> bool:
+    return bool(_configured(settings) and settings.jury_access_token_sha256
+                and settings.jury_access_expires_at > int(time.time()))
+
+
+def issue_session(response: Response, settings: Settings, role: SessionRole, *, jury: bool = False) -> None:
+    now = int(time.time())
+    exp = now + SESSION_SECONDS
+    if jury:
+        if role != "chief" or not _jury_active(settings):
+            raise HTTPException(status_code=403, detail="Ссылка для жюри недействительна")
+        exp = min(exp, settings.jury_access_expires_at)
+        payload = f"v3:jury:{exp}:{settings.jury_access_token_sha256}"
+    else:
+        payload = f"v2:{role}:{exp}"
     token = f"{payload}.{_sign(settings, payload)}"
     response.set_cookie(
         COOKIE,
@@ -58,7 +70,7 @@ def issue_session(response: Response, settings: Settings, role: SessionRole) -> 
         httponly=True,
         samesite="lax",
         secure=settings.cookie_secure,
-        max_age=SESSION_SECONDS,
+        max_age=exp - now,
         path="/",
     )
 
@@ -77,7 +89,13 @@ def session_role(request: Request, settings: Settings) -> SessionRole | None:
     if not hmac.compare_digest(sig.encode("utf-8"), _sign(settings, payload).encode("ascii")):
         return None
     try:
-        version, role, exp = payload.split(":")
+        parts = payload.split(":")
+        if len(parts) == 4 and parts[:2] == ["v3", "jury"]:
+            if (int(parts[2]) > time.time() and _jury_active(settings)
+                    and hmac.compare_digest(parts[3], settings.jury_access_token_sha256)):
+                return "chief"
+            return None
+        version, role, exp = parts
         if version != "v2" or int(exp) <= time.time():
             return None
     except ValueError:
@@ -97,13 +115,22 @@ def require_chief(request: Request, settings: Settings) -> None:
         raise HTTPException(status_code=401, detail="Требуется вход")
 
 
-def login(request: Request, response: Response, settings: Settings, username: str, password: str) -> SessionRole:
+def login(request: Request, response: Response, settings: Settings, username: str, password: str,
+          jury_token: str | None = None) -> SessionRole:
     if not settings.session_secret:
         raise HTTPException(status_code=503, detail="Авторизация не настроена")
     key = _client_key(request)
     if _locked(key):
         raise HTTPException(status_code=429, detail="Слишком много попыток. Повторите позже.")
     if username == "123" and password == "123":
+        if jury_token is not None:
+            digest = hashlib.sha256(jury_token.encode("utf-8")).hexdigest()
+            if not _jury_active(settings) or not hmac.compare_digest(digest, settings.jury_access_token_sha256):
+                _attempts[key].append(time.time())
+                raise HTTPException(status_code=403, detail="Ссылка для жюри недействительна")
+            _attempts.pop(key, None)
+            issue_session(response, settings, "chief", jury=True)
+            return "chief"
         issue_session(response, settings, "demo")
         return "demo"
     stored = settings.chief_password_hash or ""
