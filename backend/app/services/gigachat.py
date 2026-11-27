@@ -111,7 +111,12 @@ class GigaChatAPI:
 
             try:
                 payload = response.json()
-                token = str(payload["access_token"])
+                if not isinstance(payload, dict):
+                    raise TypeError("OAuth response is not an object")
+                token_value = payload.get("access_token")
+                if not isinstance(token_value, str) or not token_value.strip():
+                    raise ValueError("OAuth response has no access_token")
+                token = token_value.strip()
             except (ValueError, KeyError, TypeError) as exc:
                 raise GigaChatAPIError(502, "GigaChat OAuth returned an invalid token response") from exc
 
