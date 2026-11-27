@@ -540,3 +540,19 @@ def test_malformed_function_arguments_never_reach_the_tool(arguments):
     client = GigaChatAgentClient(API(), "test-model", max_tokens=64, timeout_s=1)
     with pytest.raises(GigaChatAPIError, match="invalid function arguments"):
         asyncio.run(client.run_with_tools([{"role": "user", "content": "Диагностика"}], [], unexpected_tool))
+
+
+def test_production_function_properties_have_required_descriptions():
+    from app.agent.gigachat_client import gigachat_functions
+    from app.agent.tools import TOOL_DEFINITIONS
+
+    functions = gigachat_functions(TOOL_DEFINITIONS)
+    for function in functions:
+        for name, parameter in function["parameters"]["properties"].items():
+            description = parameter.get("description")
+            assert isinstance(description, str) and description.strip(), (function["name"], name)
+
+    ticket = next(function for function in functions if function["name"] == "prepare_defect_ticket")
+    properties = ticket["parameters"]["properties"]
+    assert properties["operations"]["minItems"] == 1
+    assert properties["evidence_ids"]["minItems"] == 1

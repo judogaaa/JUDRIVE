@@ -54,10 +54,10 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "conclusion": {"type": "string"},
-                    "urgency": {"type": "string", "enum": ["low", "medium", "high"]},
-                    "operations": {"type": "array", "items": {"type": "string"}, "minItems": 1},
-                    "spare_parts": {"type": "array", "items": {"type": "string"}},
+                    "conclusion": {"type": "string", "description": "Краткое заключение по подтвержденным фактам диагностики."},
+                    "urgency": {"type": "string", "enum": ["low", "medium", "high"], "description": "Обоснованная срочность заявки: low, medium или high."},
+                    "operations": {"type": "array", "items": {"type": "string"}, "minItems": 1, "description": "Непустой список работ, подтвержденных применимыми источниками."},
+                    "spare_parts": {"type": "array", "items": {"type": "string"}, "description": "Подтвержденные запчасти или пустой список."},
                     "evidence_ids": {
                         "type": "array",
                         "items": {"type": "string"},
