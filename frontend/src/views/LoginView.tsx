@@ -35,11 +35,13 @@ const THEMES: { id: ThemeMode; icon: LucideIcon; labelKey: TranslationKey }[] = 
 
 export function LoginView({
   checking,
+  juryToken,
   themeMode,
   onThemeChange,
   onSuccess,
 }: {
   checking: boolean
+  juryToken?: string | null
   themeMode: ThemeMode
   onThemeChange: (mode: ThemeMode) => void
   onSuccess: (role: SessionRole) => void
@@ -59,7 +61,7 @@ export function LoginView({
         signal: AbortSignal.timeout(10_000),
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ username, password, ...(juryToken && username === '123' && password === '123' ? { jury_token: juryToken } : {}) }),
       })
       if (!response.ok) {
         if (response.status === 503) setError(t('auth.unavailable'))
@@ -154,7 +156,7 @@ export function LoginView({
                 <h2 id="login-title">{t('auth.title')}</h2>
               </div>
               <p className="auth-hint" role="note">
-                {t('auth.demoLabel')}{' · '}
+                {juryToken ? 'JUDRIVE' : t('auth.demoLabel')}{' · '}
                 {t('auth.user')}: <strong>123</strong>
                 <span aria-hidden> · </span>
                 {t('auth.password')}: <strong>123</strong>

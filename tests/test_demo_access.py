@@ -95,3 +95,45 @@ def test_login_limit_is_bound_to_the_transport_client(demo_access, monkeypatch):
         assert response.status_code == 401
     assert client.post("/api/auth/login", json={"username": "123", "password": "123"},
                        headers={"X-Forwarded-For": "198.51.100.1"}).status_code == 429
+
+
+def test_private_jury_link_grants_full_access_and_is_revocable(demo_access):
+    client, settings = demo_access
+    token = "private-test-invitation-" + "x" * 40
+    settings.chief_username = "private-chief"
+    settings.chief_password_hash = hash_password("test-only-private-chief", "test-only-salt")
+    settings.jury_access_token_sha256 = hashlib.sha256(token.encode()).hexdigest()
+    settings.jury_access_expires_at = int(time.time()) + 3600
+
+    # The well-known pair alone never unlocks the real fleet or PDF routes.
+    settings.demo_fleet_sha256 = ""
+    data = {"username": "123", "password": "123"}
+    assert client.post("/api/auth/login", json=data).json()["role"] == "demo"
+    assert client.get("/api/vehicles").status_code == 403
+    assert client.get("/api/manuals/catalog").status_code == 403
+
+    assert client.post("/api/auth/login", json={**data, "jury_token": "x" * 43}).status_code == 403
+    assert client.get("/api/auth/session").json()["role"] == "demo"
+    response = client.post("/api/auth/login", json={**data, "jury_token": token})
+    assert response.status_code == 200
+    assert response.json()["role"] == "chief"
+    assert "HttpOnly" in response.headers["set-cookie"]
+    assert "Secure" in response.headers["set-cookie"]
+    assert client.get("/api/vehicles").status_code == 200
+    assert client.get("/api/manuals/catalog").status_code == 200
+    assert client.get("/api/tickets").status_code == 200
+    assert client.get("/api/fleet/dashboard").status_code == 200
+
+    signed = client.cookies.get(COOKIE)
+    settings.jury_access_token_sha256 = hashlib.sha256(b"replacement").hexdigest()
+    assert client.get("/api/auth/session", headers={"Cookie": f"{COOKIE}={signed}"}).json()["role"] is None
+    assert client.get("/api/manuals/catalog").status_code == 401
+    settings.jury_access_token_sha256 = hashlib.sha256(token.encode()).hexdigest()
+    settings.jury_access_expires_at = int(time.time()) - 1
+    assert client.post("/api/auth/login", json={**data, "jury_token": token}).status_code == 403
+    assert client.get("/api/auth/session").json()["role"] is None
+    assert client.get("/api/vehicles").status_code == 401
+
+    # Ordinary private chief login remains independent of the jury link.
+    assert client.post("/api/auth/login", json={"username": "private-chief", "password": "test-only-private-chief"}).json()["role"] == "chief"
+    assert client.get("/api/manuals/catalog").status_code == 200

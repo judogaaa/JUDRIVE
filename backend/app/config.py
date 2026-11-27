@@ -46,6 +46,9 @@ class Settings(BaseSettings):
     agent_max_tool_steps: int = 4
 
     demo_fleet_sha256: str = Field(default="", pattern=r"^(?:[a-f0-9]{64})?$")
+    # Optional capability link for invited reviewers; never enables public 123/123.
+    jury_access_token_sha256: str = Field(default="", pattern=r"^(?:[a-f0-9]{64})?$")
+    jury_access_expires_at: int = Field(default=0, ge=0)
     chief_username: str | None = None
     chief_password_hash: str | None = None
     session_secret: str | None = None

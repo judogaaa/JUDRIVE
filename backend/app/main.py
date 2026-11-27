@@ -240,7 +240,10 @@ async def auth_login(request: Request, response: Response, body: dict):
     username, password = body.get("username"), body.get("password")
     if not isinstance(username, str) or not isinstance(password, str) or not (1 <= len(username) <= 128 and 1 <= len(password) <= 512):
         raise HTTPException(status_code=422, detail="Укажите имя и пароль допустимой длины")
-    role = chief_login(request, response, get_settings(), username, password)
+    jury_token = body.get("jury_token")
+    if jury_token is not None and (not isinstance(jury_token, str) or not 32 <= len(jury_token) <= 128):
+        raise HTTPException(status_code=422, detail="Недопустимая ссылка для жюри")
+    role = chief_login(request, response, get_settings(), username, password, jury_token=jury_token)
     response.headers["Cache-Control"] = "private, no-store"
     return {"ok": True, "role": role}
 

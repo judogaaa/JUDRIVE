@@ -108,3 +108,23 @@ test('unexpected fleet failure still offers retry', async ({ page }) => {
   await expect(page.getByRole('alert')).toContainText('Сервис временно недоступен')
   await expect(page.getByRole('button', { name: 'Повторить' })).toBeVisible()
 })
+
+test('private invitation is submitted only with the demo pair and removed from the URL', async ({ page }) => {
+  const secret = 'test-private-invitation-000000000000000000000000'
+  let received: unknown
+  await page.route('**/api/auth/login', async route => {
+    received = route.request().postDataJSON()
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, role: 'chief' }) })
+  })
+  await page.goto('/#jury=' + secret)
+  await expect(page.getByRole('button', { name: 'Войти' })).toBeVisible()
+  expect(new URL(page.url()).hash).toBe('')
+  await page.getByLabel('Имя').fill('123')
+  await page.getByLabel('Пароль', { exact: true }).fill('123')
+  await page.getByRole('button', { name: 'Войти' }).click()
+  await expect(page.getByRole('dialog', { name: 'Знакомство с JUDRIVE' })).toBeVisible()
+  expect(received).toEqual({ username: '123', password: '123', jury_token: secret })
+  await page.getByRole('button', { name: 'Пропустить' }).click()
+  await expect(page.locator('.shell-nav').getByRole('button', { name: 'Руководства' })).toBeVisible()
+  await expect(page.locator('.shell-nav').getByRole('button', { name: 'Заявки' })).toBeVisible()
+})
