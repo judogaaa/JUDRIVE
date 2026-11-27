@@ -26,9 +26,19 @@ export default function App() {
   const { mode: themeMode, setMode: setThemeMode } = useTheme()
   const [role, setRole] = useState<SessionRole | null | undefined>(undefined)
   // The invitation fragment is never sent to the web server as part of a URL.
-  const [juryToken] = useState(() => new URLSearchParams(window.location.hash.slice(1)).get('jury'))
+  const [juryToken, setJuryToken] = useState(() => new URLSearchParams(window.location.hash.slice(1)).get('jury'))
   useEffect(() => {
-    if (juryToken) window.history.replaceState(null, '', window.location.pathname + window.location.search)
+    const clearFragment = () => window.history.replaceState(null, '', window.location.pathname + window.location.search)
+    if (juryToken && window.location.hash.startsWith('#jury=')) clearFragment()
+    const receiveInvitation = () => {
+      const token = new URLSearchParams(window.location.hash.slice(1)).get('jury')
+      if (token) {
+        setJuryToken(token)
+        clearFragment()
+      }
+    }
+    window.addEventListener('hashchange', receiveInvitation)
+    return () => window.removeEventListener('hashchange', receiveInvitation)
   }, [juryToken])
   const [logoutError, setLogoutError] = useState(false)
   const [loggingOut, setLoggingOut] = useState(false)
