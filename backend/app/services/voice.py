@@ -29,8 +29,9 @@ MIME_ALIASES = {
     "audio/x-wav": ("audio/x-wav", "speech.wav"),
     "audio/wave": ("audio/wav", "speech.wav"),
     "audio/x-pn-wav": ("audio/wav", "speech.wav"),
-    "audio/mpeg": ("audio/mp3", "speech.mp3"),
-    "audio/mp3": ("audio/mp3", "speech.mp3"),
+    # The live GigaChat file endpoint accepts audio/mpeg, not audio/mp3.
+    "audio/mpeg": ("audio/mpeg", "speech.mp3"),
+    "audio/mp3": ("audio/mpeg", "speech.mp3"),
     "audio/opus": ("audio/opus", "speech.opus"),
 }
 
