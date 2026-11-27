@@ -28,7 +28,12 @@ def _configured(settings: Settings) -> bool:
 
 
 def _client_key(request: Request) -> str:
-    return request.client.host if request.client else "unknown"
+    # Backend is bound to loopback behind Nginx. Use the proxy-provided
+    # client address so one abusive client cannot lock every user out.
+    forwarded = (request.headers.get("x-real-ip") or "").strip()
+    if not forwarded:
+        forwarded = (request.headers.get("x-forwarded-for") or "").split(",", 1)[0].strip()
+    return forwarded or (request.client.host if request.client else "unknown")
 
 
 def _locked(key: str) -> bool:
