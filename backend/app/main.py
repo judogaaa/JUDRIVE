@@ -10,14 +10,14 @@ from fastapi.responses import FileResponse
 from starlette.datastructures import UploadFile
 
 from app.agent.orchestrator import AgentOrchestrator
-from app.auth.chief_session import clear_session, login as chief_login, require_chief, session_ok
+from app.auth.chief_session import clear_session, login as chief_login, require_chief, session_role
 from app.rag.catalog import MANUAL_SPECS
 from app.config import get_settings
 from app.rag.catalog import allowed_doc_ids
 from app.rag.service import ManualRagService
 from app.schemas.analytics import QuarantineRecommendationRequest
 from app.schemas.chat import ChatMessageRequest, ConversationCreate
-from app.agent.guardrails import apply_engine_context, sanitize_ml_observation
+from app.agent.guardrails import FAULT_ENGINES, apply_engine_context, sanitize_ml_observation
 from app.schemas.diagnose import DiagnoseRequest, DiagnoseResponse
 from app.schemas.fleet import VehicleDiagnosisHistory
 from app.schemas.health import HealthResponse
@@ -116,6 +116,16 @@ def _chief_guard(request: Request, response: Response) -> None:
     response.headers["Cache-Control"] = "private, no-store"
 
 
+
+def _fleet_guard(request: Request, response: Response) -> None:
+    current = get_settings()
+    if (session_role(request, current) == "demo" and current.demo_fleet_sha256
+            and current.demo_fleet_sha256 == fleet.source_sha256):
+        response.headers["Cache-Control"] = "private, no-store"
+        return
+    _chief_guard(request, response)
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[origin.strip() for origin in settings.cors_origins.split(",") if origin.strip()],
@@ -184,12 +194,12 @@ async def health() -> HealthResponse:
     )
 
 
-@app.get(f"{settings.api_prefix}/vehicles", dependencies=[Depends(_chief_guard)])
+@app.get(f"{settings.api_prefix}/vehicles", dependencies=[Depends(_fleet_guard)])
 async def list_vehicles():
     return {"vehicles": fleet.list_vehicles()}
 
 
-@app.get(f"{settings.api_prefix}/vehicles/{{vehicle_id}}/diagnosis-history", dependencies=[Depends(_chief_guard)], response_model=VehicleDiagnosisHistory)
+@app.get(f"{settings.api_prefix}/vehicles/{{vehicle_id}}/diagnosis-history", dependencies=[Depends(_fleet_guard)], response_model=VehicleDiagnosisHistory)
 async def vehicle_diagnosis_history(vehicle_id: str):
     if not fleet.vehicle_known(vehicle_id):
         raise HTTPException(status_code=404, detail="Транспорт не найден")
@@ -199,8 +209,8 @@ async def vehicle_diagnosis_history(vehicle_id: str):
     )
 
 
-@app.post(f"{settings.api_prefix}/diagnose", dependencies=[Depends(_chief_guard)], response_model=DiagnoseResponse)
-async def diagnose(body: DiagnoseRequest) -> DiagnoseResponse:
+@app.post(f"{settings.api_prefix}/diagnose", dependencies=[Depends(_fleet_guard)], response_model=DiagnoseResponse)
+async def diagnose(body: DiagnoseRequest, request: Request) -> DiagnoseResponse:
     if not fleet.validate_pair(body.vehicle_id, body.session_id):
         raise HTTPException(
             status_code=404,
@@ -214,6 +224,12 @@ async def diagnose(body: DiagnoseRequest) -> DiagnoseResponse:
         raise HTTPException(status_code=502, detail="Не удалось получить результат проверки. Повторите запрос.") from exc
 
     apply_engine_context(result, fleet.session_engine(body.vehicle_id, body.session_id))
+    if session_role(request, get_settings()) == "demo":
+        # Free text from an upstream service may contain private information.
+        result.description = ""
+        result.anomaly_type = result.anomaly_type if result.anomaly_type in FAULT_ENGINES else None
+        result.anomaly_title = None
+        result.model_version = ""
     result.description = sanitize_ml_observation(result.description)
     result.review_priority = diagnosis_review_priority(fleet, result)
     return result
@@ -221,14 +237,17 @@ async def diagnose(body: DiagnoseRequest) -> DiagnoseResponse:
 
 @app.post(f"{settings.api_prefix}/auth/login")
 async def auth_login(request: Request, response: Response, body: dict):
-    username = str(body.get("username") or "")
-    password = str(body.get("password") or "")
-    chief_login(request, response, get_settings(), username, password)
-    return {"ok": True}
+    username, password = body.get("username"), body.get("password")
+    if not isinstance(username, str) or not isinstance(password, str) or not (1 <= len(username) <= 128 and 1 <= len(password) <= 512):
+        raise HTTPException(status_code=422, detail="Укажите имя и пароль допустимой длины")
+    role = chief_login(request, response, get_settings(), username, password)
+    response.headers["Cache-Control"] = "private, no-store"
+    return {"ok": True, "role": role}
 
 
 @app.post(f"{settings.api_prefix}/auth/logout")
 async def auth_logout(response: Response):
+    response.headers["Cache-Control"] = "private, no-store"
     clear_session(response, get_settings())
     return {"ok": True}
 
@@ -236,7 +255,8 @@ async def auth_logout(response: Response):
 @app.get(f"{settings.api_prefix}/auth/session")
 async def auth_session(request: Request, response: Response):
     response.headers["Cache-Control"] = "private, no-store"
-    return {"authenticated": session_ok(request, get_settings())}
+    role = session_role(request, get_settings())
+    return {"authenticated": role is not None, "role": role}
 
 
 @app.get(f"{settings.api_prefix}/manuals/catalog", dependencies=[Depends(_chief_guard)])

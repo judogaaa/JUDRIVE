@@ -5,8 +5,8 @@ import { usableStatus } from '../lib/workflow'
 
 export interface VerdictActionsProps {
   result: DiagnoseResponse
-  onExplain: () => void
-  onWhatToCheck: () => void
+  onExplain?: () => void
+  onWhatToCheck?: () => void
   onSearchManual?: () => void
   onPrepareTicket?: () => void
   onCopyPlan: () => void
@@ -44,7 +44,7 @@ export function VerdictActions({
         primary: true,
       })
     }
-    actions.push({
+    if (onWhatToCheck) actions.push({
       id: 'repeat-recording',
       label: t('action.askFailed'),
       icon: MessageSquare,
@@ -75,13 +75,13 @@ export function VerdictActions({
         primary: !onSearchManual,
       })
     }
-    actions.push({
+    if (onExplain) actions.push({
       id: 'explain',
       label: t('verdict.action.explain'),
       icon: MessageSquare,
       onClick: onExplain,
     })
-    actions.push({
+    if (onWhatToCheck) actions.push({
       id: 'what-to-check',
       label: t('chat.suggest2'),
       icon: ListTree,

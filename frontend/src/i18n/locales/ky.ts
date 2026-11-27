@@ -410,4 +410,10 @@ export const ky: Record<TranslationKey, string> = {
   'ticket.priorityAction.low': 'Кийинки текшерүүдө караңыз.',
   'ticket.priorityAction.medium': 'Жакынкы тейлөөдө текшериңиз жана көзөмөлдөңүз.',
   'ticket.priorityAction.high': 'Каттамга чыгардан мурда текшериңиз.',
+  'nav.dashboard': "Башкы бет",
+  'dashboard.demoNote': "Ачык демо. Жабык нускамалар, чат, үн жана өтүнмөлөр башкы механик үчүн.",
+  'dashboard.recentChecks': "Акыркы текшерүүлөр",
+  'auth.demoLabel': "Демо",
+  'dashboard.checks': "Текшерүүлөр",
+  'dashboard.emptyChecks': "Текшерүүлөр али жок",
 }

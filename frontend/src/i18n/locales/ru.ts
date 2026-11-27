@@ -410,4 +410,10 @@ export const ru: Record<TranslationKey, string> = {
   'ticket.priorityAction.low': 'Проверить узел при следующей проверке.',
   'ticket.priorityAction.medium': 'Дефектовка на ближайшем ТО, работа под наблюдением.',
   'ticket.priorityAction.high': 'Дефектовка до выпуска в рейс.',
+  'nav.dashboard': "Главная",
+  'dashboard.demoNote': "Публичное демо. Закрытые руководства, чат, голос и заявки доступны главному механику.",
+  'dashboard.recentChecks': "Последние проверки",
+  'auth.demoLabel': "Демо",
+  'dashboard.checks': "Проверки",
+  'dashboard.emptyChecks': "Проверок пока нет",
 }

@@ -1,18 +1,27 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 import { openNav, runDiagnosis, selectVehicleSession } from './helpers/common'
+
+async function signInDemo(page: Page) {
+  await expect(page.locator('.shell')).toHaveCount(0)
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await page.getByLabel('Имя').fill('123')
+  await page.getByLabel('Пароль', { exact: true }).fill('123')
+  await page.getByRole('button', { name: 'Войти' }).click()
+}
 
 test.describe('Onboarding first visit', () => {
   test.use({ storageState: { cookies: [], origins: [] } })
 
   test('first visit shows onboarding and all steps can be traversed', async ({ page }) => {
     await page.goto('/')
+    await signInDemo(page)
     const dialog = page.getByRole('dialog', { name: 'Знакомство с JUDRIVE' })
     await expect(dialog).toBeVisible()
     await expect(dialog.getByRole('heading', { name: 'Добро пожаловать в JUDRIVE' })).toBeVisible()
 
     for (let step = 1; step < 7; step += 1) {
       await expect(dialog.getByRole('button', { name: 'Закрыть обучение' })).toBeDisabled()
-      await expect(dialog.getByRole('button', { name: 'Пропустить' })).toHaveCount(0)
+      await expect(dialog.getByRole('button', { name: 'Пропустить' })).toBeVisible()
       await page.keyboard.press('Escape')
       await expect(dialog).toBeVisible()
       await expect.poll(() => dialog.locator('.onboarding__visual').evaluate(el => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(1)
@@ -26,6 +35,7 @@ test.describe('Onboarding first visit', () => {
 
   test('completion is stored and not shown again', async ({ page }) => {
     await page.goto('/')
+    await signInDemo(page)
     const dialog = page.getByRole('dialog', { name: 'Знакомство с JUDRIVE' })
     for (let step = 1; step < 7; step += 1) {
       await dialog.getByRole('button', { name: 'Далее' }).click()
@@ -38,12 +48,13 @@ test.describe('Onboarding first visit', () => {
 
     await page.reload()
     await expect(page.getByRole('dialog', { name: 'Знакомство с JUDRIVE' })).toBeHidden()
-    await expect(page.getByRole('heading', { name: 'Диагностика' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Главная', exact: true })).toBeVisible()
   })
 
   test('legacy skip cannot bypass agreement', async ({ page }) => {
     await page.addInitScript(() => localStorage.setItem('judrive-onboarding', JSON.stringify({ version: 1, status: 'skipped', step: 6 })))
     await page.goto('/')
+    await signInDemo(page)
     const dialog = page.getByRole('dialog', { name: 'Знакомство с JUDRIVE' })
     await expect(dialog.getByRole('heading', { name: 'Добро пожаловать в JUDRIVE' })).toBeVisible()
     await expect(dialog.getByRole('button', { name: 'Закрыть обучение' })).toBeDisabled()
@@ -51,6 +62,7 @@ test.describe('Onboarding first visit', () => {
 
   test('unfinished step, language and theme survive reload', async ({ page }) => {
     await page.goto('/')
+    await signInDemo(page)
     const dialog = page.getByRole('dialog', { name: 'Знакомство с JUDRIVE' })
     await dialog.getByRole('button', { name: 'Далее' }).click()
     await expect(dialog.getByRole('button', { name: 'Закрыть обучение' })).toBeDisabled()
@@ -68,6 +80,7 @@ test.describe('Onboarding first visit', () => {
 
   test('Escape and close only work after the final acknowledgement', async ({ page }) => {
     await page.goto('/')
+    await signInDemo(page)
     const dialog = page.getByRole('dialog', { name: 'Знакомство с JUDRIVE' })
     for (let i = 0; i < 6; i++) await dialog.getByRole('button', { name: 'Далее' }).click()
     const close = dialog.getByRole('button', { name: 'Закрыть обучение' })
@@ -89,6 +102,7 @@ test.describe('Onboarding first visit', () => {
   test('respects reduced motion preferences', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' })
     await page.goto('/')
+    await signInDemo(page)
     const panel = page.locator('.onboarding__panel')
     await expect(panel).toBeVisible()
     const duration = await panel.evaluate((node) => getComputedStyle(node).animationDuration)
@@ -100,6 +114,7 @@ test.describe('Onboarding first visit', () => {
   test('mobile onboarding has no horizontal overflow', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 })
     await page.goto('/')
+    await signInDemo(page)
     await expect(page.getByRole('dialog', { name: 'Знакомство с JUDRIVE' })).toBeVisible()
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
     expect(overflow).toBeLessThanOrEqual(1)
@@ -143,9 +158,8 @@ test.describe('Help center and onboarding restart', () => {
   test('chief still requires authentication after help', async ({ page, context }) => {
     await context.clearCookies()
     await page.goto('/')
-    await openNav(page, /Помощь и обучение/)
-    await openNav(page, /Главный механик/)
     await expect(page.getByRole('heading', { name: 'Вход главного механика' })).toBeVisible()
+    await expect(page.locator('.shell')).toHaveCount(0)
   })
 })
 
@@ -154,6 +168,7 @@ test.describe('Onboarding accessibility edge cases', () => {
   test('invalid persisted step recovers and background is inert', async ({ page }) => {
     await page.addInitScript(() => localStorage.setItem('judrive-onboarding', JSON.stringify({ version: 1, status: 'in_progress', step: 1.5 })))
     await page.goto('/')
+    await signInDemo(page)
     const dialog = page.getByRole('dialog', { name: 'Знакомство с JUDRIVE' })
     await expect(dialog.getByRole('heading', { name: 'Добро пожаловать в JUDRIVE' })).toBeVisible()
     await expect(page.locator('.shell')).toHaveAttribute('inert', '')

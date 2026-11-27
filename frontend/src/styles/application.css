@@ -4153,3 +4153,53 @@ select {
   }
 }
 
+
+/* Workspace overview */
+.workspace-dashboard__actions,
+.workspace-dashboard h2 {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.workspace-dashboard__actions {
+  margin-top: 16px;
+}
+
+.workspace-dashboard__stats,
+.workspace-dashboard__details {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.workspace-dashboard__stats {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 136px), 1fr));
+}
+
+.workspace-dashboard__details {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
+}
+
+.workspace-dashboard__details ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.workspace-dashboard__details .queue-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  width: 100%;
+  gap: 8px;
+}
+
+.shell-nav-mobile {
+  grid-template-columns: repeat(var(--nav-columns, 6), minmax(0, 1fr));
+}
+
+.shell-nav-mobile[data-demo] {
+  --nav-columns: 3;
+}

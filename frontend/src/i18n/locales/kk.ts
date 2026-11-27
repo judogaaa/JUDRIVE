@@ -410,4 +410,10 @@ export const kk: Record<TranslationKey, string> = {
   'ticket.priorityAction.low': 'Келесі тексеруде қараңыз.',
   'ticket.priorityAction.medium': 'Жақын техникалық қызметте тексеріңіз, бақылауда ұстаңыз.',
   'ticket.priorityAction.high': 'Рейске шығар алдында тексеріңіз.',
+  'nav.dashboard': "Басты бет",
+  'dashboard.demoNote': "Ашық демо. Жабық нұсқаулықтар, чат, дауыс және өтінімдер бас механикке қолжетімді.",
+  'dashboard.recentChecks': "Соңғы тексерулер",
+  'auth.demoLabel': "Демо",
+  'dashboard.checks': "Тексерулер",
+  'dashboard.emptyChecks': "Тексерулер әлі жоқ",
 }

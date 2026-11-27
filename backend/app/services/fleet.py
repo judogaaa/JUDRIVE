@@ -1,3 +1,4 @@
+from hashlib import sha256
 import json
 from pathlib import Path
 
@@ -22,8 +23,8 @@ class FleetService:
         self.reload()
 
     def reload(self) -> None:
-        with self._data_path.open(encoding="utf-8") as f:
-            payload = json.load(f)
+        source = self._data_path.read_bytes()
+        payload = json.loads(source)
         vehicles: list[VehicleSummary] = []
         index: dict[tuple[str, str], str] = {}
         for item in payload["vehicles"]:
@@ -57,6 +58,7 @@ class FleetService:
         for item in payload["vehicles"]:
             session_by_vehicle[item["vehicle_id"]] = [safe_history_session(s, item["engine_model"]) for s in item["sessions"]]
 
+        self.source_sha256 = sha256(source).hexdigest()
         self._vehicles = vehicles
         self._session_index = index
         self._vehicle_sessions = session_by_vehicle

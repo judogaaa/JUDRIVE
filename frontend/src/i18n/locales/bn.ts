@@ -410,4 +410,10 @@ export const bn: Record<TranslationKey, string> = {
   'ticket.priorityAction.low': 'পরের পরীক্ষায় অংশটি দেখুন।',
   'ticket.priorityAction.medium': 'পরের রক্ষণাবেক্ষণে পরীক্ষা করুন এবং নজর রাখুন।',
   'ticket.priorityAction.high': 'যাত্রার আগে পরীক্ষা করুন।',
+  'nav.dashboard': "হোম",
+  'dashboard.demoNote': "সর্বজনীন ডেমো। সীমিত নির্দেশিকা, চ্যাট, ভয়েস ও অনুরোধ প্রধান মেকানিকের জন্য।",
+  'dashboard.recentChecks': "সাম্প্রতিক পরীক্ষা",
+  'auth.demoLabel': "ডেমো",
+  'dashboard.checks': "পরীক্ষা",
+  'dashboard.emptyChecks': "এখনও কোনো পরীক্ষা নেই",
 }

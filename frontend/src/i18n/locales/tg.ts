@@ -410,4 +410,10 @@ export const tg: Record<TranslationKey, string> = {
   'ticket.priorityAction.low': 'Дар санҷиши навбатӣ тафтиш кунед.',
   'ticket.priorityAction.medium': 'Дар наздиктарин хизматрасонӣ тафтиш кунед ва зери назорат нигоҳ доред.',
   'ticket.priorityAction.high': 'Пеш аз сафар тафтиш кунед.',
+  'nav.dashboard': "Асосӣ",
+  'dashboard.demoNote': "Демои оммавӣ. Дастурҳои пӯшида, чат, овоз ва дархостҳо барои сармеханик.",
+  'dashboard.recentChecks': "Санҷишҳои охирин",
+  'auth.demoLabel': "Демо",
+  'dashboard.checks': "Санҷишҳо",
+  'dashboard.emptyChecks': "Ҳанӯз санҷиш нест",
 }

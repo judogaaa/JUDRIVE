@@ -410,4 +410,10 @@ export const uz: Record<TranslationKey, string> = {
   'ticket.priorityAction.low': 'Keyingi tekshiruvda tekshiring.',
   'ticket.priorityAction.medium': 'Yaqin texnik xizmatda tekshiring, kuzatuv ostida ishlating.',
   'ticket.priorityAction.high': 'Yo‘lga chiqishdan oldin tekshiring.',
+  'nav.dashboard': "Bosh sahifa",
+  'dashboard.demoNote': "Ochiq demo. Yopiq qo‘llanmalar, chat, ovoz va buyurtmalar bosh mexanik uchun.",
+  'dashboard.recentChecks': "Oxirgi tekshiruvlar",
+  'auth.demoLabel': "Demo",
+  'dashboard.checks': "Tekshiruvlar",
+  'dashboard.emptyChecks': "Tekshiruvlar hali yo‘q",
 }

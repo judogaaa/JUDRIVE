@@ -26,6 +26,15 @@ def verify(base: str, record: Path, after_restart: bool) -> None:
         assert api.get(pdf, params=scope).status_code == 401
         assert api.get("/api/sources/evidence/y236-re:p0033", params=scope).status_code == 401
         assert api.post("/api/conversations", json=pair).status_code == 401
+        demo = api.post("/api/auth/login", json={"username": "123", "password": "123"})
+        assert demo.status_code == 200 and demo.json()["role"] == "demo"
+        assert api.get("/api/vehicles").status_code == 200
+        assert api.get(pdf, params=scope).status_code == 403
+        assert api.get("/api/sources/evidence/y236-re:p0033", params=scope).status_code == 403
+        assert api.post("/api/conversations", json=pair).status_code == 403
+        assert api.post("/api/voice/transcribe").status_code == 403
+        assert api.get("/api/tickets").status_code == 403
+        assert api.post("/api/auth/logout").status_code == 200
         assert api.post("/api/auth/login", json={
             "username": "compose-test", "password": os.environ["TEST_CHIEF_PASSWORD"],
         }).status_code == 200

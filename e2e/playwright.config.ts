@@ -1,8 +1,8 @@
 import { join } from 'node:path'
-import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, readFileSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { execFileSync } from 'node:child_process'
-import { pbkdf2Sync, randomBytes } from 'node:crypto'
+import { createHash, pbkdf2Sync, randomBytes } from 'node:crypto'
 import { defineConfig } from '@playwright/test'
 
 const root = join(__dirname, '..')
@@ -35,6 +35,7 @@ if (!external && !process.env.JUDRIVE_E2E_MANAGED) {
   execFileSync(python, [join(root, 'e2e', 'fixtures', 'synthetic_fleet.py'), dataset])
   process.env.MOCK_DATA_PATH = dataset
   process.env.FLEET_DATA_PATH = dataset
+  process.env.DEMO_FLEET_SHA256 = createHash('sha256').update(readFileSync(dataset)).digest('hex')
   process.env.E2E_AUTH_PATH = join(directory, 'auth.json')
 }
 const statePath = process.env.E2E_AUTH_PATH

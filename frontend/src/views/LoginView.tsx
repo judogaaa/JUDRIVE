@@ -13,6 +13,7 @@ import {
   Truck,
   type LucideIcon,
 } from 'lucide-react'
+import { readRole, type SessionRole } from '../api/auth'
 import type { ThemeMode } from '../hooks/useTheme'
 import { useI18n } from '../i18n/I18nContext'
 import type { TranslationKey } from '../i18n/translations'
@@ -41,7 +42,7 @@ export function LoginView({
   checking: boolean
   themeMode: ThemeMode
   onThemeChange: (mode: ThemeMode) => void
-  onSuccess: () => void
+  onSuccess: (role: SessionRole) => void
 }) {
   const { t, locale, setLocale, locales, localeLabels } = useI18n()
   const [username, setUsername] = useState('')
@@ -55,6 +56,7 @@ export function LoginView({
     try {
       const response = await fetch('/api/auth/login', {
         method: 'POST',
+        signal: AbortSignal.timeout(10_000),
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
@@ -65,8 +67,9 @@ export function LoginView({
         else setError(t('auth.error'))
         return
       }
-      onSuccess()
-      window.dispatchEvent(new Event('judrive-auth-change'))
+      const role = readRole(await response.json())
+      if (!role) throw new Error()
+      onSuccess(role)
     } catch {
       setError(t('auth.error'))
     } finally {
@@ -151,6 +154,7 @@ export function LoginView({
                 <h2 id="login-title">{t('auth.title')}</h2>
               </div>
               <p className="auth-hint" role="note">
+                {t('auth.demoLabel')}{' · '}
                 {t('auth.user')}: <strong>123</strong>
                 <span aria-hidden> · </span>
                 {t('auth.password')}: <strong>123</strong>

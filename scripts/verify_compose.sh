@@ -30,6 +30,8 @@ chmod 755 "$audit_dir"
 chmod 777 "$JUDRIVE_STATE_DIR"
 "$python" e2e/fixtures/synthetic_fleet.py "$JUDRIVE_FLEET_DIR/vehicles.json"
 PYTHONPATH=backend "$python" -c 'from pathlib import Path; from sys import argv; from e2e.fixtures.synthetic_manuals import generate; generate(Path(argv[1]))' "$JUDRIVE_MANUALS_DIR"
+export TEST_DEMO_FLEET_SHA256
+TEST_DEMO_FLEET_SHA256=$("$python" -c 'import hashlib, pathlib, sys; print(hashlib.sha256(pathlib.Path(sys.argv[1]).read_bytes()).hexdigest())' "$JUDRIVE_FLEET_DIR/vehicles.json")
 chmod 755 "$JUDRIVE_FLEET_DIR" "$JUDRIVE_MANUALS_DIR"
 chmod 644 "$JUDRIVE_FLEET_DIR/vehicles.json" "$JUDRIVE_MANUALS_DIR/"*.pdf
 "${compose[@]}" config --quiet

@@ -220,7 +220,7 @@ export function DiagnosisView({
     if (!activeResult) return null
     const effective = usableStatus(activeResult)
     return {
-      onExplain: () =>
+      onExplain: !documentsAuthorized ? undefined : () =>
         onChatIntent({
           id: Date.now(),
           vehicleId,
@@ -229,7 +229,7 @@ export function DiagnosisView({
           action: 'explain',
           autoSend: true,
         }),
-      onWhatToCheck: () =>
+      onWhatToCheck: !documentsAuthorized ? undefined : () =>
         onChatIntent({
           id: Date.now(),
           vehicleId,
@@ -239,7 +239,7 @@ export function DiagnosisView({
           autoSend: true,
         }),
       onSearchManual:
-        effective === 'check_failed'
+        !documentsAuthorized || effective === 'check_failed'
           ? undefined
           : () => {
               if (!engineModel) return
@@ -251,7 +251,7 @@ export function DiagnosisView({
               })
             },
       onPrepareTicket:
-        effective === 'anomaly' && (activeResult.confidence ?? 0) >= 0.50
+        documentsAuthorized && effective === 'anomaly' && (activeResult.confidence ?? 0) >= 0.50
           ? () =>
               onChatIntent({
                 id: Date.now(),
@@ -265,7 +265,7 @@ export function DiagnosisView({
       onCopyPlan: () => void copyVerdictPlan(),
       onOtherSession: sortedSessions.length > 1 ? () => setSessionChooserOpen(true) : undefined,
     }
-  }, [activeResult, copyVerdictPlan, engineModel, onChatIntent, onOpenManuals, sessionId, sortedSessions.length, t, vehicleId])
+  }, [activeResult, copyVerdictPlan, documentsAuthorized, engineModel, onChatIntent, onOpenManuals, sessionId, sortedSessions.length, t, vehicleId])
 
   return (
     <div className="diag-page">

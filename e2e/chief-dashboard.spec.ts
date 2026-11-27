@@ -15,7 +15,6 @@ test.describe('Chief mechanic auth and filters', () => {
 
     await page.addInitScript(() => localStorage.setItem('judrive-onboarding', JSON.stringify({ version: 1, status: 'completed', step: 6, acknowledged: true })))
     await page.goto('/')
-    await openNav(page, /Главный механик/)
     await expect(page.getByRole('heading', { name: 'Вход главного механика' })).toBeVisible()
 
     await page.getByLabel('Имя').fill(user)
@@ -33,11 +32,12 @@ test.describe('Chief mechanic auth and filters', () => {
 
     await page.addInitScript(() => localStorage.setItem('judrive-onboarding', JSON.stringify({ version: 1, status: 'completed', step: 6, acknowledged: true })))
     await page.goto('/')
-    await openNav(page, /Главный механик/)
     await page.getByLabel('Имя').fill(creds.user)
     await page.getByLabel('Пароль', { exact: true }).fill(creds.password)
     await page.getByRole('button', { name: 'Войти' }).click()
 
+    await expect(page.getByRole('heading', { name: 'Главная', exact: true })).toBeVisible()
+    await openNav(page, /Главный механик/)
     await expect(page.getByRole('heading', { name: 'Главный механик' })).toBeVisible({ timeout: 15_000 })
     await expect(page.locator('.summary-card').first()).toBeVisible()
 

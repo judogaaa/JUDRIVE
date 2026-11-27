@@ -410,4 +410,10 @@ export const hi: Record<TranslationKey, string> = {
   'ticket.priorityAction.low': 'अगली जाँच में देखें।',
   'ticket.priorityAction.medium': 'अगले रखरखाव में जाँचें और निगरानी रखें।',
   'ticket.priorityAction.high': 'यात्रा से पहले जाँचें।',
+  'nav.dashboard': "मुखपृष्ठ",
+  'dashboard.demoNote': "सार्वजनिक डेमो। प्रतिबंधित मैनुअल, चैट, आवाज़ और अनुरोध मुख्य मैकेनिक के लिए उपलब्ध हैं।",
+  'dashboard.recentChecks': "हाल की जाँचें",
+  'auth.demoLabel': "डेमो",
+  'dashboard.checks': "जाँचें",
+  'dashboard.emptyChecks': "अभी कोई जाँच नहीं",
 }
