@@ -4,6 +4,7 @@ import argparse
 from concurrent.futures import ThreadPoolExecutor
 import json
 import os
+import re
 from pathlib import Path
 from statistics import median
 from time import perf_counter
@@ -18,7 +19,21 @@ def verify(base: str, record: Path, after_restart: bool) -> None:
     pair = {"vehicle_id": "B418HK98", "session_id": "S-0009"}
     scope = {"engine_model": "ЯМЗ-236М2", **pair}
     with httpx.Client(base_url=base, trust_env=False, timeout=30) as api:
-        assert api.get("/").status_code == 200
+        index = api.get("/")
+        assert index.status_code == 200
+        entry_url = re.search(r'src="(/assets/[^"]+\.js)"', index.text)
+        assert entry_url, "Production entry script missing"
+        entry = api.get(entry_url.group(1))
+        assert entry.status_code == 200
+        viewer_name = re.search(r'(?<![\w-])(SourceViewer-[\w-]+\.js)', entry.text)
+        assert viewer_name, "PDF viewer chunk missing"
+        viewer = api.get("/assets/" + viewer_name.group(1))
+        assert viewer.status_code == 200
+        worker_url = re.search(r'/assets/pdf\.worker\.min-[\w-]+\.js', viewer.text)
+        assert worker_url, "PDF module worker must use a .js URL"
+        worker = api.get(worker_url.group())
+        assert worker.status_code == 200
+        assert worker.headers["content-type"].split(";")[0] in {"text/javascript", "application/javascript"}
         readiness = api.get("/api/ready")
         assert readiness.status_code == 200
         assert readiness.json()["gigachat_agent"] == "ready"
