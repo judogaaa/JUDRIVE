@@ -412,6 +412,7 @@ export const tg: Record<TranslationKey, string> = {
   'ticket.priorityAction.high': 'Пеш аз сафар тафтиш кунед.',
   'nav.dashboard': "Асосӣ",
   'dashboard.demoNote': "Демои оммавӣ. Дастурҳои пӯшида, чат, овоз ва дархостҳо барои сармеханик.",
+  'dashboard.demoFleetUnavailable': "Маълумоти автопарк ва ташхис дар демои оммавӣ дастрас нестанд. Барои истифода аз онҳо бароед ва бо ҳисоби сармеханик ворид шавед. Омӯзиш ва кӯмак ҳоло дастрасанд.",
   'dashboard.recentChecks': "Санҷишҳои охирин",
   'auth.demoLabel': "Демо",
   'dashboard.checks': "Санҷишҳо",

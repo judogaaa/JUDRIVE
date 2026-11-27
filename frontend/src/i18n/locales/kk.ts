@@ -412,6 +412,7 @@ export const kk: Record<TranslationKey, string> = {
   'ticket.priorityAction.high': 'Рейске шығар алдында тексеріңіз.',
   'nav.dashboard': "Басты бет",
   'dashboard.demoNote': "Ашық демо. Жабық нұсқаулықтар, чат, дауыс және өтінімдер бас механикке қолжетімді.",
+  'dashboard.demoFleetUnavailable': "Ашық демода автопарк деректері мен диагностика қолжетімсіз. Оларды пайдалану үшін шығып, бас механиктің тіркелгісімен кіріңіз. Оқыту мен көмек қазір қолжетімді.",
   'dashboard.recentChecks': "Соңғы тексерулер",
   'auth.demoLabel': "Демо",
   'dashboard.checks': "Тексерулер",

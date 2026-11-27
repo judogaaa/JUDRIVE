@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { fetchVehicles } from './api/client'
+import { ApiResponseError, fetchVehicles } from './api/client'
 import type { VehicleSummary } from './api/types'
 import { WorkspaceShell, type AppView } from './components/shell/WorkspaceShell'
 import { Onboarding } from './components/Onboarding'
-import { useOnboarding } from './hooks/useOnboarding'
+import { resetOnboardingForLogin, useOnboarding } from './hooks/useOnboarding'
 import { useTheme } from './hooks/useTheme'
 import { useI18n } from './i18n/I18nContext'
 import { HelpView } from './views/HelpView'
@@ -71,7 +71,7 @@ export default function App() {
 
   if (!role) {
     return <LoginView checking={role === undefined} themeMode={themeMode} onThemeChange={setThemeMode}
-      onSuccess={(next) => { ++authSequence.current; setRole(next) }} />
+      onSuccess={(next) => { resetOnboardingForLogin(); ++authSequence.current; setRole(next) }} />
   }
 
   return <Workspace key={role} role={role} themeMode={themeMode} setThemeMode={setThemeMode}
@@ -107,6 +107,7 @@ function Workspace({ role, themeMode, setThemeMode, onLogout, loggingOut, logout
     setView(next)
   }
   const [fleetLoaded, setFleetLoaded] = useState(false)
+  const [fleetRestricted, setFleetRestricted] = useState(false)
   const [vehicles, setVehicles] = useState<VehicleSummary[]>([])
   const [fleetError, setFleetError] = useState<string | null>(null)
   const [fleetRevision, setFleetRevision] = useState(0)
@@ -182,6 +183,7 @@ function Workspace({ role, themeMode, setThemeMode, onLogout, loggingOut, logout
         if (cancelled) return
         setVehicles(list)
         setFleetLoaded(true)
+        setFleetRestricted(false)
         setFleetError(null)
         // Initial selection only. Changing language must not reset the mechanic's context.
         if (!selectionRef.current.vehicleId && list.length > 0) {
@@ -192,12 +194,20 @@ function Workspace({ role, themeMode, setThemeMode, onLogout, loggingOut, logout
       })
       .catch((err: unknown) => {
         if (cancelled) return
+        if (!chief && err instanceof ApiResponseError && err.status === 403) {
+          // A private production fleet is intentionally unavailable to public demo sessions.
+          setFleetRestricted(true)
+          setFleetLoaded(false)
+          setFleetError(null)
+          return
+        }
+        setFleetRestricted(false)
         setFleetError(resolveErrorMessage(tRef.current, err, 'error.fleet'))
       })
     return () => {
       cancelled = true
     }
-  }, [fleetRevision])
+  }, [chief, fleetRevision])
 
   const retryFleet = () => {
     setFleetError(null)
@@ -223,13 +233,33 @@ function Workspace({ role, themeMode, setThemeMode, onLogout, loggingOut, logout
       <WorkspaceShell modalOpen={onboarding.open} view={view} onViewChange={navigate} themeMode={themeMode}
         onThemeChange={setThemeMode} chief={chief} onLogout={onLogout} loggingOut={loggingOut}>
         {logoutError && <p role="alert" className="panel__error">{logoutError}</p>}
-        {view === 'dashboard' && (
+        {fleetRestricted && (view === 'dashboard' || view === 'diagnosis' || view === 'fleet') && (
+          <div className="workspace-dashboard">
+            <header className="page-header">
+              <h1>{t(`nav.${view}`)}</h1>
+              <p>{t('dashboard.demoNote')}</p>
+            </header>
+            <section className="panel" aria-label={t('auth.demoLabel')}>
+              <h2>{t('auth.demoLabel')}</h2>
+              <p>{t('dashboard.demoFleetUnavailable')}</p>
+              <div className="workspace-dashboard__actions">
+                <button type="button" className="btn btn--primary" onClick={onLogout} disabled={loggingOut}>
+                  {t('auth.logout')}
+                </button>
+                <button type="button" className="btn btn--secondary" onClick={onboarding.start}>
+                  {t('help.restart')}
+                </button>
+              </div>
+            </section>
+          </div>
+        )}
+        {!fleetRestricted && view === 'dashboard' && (
           <DashboardView vehicles={vehicles} fleetLoaded={fleetLoaded} chief={chief} fleetError={fleetError} onRetry={retryFleet}
             onNavigate={navigate} onOpenDiagnosis={openDiagnosisForVehicle}
             onOpenTicket={openTicketsForVehicle}
             onOpenChat={() => { helpDestination.current = 'diagnosis-chat'; navigate('diagnosis') }} />
         )}
-        {visited.includes('diagnosis') && <div hidden={view !== 'diagnosis'}>
+        {!fleetRestricted && visited.includes('diagnosis') && <div hidden={view !== 'diagnosis'}>
           {diagnosisOrigin && diagnosisOrigin !== 'diagnosis' && (
             <button type="button" className="btn btn--secondary context-return" onClick={() => navigate(diagnosisOrigin)}>
               ← {t(`nav.${diagnosisOrigin}`)}
@@ -297,7 +327,7 @@ function Workspace({ role, themeMode, setThemeMode, onLogout, loggingOut, logout
             />
           </div>
         ) : null}
-        {visited.includes('fleet') ? (
+        {!fleetRestricted && visited.includes('fleet') ? (
           <div hidden={view !== 'fleet'}>
             <FleetView
               vehicles={vehicles}

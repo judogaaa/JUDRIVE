@@ -411,6 +411,7 @@ export type TranslationKey =
 
   | 'nav.dashboard'
   | 'dashboard.demoNote'
+  | 'dashboard.demoFleetUnavailable'
   | 'dashboard.recentChecks'
   | 'auth.demoLabel'
   | 'dashboard.checks'

@@ -412,6 +412,7 @@ export const bn: Record<TranslationKey, string> = {
   'ticket.priorityAction.high': 'যাত্রার আগে পরীক্ষা করুন।',
   'nav.dashboard': "হোম",
   'dashboard.demoNote': "সর্বজনীন ডেমো। সীমিত নির্দেশিকা, চ্যাট, ভয়েস ও অনুরোধ প্রধান মেকানিকের জন্য।",
+  'dashboard.demoFleetUnavailable': "সর্বজনীন ডেমোতে যানবাহনের তথ্য ও ডায়াগনস্টিকস পাওয়া যায় না। এগুলো ব্যবহার করতে লগ আউট করে প্রধান মেকানিকের অ্যাকাউন্টে প্রবেশ করুন। প্রশিক্ষণ ও সহায়তা এখনই উপলব্ধ।",
   'dashboard.recentChecks': "সাম্প্রতিক পরীক্ষা",
   'auth.demoLabel': "ডেমো",
   'dashboard.checks': "পরীক্ষা",

@@ -412,6 +412,7 @@ export const uz: Record<TranslationKey, string> = {
   'ticket.priorityAction.high': 'Yo‘lga chiqishdan oldin tekshiring.',
   'nav.dashboard': "Bosh sahifa",
   'dashboard.demoNote': "Ochiq demo. Yopiq qo‘llanmalar, chat, ovoz va buyurtmalar bosh mexanik uchun.",
+  'dashboard.demoFleetUnavailable': "Ochiq demoda avtopark ma’lumotlari va diagnostika mavjud emas. Ulardan foydalanish uchun tizimdan chiqing va bosh mexanik hisobiga kiring. O‘quv va yordam hozir mavjud.",
   'dashboard.recentChecks': "Oxirgi tekshiruvlar",
   'auth.demoLabel': "Demo",
   'dashboard.checks': "Tekshiruvlar",

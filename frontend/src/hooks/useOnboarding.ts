@@ -34,6 +34,12 @@ function readState(): OnboardingState {
   }
 }
 
+// A successful explicit login starts a new introduction. Reloading an
+// existing session still restores its current step or completion.
+export function resetOnboardingForLogin() {
+  try { localStorage.removeItem(STORAGE_KEY) } catch { /* in-memory fallback */ }
+}
+
 export function useOnboarding() {
   const [state, setState] = useState<OnboardingState>(readState)
   const open = state.status === 'in_progress'
