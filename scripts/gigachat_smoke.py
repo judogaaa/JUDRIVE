@@ -2,6 +2,7 @@
 """Check GigaChat OAuth, model availability and one small completion without printing secrets."""
 from __future__ import annotations
 
+import argparse
 import asyncio
 import os
 import sys
@@ -12,13 +13,34 @@ import httpx
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend"))
 
+from app.agent.gigachat_client import gigachat_functions
+from app.agent.tools import TOOL_DEFINITIONS
 from app.config import get_settings
 from app.services.gigachat import GigaChatAPI, GigaChatAPIError, GigaChatRateLimitError
 
 
-async def run() -> int:
+async def validate_functions(api: GigaChatAPI) -> int:
+    failures = 0
+    for function in gigachat_functions(TOOL_DEFINITIONS):
+        name = function["name"]
+        try:
+            result = await api.request_json("POST", "/v1/functions/validate", json=function)
+        except GigaChatAPIError as exc:
+            print(f"FAIL: {name}, HTTP {exc.status_code}")
+            failures += 1
+            continue
+        warnings = result.get("warnings") or []
+        if result.get("status") != 200 or result.get("errors") or not isinstance(warnings, list):
+            print(f"FAIL: {name}, invalid schema or unexpected validation response")
+            failures += 1
+        else:
+            print(f"PASS: {name}, warnings={len(warnings)}")
+    return 1 if failures else 0
+
+
+async def run(*, validate_only: bool = False) -> int:
     if os.getenv("JUDRIVE_LIVE_GIGACHAT") != "1":
-        print("BLOCKED: живой запрос разрешается только через JUDRIVE_LIVE_GIGACHAT=1")
+        print("BLOCKED: укажите JUDRIVE_LIVE_GIGACHAT=1 для живой проверки")
         return 2
     settings = get_settings()
     if not settings.gigachat_credentials:
@@ -34,6 +56,8 @@ async def run() -> int:
         ca_bundle=settings.gigachat_ca_bundle,
     )
     try:
+        if validate_only:
+            return await validate_functions(api)
         models_payload = await api.request_json("GET", "/v1/models")
         models = models_payload.get("data") or []
         model_ids = [str(item.get("id")) for item in models if isinstance(item, dict) and item.get("id")]
@@ -41,7 +65,7 @@ async def run() -> int:
         print("Модели:", ", ".join(model_ids[:30]) or "(список пуст)")
         if settings.gigachat_model not in model_ids:
             print(f"BLOCKED: настроенная модель {settings.gigachat_model!r} не найдена в GET /v1/models")
-            print("Проверьте доступ к выбранной модели в кабинете GigaChat.")
+            print("Измените GIGACHAT_MODEL на один из идентификаторов выше.")
             return 2
 
         result = await api.request_json(
@@ -84,4 +108,8 @@ async def run() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(asyncio.run(run()))
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--validate-functions", action="store_true",
+                        help="Validate the production tool schemas without generating a completion")
+    args = parser.parse_args()
+    raise SystemExit(asyncio.run(run(validate_only=args.validate_functions)))

@@ -36,19 +36,22 @@ export function VehiclePicker({ vehicles, selectedId, onSelect }: VehiclePickerP
     return () => document.removeEventListener('mousedown', onPointer)
   }, [open])
 
-  useEffect(() => {
-    if (!open) setQuery('')
-  }, [open])
+  const updateQuery = (value: string) => {
+    setQuery(value)
+    const matching = vehicles.filter((vehicle) => matchesVehicle(vehicle, value))
+    setActive(Math.max(0, matching.findIndex((vehicle) => vehicle.vehicle_id === selectedId)))
+  }
+
+  const openPicker = () => {
+    updateQuery('')
+    setOpen(true)
+  }
 
   useEffect(() => {
     if (!open) return
-    const selectedIndex = filtered.findIndex((vehicle) => vehicle.vehicle_id === selectedId)
-    setActive(selectedIndex >= 0 ? selectedIndex : 0)
     const frame = window.requestAnimationFrame(() => inputRef.current?.focus())
     return () => window.cancelAnimationFrame(frame)
-    // Only reset the cursor when the panel opens or the query changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, query])
+  }, [open])
 
   useEffect(() => {
     if (!open || !filtered[active]) return
@@ -108,11 +111,11 @@ export function VehiclePicker({ vehicles, selectedId, onSelect }: VehiclePickerP
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={listId}
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => open ? setOpen(false) : openPicker()}
         onKeyDown={(event) => {
           if (event.key === 'ArrowDown' || event.key === 'Enter' || event.key === ' ') {
             event.preventDefault()
-            setOpen(true)
+            openPicker()
           }
         }}
       >
@@ -146,7 +149,7 @@ export function VehiclePicker({ vehicles, selectedId, onSelect }: VehiclePickerP
               aria-activedescendant={filtered[active] ? `${listId}-${active}` : undefined}
               value={query}
               placeholder={t('diag.vehicleSearchPlaceholder')}
-              onChange={(event) => setQuery(event.target.value)}
+              onChange={(event) => updateQuery(event.target.value)}
               onKeyDown={onSearchKeyDown}
             />
             {query ? (
@@ -156,7 +159,7 @@ export function VehiclePicker({ vehicles, selectedId, onSelect }: VehiclePickerP
                 aria-label={t('diag.clearSearch')}
                 title={t('diag.clearSearch')}
                 onClick={() => {
-                  setQuery('')
+                  updateQuery('')
                   inputRef.current?.focus()
                 }}
               >

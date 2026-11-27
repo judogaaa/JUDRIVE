@@ -16,7 +16,7 @@ export function SessionChooser({ open, sessions, activeSessionId, onSelect, onCl
   const { t, locale } = useI18n()
   const closeRef = useRef<HTMLButtonElement | null>(null)
   const onCloseRef = useRef(onClose)
-  onCloseRef.current = onClose
+  useEffect(() => { onCloseRef.current = onClose }, [onClose])
 
   useEffect(() => {
     if (!open) return

@@ -5,6 +5,7 @@ import math
 from contextlib import nullcontext
 import time
 import uuid
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +22,12 @@ class GigaChatAPIError(RuntimeError):
 
 class GigaChatRateLimitError(GigaChatAPIError):
     pass
+
+
+@dataclass(frozen=True)
+class _AccessToken:
+    value: str
+    refresh_at: float
 
 
 class GigaChatAPI:
@@ -51,8 +58,7 @@ class GigaChatAPI:
         self._verify: bool | str = str(ca_bundle) if ca_bundle else True
         self._transport = transport
         self._budget = budget
-        self._access_token: str | None = None
-        self._token_expires_monotonic = 0.0
+        self._access_token: _AccessToken | None = None
         self._token_lock = asyncio.Lock()
 
     @property
@@ -88,15 +94,15 @@ class GigaChatAPI:
             pass
         return response.text[:300] or f"HTTP {response.status_code}"
 
-    async def _get_access_token(self) -> str:
+    async def _get_access_token(self) -> _AccessToken:
         if not self.configured:
             raise GigaChatAPIError(503, "GIGACHAT_CREDENTIALS is not configured")
 
-        if self._access_token and time.monotonic() < self._token_expires_monotonic:
+        if self._access_token and time.monotonic() < self._access_token.refresh_at:
             return self._access_token
 
         async with self._token_lock:
-            if self._access_token and time.monotonic() < self._token_expires_monotonic:
+            if self._access_token and time.monotonic() < self._access_token.refresh_at:
                 return self._access_token
 
             key = self._credentials
@@ -131,19 +137,19 @@ class GigaChatAPI:
 
             expires_at = payload.get("expires_at")
             expires_in = payload.get("expires_in")
-            if isinstance(expires_at, (int, float)):
-                expires_at_seconds = expires_at / 1000 if expires_at >= 100_000_000_000 else expires_at
-                ttl = expires_at_seconds - time.time()
-            elif isinstance(expires_in, (int, float)):
-                ttl = float(expires_in)
+            if type(expires_at) in (int, float):
+                # Current API sends epoch milliseconds. Older OAuth responses used seconds.
+                deadline = expires_at / 1_000 if expires_at >= 100_000_000_000 else expires_at
+                ttl = deadline - time.time()
+            elif type(expires_in) in (int, float):
+                ttl = expires_in
             else:
                 raise GigaChatAPIError(502, "GigaChat OAuth returned no expiration")
             if not math.isfinite(ttl) or ttl <= 0:
-                raise GigaChatAPIError(502, "GigaChat OAuth returned an expired token")
+                raise GigaChatAPIError(502, "GigaChat OAuth returned an invalid expiration")
 
-            self._access_token = token
-            self._token_expires_monotonic = time.monotonic() + ttl - min(60.0, ttl / 2)
-            return token
+            self._access_token = _AccessToken(token, time.monotonic() + ttl - min(60.0, ttl / 2))
+            return self._access_token
 
     async def request_json(
         self,
@@ -164,19 +170,19 @@ class GigaChatAPI:
                 url,
                 timeout_s=timeout_s,
                 headers={
-                    "Authorization": f"Bearer {token}",
+                    "Authorization": f"Bearer {token.value}",
                     "Accept": "application/json",
                     **extra_headers,
                 },
                 **kwargs,
             )
-            if response.status_code == 401 and attempt == 0:
+            if response.status_code == 401:
                 async with self._token_lock:
-                    if self._access_token == token:
+                    if self._access_token is token:
                         self._access_token = None
-                        self._token_expires_monotonic = 0.0
-                token = await self._get_access_token()
-                continue
+                if attempt == 0:
+                    token = await self._get_access_token()
+                    continue
             if budget and reservation and 400 <= response.status_code < 500:
                 budget.settle(reservation, 0)
             if response.status_code == 429:

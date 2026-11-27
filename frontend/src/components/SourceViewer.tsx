@@ -28,7 +28,7 @@ function SourceViewerBody({ hit, scope, onClose, onRecentChange }: Omit<SourceVi
   const wrapRef = useRef<HTMLDivElement>(null)
   const closeRef = useRef<HTMLButtonElement>(null)
   const onCloseRef = useRef(onClose)
-  onCloseRef.current = onClose
+  useEffect(() => { onCloseRef.current = onClose }, [onClose])
   const [full, setFull] = useState(false)
   const [zoom, setZoom] = useState(1)
   const [availableWidth, setAvailableWidth] = useState(460)
@@ -80,6 +80,7 @@ function SourceViewerBody({ hit, scope, onClose, onRecentChange }: Omit<SourceVi
   // Loading is independent of zoom, language, view size, and page navigation.
   useEffect(() => {
     let cancelled = false
+    // oxlint-disable-next-line react/set-state-in-effect -- Discard a PDF.js handle when its external document changes.
     setPdfDoc(null)
     setFailed(false)
     setLoadingPdf(true)
@@ -105,6 +106,7 @@ function SourceViewerBody({ hit, scope, onClose, onRecentChange }: Omit<SourceVi
     let cancelled = false
     let renderTask: RenderTask | null = null
     let cleanupPage: (() => void) | undefined
+    // oxlint-disable-next-line react/set-state-in-effect -- Synchronize canvas status with the current PDF.js render task.
     setFailed(false)
     setRendering(true)
     void (async () => {

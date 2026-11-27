@@ -5,6 +5,7 @@ import json
 import logging
 import sqlite3
 from contextlib import contextmanager
+from functools import lru_cache
 from pathlib import Path
 from typing import Iterator
 
@@ -54,11 +55,15 @@ CREATE VIRTUAL TABLE IF NOT EXISTS pages_fts USING fts5(
 
 
 def _file_sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as f:
-        for block in iter(lambda: f.read(1024 * 1024), b""):
-            digest.update(block)
-    return digest.hexdigest()
+    metadata = path.stat()
+    identity = (metadata.st_dev, metadata.st_ino, metadata.st_size, metadata.st_mtime_ns, metadata.st_ctime_ns)
+    return _fingerprinted_file(path, identity)
+
+
+@lru_cache(maxsize=32)
+def _fingerprinted_file(path: Path, _identity: tuple[int, ...]) -> str:
+    with path.open("rb") as handle:
+        return hashlib.file_digest(handle, "sha256").hexdigest()
 
 
 def _corpus_fingerprint(pdf_dir: Path) -> str:

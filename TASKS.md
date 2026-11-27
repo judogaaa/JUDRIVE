@@ -54,3 +54,17 @@
 - [ ] BLOCKED — живой Ultra, голос, приёмка ЯМЗ-236 по оригиналам, live C1 и замер расходов.
 - [ ] BLOCKED — публичный HTTPS-стенд и подтверждение доступности до 15.12.2026.
 - [Итоги инженерного прогона](docs/FINAL_VERIFICATION.md).
+
+## Стабилизация feat/gigachat-integration перед VPS
+
+- [x] OAuth с миллисекундами, повтором после 401 и конкурентным обновлением.
+- [x] Локальные проверки схем передачи, голосового транспорта, авторизации, RAG, Playwright и Compose. [Команды и результаты](docs/GIGACHAT_LOCAL_AUDIT.md)
+- [ ] BLOCKED — каталог моделей, генерация, native function calling, аудио и `/v1/functions/validate` на реальной учётной записи GigaChat.
+- [ ] BLOCKED — RAG и submission regression с разрешёнными оригиналами PDF. Проверить до публичного развёртывания.
+
+## Финальная сдача
+
+- [x] Объединение веток, README, скриншоты, проверки Git и CI.
+- [x] Автоматические проверки интерфейса, backend, RAG и заявки на синтетических данных.
+- [ ] BLOCKED — разрешённые PDF и live GigaChat. [Приёмка](docs/FINAL_VERIFICATION.md)
+- [ ] BLOCKED — развёртывание и повторная приёмка по публичному HTTPS. Нужны авторизованный доступ к VPS и домен. [Процедура](docs/DEPLOY_HTTPS.md)

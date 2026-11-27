@@ -1,6 +1,6 @@
 .git
-.env
-.env.*
+**/.env
+**/.env.*
 **/node_modules
 **/.venv
 **/__pycache__
@@ -19,7 +19,7 @@ output
 *.hocr
 *.alto.xml
 **/data/index
-*.pdf
+**/*.pdf
 *.zip
-*.key
-*.pem
+**/*.key
+**/*.pem

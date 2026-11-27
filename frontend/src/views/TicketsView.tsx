@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronRight, Filter, X } from 'lucide-react'
 import { createConversation, sendChatMessage, type SourceHit } from '../api/chat'
 import { fetchEvidence, type ManualSearchHit } from '../api/manuals'
 import { fetchTickets, type TicketSubmission } from '../api/tickets'
-import { MessageText, readableAnswer } from '../components/MessageText'
+import { MessageText } from '../components/MessageText'
+import { readableAnswer } from '../lib/messageText'
 import { CopyButton } from '../components/CopyButton'
 import { SourceDrawer } from '../components/SourceDrawer'
 import { useI18n } from '../i18n/I18nContext'
@@ -85,17 +86,32 @@ export function TicketsView({ engineForVehicle, isVisible, filterVehicleId, link
     return urgency ?? '—'
   }
 
+  const selectTicket = useCallback((id: string | null) => {
+    reviewRequest.current?.abort()
+    reviewRequest.current = null
+    reviewGen.current += 1
+    sourceGen.current += 1
+    setReview(null)
+    setReviewSources([])
+    setReviewError(null)
+    setReviewing(false)
+    setSource(null)
+    setOpenId(id)
+  }, [])
+
   useEffect(() => {
     if (!filterVehicleId) return
+    // oxlint-disable-next-line react/set-state-in-effect -- Clear the old dialog before consuming an externally supplied filter.
     if (filterVehicleId !== vehicleFilter) selectTicket(null)
     setVehicleFilter(filterVehicleId)
     setQuery('')
     onFilterConsumed?.()
-  }, [filterVehicleId, onFilterConsumed])
+  }, [filterVehicleId, onFilterConsumed, selectTicket, vehicleFilter])
 
   useEffect(() => {
     if (!isVisible || filterVehicleId) return
     let cancelled = false
+    // oxlint-disable-next-line react/set-state-in-effect -- Synchronize UI status with the journal request.
     setLoading(true)
     setError(null)
     fetchTickets(vehicleFilter || undefined)
@@ -122,7 +138,7 @@ export function TicketsView({ engineForVehicle, isVisible, filterVehicleId, link
     return () => {
       cancelled = true
     }
-  }, [retry, t, vehicleFilter, isVisible, filterVehicleId])
+  }, [retry, t, vehicleFilter, isVisible, filterVehicleId, linkedTicketId, onLinkedTicketConsumed, selectTicket])
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -157,18 +173,6 @@ export function TicketsView({ engineForVehicle, isVisible, filterVehicleId, link
     ].join('\n')
   }
 
-  const selectTicket = (id: string | null) => {
-    reviewRequest.current?.abort()
-    reviewRequest.current = null
-    reviewGen.current += 1
-    sourceGen.current += 1
-    setReview(null)
-    setReviewSources([])
-    setReviewError(null)
-    setReviewing(false)
-    setSource(null)
-    setOpenId(id)
-  }
 
   const openReviewSource = async (hit: SourceHit) => {
     if (!open) return

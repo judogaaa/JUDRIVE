@@ -1,9 +1,16 @@
 x-runtime: &runtime
-  image: judrive-runtime:local
+  image: ${JUDRIVE_RUNTIME_IMAGE:-judrive-runtime:local}
   build:
     context: .
     dockerfile: deploy/Dockerfile.backend
   restart: unless-stopped
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  logging: &rotated_logs
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
 
 services:
   ml:
@@ -58,12 +65,14 @@ services:
     volumes:
       - ${JUDRIVE_FLEET_DIR:-./local-data/external}:/run/judrive-fixtures:ro
       - ${JUDRIVE_MANUALS_DIR:-./materials/manuals}:/app/materials/manuals:ro
-      - ./local-data:/app/local-data
+      - ${JUDRIVE_STATE_DIR:-./local-data}:/app/local-data
+      - ${JUDRIVE_CA_DIR:-./local-data/ca}:/run/judrive-ca:ro
   web:
     build:
       context: .
       dockerfile: deploy/Dockerfile.web
     restart: unless-stopped
+    logging: *rotated_logs
     depends_on:
       backend:
         condition: service_healthy

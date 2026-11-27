@@ -30,7 +30,7 @@ export function Onboarding({
   const last = step === ONBOARDING_STEPS.length - 1
   const canFinish = last && acknowledged
   const finishRef = useRef<(() => void) | null>(null)
-  finishRef.current = canFinish ? onStart : null
+  useEffect(() => { finishRef.current = canFinish ? onStart : null }, [canFinish, onStart])
 
   useEffect(() => {
     if (!open) return

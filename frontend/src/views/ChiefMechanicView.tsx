@@ -40,13 +40,12 @@ export function ChiefMechanicView({ onOpenDiagnosis, onOpenTickets }: ChiefMecha
   const PAGE_SIZE = 20
 
   useEffect(() => {
-    const timer = window.setTimeout(() => setAppliedFilters(filters), 250)
+    const timer = window.setTimeout(() => {
+      setAppliedFilters(filters)
+      setPage(0)
+    }, 250)
     return () => window.clearTimeout(timer)
   }, [filters])
-
-  useEffect(() => {
-    setPage(0)
-  }, [appliedFilters])
 
   useEffect(() => {
     let cancelled = false
@@ -66,6 +65,7 @@ export function ChiefMechanicView({ onOpenDiagnosis, onOpenTickets }: ChiefMecha
   useEffect(() => {
     if (!authed) return
     let cancelled = false
+    // oxlint-disable-next-line react/set-state-in-effect -- Synchronize the loading and error indicators with the dashboard request.
     setLoading(true)
     setError(null)
     fetchFleetDashboard(appliedFilters)
@@ -92,6 +92,7 @@ export function ChiefMechanicView({ onOpenDiagnosis, onOpenTickets }: ChiefMecha
     const next = { category }
     setFilters(next)
     setAppliedFilters(next)
+    setPage(0)
     setTab('fleet')
   }
 

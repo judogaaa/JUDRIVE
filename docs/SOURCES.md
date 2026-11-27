@@ -19,7 +19,6 @@
 
 Ссылки:
 - Официальный шаблон экономики https://drive.google.com/file/d/1TjQRRsfafywe193cGyENUNq0VkkGCQxN/view
-- Универсальный референс владельца https://github.com/judogaaa/industrial-safety-ai-platform (только чтение, адаптация разрешённых элементов, раскрытие при сдаче).
 - Исследованные продуктовые референсы JPRO, Jaltest, Fleetio, Bosch ESI tronic, Samsara, Augmentir, Diesel Repair, RAGFlow, PDF.js: использовать только принципы, не копировать целиком интерфейс/контент.
 
 Все актуальные договорённости и точные схемы внешних API зафиксированы в MASTER.md. Предыдущие досье 23–24.11 не являются источником актуальных контрактов.

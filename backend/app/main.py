@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 import json
 from time import monotonic
@@ -100,8 +101,6 @@ def _refresh_settings() -> None:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    import asyncio
-
     _refresh_settings()
     app_repo.recover_interrupted_submissions()
     # Первая индексация может занять несколько минут при 6 PDF.
@@ -141,12 +140,13 @@ async def _provider_available() -> bool:
     if _provider_probe and _provider_probe[0] is gigachat_api and now < _provider_probe[1]:
         return _provider_probe[2]
     try:
-        models = await gigachat_api.request_json("GET", "/v1/models", timeout_s=3)
+        async with asyncio.timeout(4):
+            models = await gigachat_api.request_json("GET", "/v1/models", timeout_s=3)
         available = any(
             isinstance(model, dict) and model.get("id") == settings.gigachat_model
             for model in (models.get("data") or [])
         )
-    except (GigaChatAPIError, httpx.HTTPError):
+    except (GigaChatAPIError, httpx.HTTPError, TimeoutError):
         available = False
     _provider_probe = (gigachat_api, monotonic() + (60 if available else 10), available)
     return available
@@ -162,17 +162,17 @@ async def ready(response: Response) -> HealthResponse:
 
 @app.get(f"{settings.api_prefix}/health", response_model=HealthResponse)
 async def health() -> HealthResponse:
-    try:
-        ml_ok = await mock_ml.health()
-    except httpx.HTTPError:
-        ml_ok = False
-    try:
-        toir_ok = await mock_toir.health()
-    except httpx.HTTPError:
-        toir_ok = False
-    rag_status = rag_service.status()
+    async def reachable(client) -> bool:
+        try:
+            return await client.health()
+        except httpx.HTTPError:
+            return False
+
+    ml_ok, toir_ok, rag_status, gigachat_ready = await asyncio.gather(
+        reachable(mock_ml), reachable(mock_toir),
+        asyncio.to_thread(rag_service.status), _provider_available(),
+    )
     rag_ok = rag_status.get("index_current") and not rag_status.get("missing_files")
-    gigachat_ready = await _provider_available()
     status = "ok" if ml_ok and toir_ok and rag_ok and gigachat_ready else "degraded"
     return HealthResponse(
         status=status,
@@ -260,8 +260,6 @@ async def manuals_status():
 
 @app.post(f"{settings.api_prefix}/manuals/search", dependencies=[Depends(_chief_guard)], response_model=ManualSearchResponse)
 async def manuals_search(body: ManualSearchRequest, response: Response) -> ManualSearchResponse:
-    import asyncio
-
     response.headers["Cache-Control"] = "private, no-store"
     response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
     engine = _document_engine(body.engine_model, body.vehicle_id, body.session_id)

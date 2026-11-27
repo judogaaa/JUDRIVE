@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { fetchVehicles } from './api/client'
 import type { VehicleSummary } from './api/types'
 import { WorkspaceShell, type AppView } from './components/shell/WorkspaceShell'
@@ -62,11 +62,13 @@ export default function App() {
   const [chatIntent, setChatIntent] = useState<ChatIntent | null>(null)
   const [linkedTicket, setLinkedTicket] = useState<string | undefined>(undefined)
   const [ticketsVehicleFilter, setTicketsVehicleFilter] = useState<string | undefined>(undefined)
+  const consumeLinkedTicket = useCallback(() => setLinkedTicket(undefined), [])
+  const consumeTicketFilter = useCallback(() => setTicketsVehicleFilter(undefined), [])
   const sequence = useRef(0)
   const selectionRef = useRef({ vehicleId: '', sessionId: '' })
-  selectionRef.current = { vehicleId, sessionId }
+  useEffect(() => { selectionRef.current = { vehicleId, sessionId } }, [vehicleId, sessionId])
   const tRef = useRef(t)
-  tRef.current = t
+  useEffect(() => { tRef.current = t }, [t])
 
   const currentEngine = vehicles.find((v) => v.vehicle_id === vehicleId)?.engine_model ?? null
   const currentTarget = currentEngine && vehicleId && sessionId ? { vehicleId, sessionId, engineModel: currentEngine } : null
@@ -121,6 +123,7 @@ export default function App() {
 
   useEffect(() => {
     if (authenticated !== true) {
+      // oxlint-disable-next-line react/set-state-in-effect -- Clear protected fleet state as soon as authentication changes.
       setVehicles([])
       setVehicleId('')
       setSessionId('')
@@ -265,8 +268,8 @@ export default function App() {
               engineForVehicle={(id) => vehicles.find((vehicle) => vehicle.vehicle_id === id)?.engine_model ?? ''}
               filterVehicleId={ticketsVehicleFilter}
               linkedTicketId={linkedTicket}
-              onLinkedTicketConsumed={() => setLinkedTicket(undefined)}
-              onFilterConsumed={() => setTicketsVehicleFilter(undefined)}
+              onLinkedTicketConsumed={consumeLinkedTicket}
+              onFilterConsumed={consumeTicketFilter}
               onOpenDiagnosis={openDiagnosisForVehicle}
             />
           </div>

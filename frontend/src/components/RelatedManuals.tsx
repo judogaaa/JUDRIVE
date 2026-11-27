@@ -13,6 +13,7 @@ export function RelatedManuals({ engineModel, query, vehicleId, sessionId }: { e
   const [opened, setOpened] = useState<ManualSearchHit | null>(null)
   useEffect(() => {
     const ctrl = new AbortController()
+    // oxlint-disable-next-line react/set-state-in-effect -- Discard results before querying another engine.
     setData(null)
     setError(false)
     searchManuals(engineModel, query, 8, ctrl.signal, { vehicleId, sessionId })

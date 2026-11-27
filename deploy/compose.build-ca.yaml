@@ -1,0 +1,10 @@
+services:
+  backend:
+    build:
+      secrets: [package_ca]
+  web:
+    build:
+      secrets: [package_ca]
+secrets:
+  package_ca:
+    file: ${JUDRIVE_PACKAGE_CA:?Point to a trusted CA bundle}

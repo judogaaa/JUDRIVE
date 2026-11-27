@@ -2,6 +2,7 @@
     encode zstd gzip
     header {
         X-Content-Type-Options nosniff
+        X-Frame-Options DENY
         Referrer-Policy same-origin
         Permissions-Policy "microphone=(self)"
     }

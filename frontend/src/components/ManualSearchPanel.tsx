@@ -40,7 +40,8 @@ export function ManualSearchPanel({ engineModel, isVisible = true, chatTargetLab
   const requestRef = useRef<AbortController | null>(null)
   const mountedRef = useRef(true)
   const visibleRef = useRef(isVisible)
-  visibleRef.current = isVisible
+  useEffect(() => { visibleRef.current = isVisible }, [isVisible])
+  // oxlint-disable-next-line react/set-state-in-effect -- Close the external PDF dialog when navigation hides this view.
   useEffect(() => { if (!isVisible) setActive(null) }, [isVisible])
   const lastEngineRef = useRef(engineModel)
 
@@ -69,7 +70,7 @@ export function ManualSearchPanel({ engineModel, isVisible = true, chatTargetLab
   const hint = useMemo(() => {
     if (!engineModel) return t('manual.hintNoVehicle')
     return `${t('manual.hintEngine')} «${engineModel}».`
-  }, [engineModel, t, context])
+  }, [engineModel, t])
 
   const runSearch = useCallback(
     async (q: string, autoOpenSingle?: boolean) => {
@@ -95,7 +96,7 @@ export function ManualSearchPanel({ engineModel, isVisible = true, chatTargetLab
         if (mountedRef.current && !request.signal.aborted) setLoading(false)
       }
     },
-    [engineModel, t],
+    [engineModel, t, context],
   )
 
   useEffect(() => {

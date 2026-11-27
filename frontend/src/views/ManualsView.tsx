@@ -43,6 +43,7 @@ export function ManualsView({ engineModel, isVisible, chatEngineModel, chatTarge
 
   useEffect(() => {
     const controller = new AbortController()
+    // oxlint-disable-next-line react/set-state-in-effect -- Synchronize the loading indicator with the catalogue request.
     setCatalogLoading(true)
     fetch('/api/manuals/catalog', { signal: controller.signal })
       .then((response) => {
@@ -69,6 +70,7 @@ export function ManualsView({ engineModel, isVisible, chatEngineModel, chatTarge
     }
   }, [catalogRevision])
 
+  // oxlint-disable-next-line react/set-state-in-effect -- Close the external PDF dialog when navigation hides the catalogue.
   useEffect(() => { if (!isVisible) setOpen(null) }, [isVisible])
 
   const allDocs = useMemo(() => {

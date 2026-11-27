@@ -65,7 +65,7 @@ export function DiagnosisView({
   const trendGen = useRef(0)
   const inFlightRef = useRef<AbortController | null>(null)
   const tRef = useRef(t)
-  tRef.current = t
+  useEffect(() => { tRef.current = t }, [t])
 
   const selectedVehicle = useMemo(
     () => vehicles.find((vehicle) => vehicle.vehicle_id === vehicleId) ?? null,
@@ -90,12 +90,14 @@ export function DiagnosisView({
 
   // A different vehicle/session must never show the previous verdict, chart or error.
   useEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect -- Cancel the previous request and reset the old verdict on external navigation.
     resetVerdict()
     setSessionChooserOpen(false)
   }, [contextKey, resetVerdict])
 
   useEffect(() => {
     const generation = ++trendGen.current
+    // oxlint-disable-next-line react/set-state-in-effect -- Clear the previous request state before fetching for another vehicle.
     setTrendError(null)
     // Hide the previous vehicle's chart immediately, even before the new request settles.
     setTrendData({ vehicleId: '', points: [] })

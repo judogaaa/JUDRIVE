@@ -16,7 +16,8 @@ import { SourceDrawer } from './SourceDrawer'
 import { TicketDraftCard } from './TicketDraftCard'
 import { VoiceCapture } from './VoiceCapture'
 import { CopyButton } from './CopyButton'
-import { MessageText, readableAnswer } from './MessageText'
+import { MessageText } from './MessageText'
+import { readableAnswer } from '../lib/messageText'
 import { manualTopic, usableStatus, type DiagnosisAction, type ChatIntent } from '../lib/workflow'
 
 interface AgentChatProps {
@@ -72,7 +73,7 @@ export function AgentChat({
   const chatIntentRef = useRef<number | null>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const tRef = useRef(t)
-  tRef.current = t
+  useEffect(() => { tRef.current = t }, [t])
 
   const [conversationRetry, setConversationRetry] = useState(0)
   const [conversationId, setConversationId] = useState<string | null>(null)
@@ -122,6 +123,7 @@ export function AgentChat({
     sendAbortRef.current?.abort()
     sendAbortRef.current = null
     sendingRef.current = false
+    // oxlint-disable-next-line react/set-state-in-effect -- Discard the prior conversation at an externally selected context change.
     setConversationId(null)
     setMessages([])
     setLoading(false)
@@ -218,6 +220,7 @@ export function AgentChat({
     if (chatIntent.autoSend) {
       pendingIntent.current = { text: chatIntent.message, action: chatIntent.action }
     } else {
+      // oxlint-disable-next-line react/set-state-in-effect -- Apply the source carried by an external navigation intent.
       setComposerEvidence(chatIntent.evidenceId ? { id: chatIntent.evidenceId, label: chatIntent.evidenceLabel ?? chatIntent.message } : null)
       prefill(chatIntent.message)
     }

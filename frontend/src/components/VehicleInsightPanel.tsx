@@ -28,9 +28,10 @@ export function VehicleInsightPanel({ vehicleId, onClose, onOpenDiagnosis, onOpe
   const [retry, setRetry] = useState(0)
   const savingRef = useRef(false)
   const vehicleRef = useRef(vehicleId)
-  vehicleRef.current = vehicleId
+  useEffect(() => { vehicleRef.current = vehicleId }, [vehicleId])
 
   useEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect -- Discard private data before starting a request for another vehicle.
     setRow(null)
     setHistory([])
     setTrend([])
