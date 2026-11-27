@@ -30,8 +30,8 @@ class Settings(BaseSettings):
     gigachat_scope: str = "GIGACHAT_API_PERS"
     gigachat_base_url: str = "https://api.giga.chat"
     gigachat_auth_url: str = "https://ngw.devices.sberbank.ru:9443/api/v2/oauth"
-    gigachat_model: str = "GigaChat-3-Ultra"
-    gigachat_stt_model: str = "GigaChat-3-Ultra"
+    gigachat_model: str = "GigaChat-2-Max"
+    gigachat_stt_model: str = "GigaChat-2-Max"
     gigachat_max_tokens: int = 1200
     gigachat_timeout_s: float = 60.0
     gigachat_stt_timeout_s: float = 90.0
