@@ -11,6 +11,7 @@ param(
     [string]$ReportPath,
     [switch]$AuditOnly,
     [switch]$InstallSshKey,
+    [switch]$PromptKey,
     [switch]$ConfirmMock,
     [switch]$AllowDemoFleet,
     [ValidatePattern('^[a-f0-9]{32}$')][string]$StopRunId,
@@ -167,7 +168,7 @@ try {
     if ($ArchivePath -and $script:JudriveAudit.missing_materials) { Send-PrivateFile $ArchivePath 'organizer.zip' }
     if ($AudioPath) { Send-PrivateFile $AudioPath 'speech' }
     if ($CaBundle) { Send-PrivateFile $CaBundle 'ca.pem' }
-    if (-not $script:JudriveAudit.configured_key) {
+    if ($PromptKey -or -not $script:JudriveAudit.configured_key) {
         $secure = Read-Host 'GigaChat Authorization Key' -AsSecureString
         $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
         try { $values.key = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr).Trim() }

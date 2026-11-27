@@ -219,6 +219,7 @@ def fill_materials(root, staging, settings, config, manifest):
 
 def compose_env(root, port, project, ca):
     return {key: val for key, val in os.environ.items() if not key.startswith(("COMPOSE_", "DOCKER_", "JUDRIVE_"))} | {
+        "COMPOSE_PARALLEL_LIMIT": "1",
         "JUDRIVE_RUNTIME_IMAGE": f"{project}-runtime:local",
         "JUDRIVE_ACCEPT_WEB_IMAGE": f"{project}-web:local",
         "JUDRIVE_DOMAIN": "http://:80",
@@ -297,6 +298,16 @@ def stop(run_id):
     print(f"PASS: {project} stopped; state retained", flush=True)
 
 
+def check_disk_capacity():
+    docker_directory = command("docker", "info", "--format", "{{.DockerRootDir}}", capture=True).strip()
+    if not docker_directory or not Path(docker_directory).is_absolute():
+        raise Blocked("Не удалось определить хранилище Docker на VPS")
+    # Leave operating headroom for the existing containers and SQLite.
+    for path in {Path("/opt"), Path(docker_directory)}:
+        if shutil.disk_usage(path).free < 2 * 1024 ** 3:
+            raise Blocked(f"Недостаточно свободного места для изолированной сборки и действующих сервисов: {path}")
+
+
 def setup(args, config, settings, manifest):
     if os.geteuid() != 0:
         raise Blocked("Требуется доступ root к VPS")
@@ -316,6 +327,7 @@ def setup(args, config, settings, manifest):
         raise Blocked("Нужен подтверждённый scope из кабинета GigaChat")
     if args.run_id is None or not re.fullmatch(r"[a-f0-9]{32}", args.run_id):
         raise Blocked("Неверный идентификатор прогона")
+    check_disk_capacity()
     run_id = args.run_id
     project = f"judrive-live-{run_id}"
     if ROOT.is_symlink():
@@ -386,7 +398,8 @@ def setup(args, config, settings, manifest):
 
     write_env("GigaChat-3-Ultra")
     verify_isolation(json.loads(invoke("config", "--format", "json", capture=True)), root, args.port, project)
-    invoke("build", "backend", "web")
+    invoke("build", "backend")
+    invoke("build", "web")
     invoke("up", "--no-build", "-d", "--wait", "--wait-timeout", "420")
     invoke("ps")
     invoke("exec", "-T", "backend", "python", "/acceptance/scripts/verify_original_manuals.py",
