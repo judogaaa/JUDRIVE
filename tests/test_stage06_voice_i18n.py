@@ -18,15 +18,15 @@ def test_supported_locales():
     assert "русском" in agent_language_instruction("ru") or "search_manuals" in agent_language_instruction("ru")
 
 
-def test_voice_transcribe_requires_key():
-    client = TestClient(app)
-    # Минимальный файл webm-заголовок не обязателен — ожидаем 503 без ключа или 422/502 с ключом
+def test_voice_transcribe_requires_key(auth_client):
+    client = auth_client
+    # Голосовой endpoint закрыт сессией механика; без GigaChat credentials вернёт 503.
     response = client.post(
         "/api/voice/transcribe",
         files={"file": ("test.webm", b"\x00", "audio/webm")},
         data={"locale": "ru"},
     )
-    assert response.status_code in {400, 413, 422, 502, 503}
+    assert response.status_code == 503
 
 
 def test_all_locale_json_have_same_keys_as_ru():
@@ -74,6 +74,6 @@ def test_chat_accepts_locale_field(auth_client):
     )
     assert conv.status_code == 200
     cid = conv.json()["conversation_id"]
-    # Пустой ответ без Groq не тестируем; проверяем, что locale в теле принимается схемой
+    # Пустой ответ без GigaChat не тестируем; проверяем, что locale в теле принимается схемой
     bad = client.post(f"/api/conversations/{cid}/messages", json={"message": "   ", "locale": "uz"})
     assert bad.status_code == 400

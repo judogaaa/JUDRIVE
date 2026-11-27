@@ -17,7 +17,7 @@ const state = (url: string) => ({ cookies: [], origins: [{ origin: new URL(url).
 }] }] })
 
 // Managed E2E always uses disposable services, including test-only chief credentials.
-// Never reuse a working backend, ticket database or real Groq key.
+// Never reuse a working backend, ticket database or real GigaChat key.
 if (!external && !process.env.JUDRIVE_E2E_MANAGED) {
   process.env.JUDRIVE_E2E_MANAGED = '1'
   const password = randomBytes(24).toString('hex')
@@ -61,7 +61,7 @@ export default defineConfig({
       url: 'http://127.0.0.1:8003/health', reuseExistingServer: false, timeout: 120_000,
     },
     {
-      command: `"${python}" e2e/fixtures/fake_groq.py`, cwd: root, env: localEnv,
+      command: `"${python}" e2e/fixtures/fake_gigachat.py`, cwd: root, env: localEnv,
       url: 'http://127.0.0.1:8004/health', reuseExistingServer: false, timeout: 120_000,
     },
     {

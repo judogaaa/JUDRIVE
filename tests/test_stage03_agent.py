@@ -1,4 +1,4 @@
-"""Этап 03: guardrails, API чата и черновиков (без обязательного live Groq)."""
+"""Этап 03: guardrails, API чата и черновиков (без обязательного live GigaChat)."""
 
 from __future__ import annotations
 
@@ -88,12 +88,12 @@ def test_diagnosis_hash_stable():
     assert diagnosis_hash(diag) == diagnosis_hash(diag)
 
 
-def test_health_reports_groq_field():
+def test_health_reports_gigachat_field():
     get_settings.cache_clear()
     client = TestClient(app)
     body = client.get("/api/health").json()
-    assert "groq_agent" in body
-    assert body["groq_agent"] in {"configured", "missing_key"}
+    assert "gigachat_agent" in body
+    assert body["gigachat_agent"] in {"configured", "missing_key"}
 
 
 def test_conversation_create_and_invalid_pair(auth_client):
@@ -146,7 +146,7 @@ def test_ticket_confirm_refused_for_normal_session(auth_client):
         json={"vehicle_id": "M333YK47", "session_id": "S-0006"},
     )
 
-    # Имитируем черновик через репозиторий нельзя из TestClient без Groq — проверяем guardrail напрямую.
+    # Имитируем черновик через репозиторий нельзя из TestClient без GigaChat — проверяем guardrail напрямую.
     ok, reason = can_create_ticket(DiagnoseResponse.model_validate(diag.json()))
     assert not ok
     assert reason
@@ -188,7 +188,7 @@ def test_manual_intents_across_locales(question):
 
 
 def test_context_action_retry_keeps_one_complete_turn(monkeypatch, tmp_path, auth_client):
-    from app.agent.groq_client import GroqRateLimitError
+    from app.services.gigachat import GigaChatRateLimitError
     from app.main import agent
     from app.storage.repository import AppRepository
 
@@ -211,12 +211,12 @@ def test_context_action_retry_keeps_one_complete_turn(monkeypatch, tmp_path, aut
             draft = await execute("prepare_defect_ticket", {})
             assert draft["status"] == "refused"
             if self.attempts == 1:
-                raise GroqRateLimitError("quota")
+                raise GigaChatRateLimitError(429, "quota")
             return "Проверка завершена.", [], {}
 
     provider = Provider()
     monkeypatch.setattr(agent._mock_ml, "diagnose", diagnose)
-    monkeypatch.setattr(agent, "_groq", lambda: provider)
+    monkeypatch.setattr(agent, "_gigachat", lambda: provider)
 
     client = auth_client
     created = client.post("/api/conversations", json={"vehicle_id": "M333YK47", "session_id": "S-0006"})
@@ -272,7 +272,7 @@ def test_valid_attached_page_is_grounded_and_cannot_prepare_ticket(monkeypatch, 
             return "Проверьте зазор клапанного механизма. [y236-re:p0033]", [], {}
 
     monkeypatch.setattr(agent._mock_ml, "diagnose", diagnose)
-    monkeypatch.setattr(agent, "_groq", lambda: Provider())
+    monkeypatch.setattr(agent, "_gigachat", lambda: Provider())
     client = auth_client
     created = client.post("/api/conversations", json={"vehicle_id": "B418HK98", "session_id": "S-0009"})
     assert created.status_code == 200

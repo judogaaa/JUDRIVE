@@ -1,12 +1,19 @@
 #!/usr/bin/env python3
-"""Live Groq STT smoke: POST /api/voice/transcribe with minimal WAV."""
+"""Authenticated live GigaChat STT smoke test."""
 from __future__ import annotations
 
 import io
 import os
+import sys
 import wave
+from getpass import getpass
+from pathlib import Path
 
 import httpx
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "backend"))
+from app.config import get_settings  # noqa: E402
 
 BASE = os.environ.get("JUDRIVE_API_BASE", "http://127.0.0.1:8090")
 
@@ -24,28 +31,39 @@ def make_silent_wav(seconds: float = 0.4) -> bytes:
 
 
 def main() -> int:
-    wav = make_silent_wav()
-    files = {"file": ("smoke.wav", wav, "audio/wav")}
-    data = {"locale": "ru"}
-    r = httpx.post(f"{BASE}/api/voice/transcribe", files=files, data=data, timeout=60.0)
-    print(f"HTTP {r.status_code}")
-    try:
-        body = r.json()
-    except Exception:
-        print(r.text[:500])
-        return 1
-    print(body)
-    if r.status_code == 200 and body.get("text"):
-        print("OK: live STT returned text")
-        return 0
-    if r.status_code == 422:
-        print("OK: live STT reached Groq (empty/silent audio — ожидаемо)")
-        return 0
-    if r.status_code in {502, 503}:
-        print("FAIL: STT недоступен")
+    settings = get_settings()
+    if not settings.gigachat_credentials:
+        print("BLOCKED: добавьте GIGACHAT_CREDENTIALS в локальный .env")
         return 2
-    print("NOTE: unexpected status; проверьте микрофон в браузере")
-    return 0
+    username = settings.chief_username or input("Имя главного механика: ")
+    password = getpass("Пароль главного механика: ")
+    with httpx.Client(base_url=BASE, timeout=120.0) as client:
+        login = client.post("/api/auth/login", json={"username": username, "password": password})
+        if login.status_code != 200:
+            print(f"BLOCKED: вход chief HTTP {login.status_code}")
+            return 2
+        response = client.post(
+            "/api/voice/transcribe",
+            files={"file": ("smoke.wav", make_silent_wav(), "audio/wav")},
+            data={"locale": "ru"},
+        )
+    print(f"HTTP {response.status_code}")
+    try:
+        body = response.json()
+    except Exception:
+        print(response.text[:300])
+        return 1
+    if response.status_code == 200 and body.get("text"):
+        print("OK: GigaChat STT returned text")
+        return 0
+    if response.status_code == 422:
+        print("OK: audio reached GigaChat; silent WAV contained no recognizable speech")
+        return 0
+    if response.status_code in {502, 503, 504}:
+        print("FAIL: check GigaChat credentials, model and CA certificates")
+        return 2
+    print(f"NOTE: unexpected response: {body}")
+    return 1
 
 
 if __name__ == "__main__":

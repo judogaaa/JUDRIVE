@@ -6,4 +6,4 @@ class HealthResponse(BaseModel):
     mock_ml: str
     mock_toir: str
     manuals_index: str | None = None
-    groq_agent: str | None = None
+    gigachat_agent: str | None = None

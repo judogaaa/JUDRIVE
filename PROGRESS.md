@@ -494,3 +494,14 @@
 - Исправлено ложное срабатывание сравнения тепловых зазоров при поиске по редукционному клапану. Добавлены HTTP-регрессии доступа, проверка всех F-кодов для пяти моделей и неизвестной модели, проверка отказа при подмене полей подтверждения.
 - **BLOCKED** — сверка страниц РЭ 31 и РК 269/276 на оригиналах и live C1. В среде нет разрешённого исходного корпуса. Отдельные opt-in команды описаны в README.
 - Docker Compose configuration и сборка всех четырёх финальных образов прошли на временной проверочной конфигурации. Ранее в этом этапе Compose с синтетическим внешним томом прошёл health, проверку API/доступа и сохранение SQLite после перезапуска. Повтор запуска на финальных образах — **BLOCKED** из-за заполнения Docker VFS.
+
+
+## 27.11.2026 — миграция провайдера на GigaChat (ветка feat/gigachat-integration)
+
+- Добавлен отдельный REST/OAuth-клиент GigaChat: Authorization Key → 30-минутный Bearer token, кеширование/обновление токена, 401 retry, 429/ошибки и TLS verification.
+- Основной агент переведён с Groq tools на нативный GigaChat functions/function_call; серверный ToolRuntime, RAG, guardrails и ручное подтверждение заявки сохранены.
+- STT переведён на аудиофайлы GigaChat: upload → attachments → текстовая расшифровка → удаление файла. Лимит 8 МБ, MIME allowlist, voice endpoint закрыт сессией главного механика.
+- Usage перенесён в provider-neutral llm_usage/llm_usage_steps; старые Groq-замеры мигрируют как provider=groq и сохраняются.
+- E2E использует локальную заглушку GigaChat-native function calling; добавлены целевые тесты OAuth cache, function loop и voice upload/cleanup.
+- Добавлены docs/GIGACHAT.md и scripts/gigachat_smoke.py. Live-проверка пока BLOCKED до настройки Authorization Key владельца; ключ в Git не добавлялся.
+- Не заявлять, что GigaChat уже проверен live или что стоимость равна историческим Groq-замерам. Следующий шаг: внести Authorization Key в локальный .env, выполнить smoke, проверить C1–C3 и voice STT, затем запустить pytest/E2E/build.

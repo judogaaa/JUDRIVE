@@ -25,13 +25,17 @@ class Settings(BaseSettings):
     db_path: Path = PROJECT_ROOT / "local-data" / "judrive.sqlite"
     api_prefix: str = "/api"
 
-    groq_api_key: str | None = None
-    groq_base_url: str = "https://api.groq.com/openai/v1"
-    groq_model: str = "openai/gpt-oss-120b"
-    groq_max_tokens: int = 1200
-    groq_timeout_s: float = 60.0
-    groq_stt_model: str = "whisper-large-v3-turbo"
-    groq_stt_timeout_s: float = 45.0
+    # Authorization Key from the GigaChat API cabinet (not the short-lived access token).
+    gigachat_credentials: str | None = None
+    gigachat_scope: str = "GIGACHAT_API_PERS"
+    gigachat_base_url: str = "https://api.giga.chat"
+    gigachat_auth_url: str = "https://ngw.devices.sberbank.ru:9443/api/v2/oauth"
+    gigachat_model: str = "GigaChat-3-Ultra"
+    gigachat_stt_model: str = "GigaChat-3-Ultra"
+    gigachat_max_tokens: int = 1200
+    gigachat_timeout_s: float = 60.0
+    gigachat_stt_timeout_s: float = 90.0
+    gigachat_ca_bundle: Path | None = None
     agent_max_tool_steps: int = 4
 
     chief_username: str | None = None
@@ -39,9 +43,11 @@ class Settings(BaseSettings):
     session_secret: str | None = None
     cookie_secure: bool = False
 
-    @field_validator("fleet_data_path", "pdf_dir", "db_path", mode="before")
+    @field_validator("fleet_data_path", "pdf_dir", "db_path", "gigachat_ca_bundle", mode="before")
     @classmethod
     def _resolve_path(cls, value: object) -> object:
+        if value is None or value == "":
+            return None if value == "" else value
         if isinstance(value, Path):
             return _abs_path(value)
         if isinstance(value, str):

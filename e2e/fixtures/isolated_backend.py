@@ -1,4 +1,4 @@
-"""Run production routes against disposable storage and an unauthenticated loopback stub."""
+"""Run production routes against disposable storage and a local GigaChat API stub."""
 from contextlib import asynccontextmanager
 from pathlib import Path
 import os
@@ -19,22 +19,25 @@ with tempfile.TemporaryDirectory(prefix="judrive-e2e-") as raw:
 
     @lru_cache
     def isolated_settings():
-        return config.Settings(_env_file=None, groq_api_key=None)
+        return config.Settings(
+            _env_file=None,
+            gigachat_credentials="e2e-test-authorization-key",
+            gigachat_scope="GIGACHAT_API_PERS",
+            gigachat_base_url="http://127.0.0.1:8004",
+            gigachat_auth_url="http://127.0.0.1:8004/api/v2/oauth",
+            gigachat_model="e2e-function-stub",
+            gigachat_stt_model="e2e-function-stub",
+            gigachat_ca_bundle=None,
+        )
 
     config.get_settings = isolated_settings
     from app import main
-    from app.agent.groq_client import GroqClient
 
     lifespan = main.app.router.lifespan_context
 
     @asynccontextmanager
     async def isolated_lifespan(app):
         async with lifespan(app):
-            main.agent._groq = lambda: GroqClient(
-                None, "e2e", base_url="http://127.0.0.1:8004/openai/v1",
-                max_tokens=1200, timeout_s=15,
-            )
-            main.agent.provider_ready = lambda: True
             yield
 
     main.app.router.lifespan_context = isolated_lifespan

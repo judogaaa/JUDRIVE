@@ -6,7 +6,7 @@ AI-powered engine diagnostics and intelligent fleet management platform.
 
 ## Статус
 
-**26.11.2026 — этапы 01–06 готовы, ветка сдачи `fix/submission-hardening` прошла технический аудит.** Голос (Groq Whisper), 7 языков UI/агента, обязательное обучение при первом входе и центр «Помощь и обучение». Локальный стенд :8090/:5173; публичный HTTPS URL ещё не заявлен.
+**27.11.2026 — активная ветка `feat/gigachat-integration`: основной LLM и STT переведены на GigaChat; live smoke с Authorization Key владельца ещё не выполнен.** Голос (GigaChat audio attachments), 7 языков UI/агента, обязательное обучение при первом входе и центр «Помощь и обучение». Локальный стенд :8090/:5173; публичный HTTPS URL ещё не заявлен.
 
 ## Первый вход и помощь
 
@@ -18,7 +18,7 @@ AI-powered engine diagnostics and intelligent fleet management platform.
 
 Требования: Python 3.11+ (проверено на 3.14), Node.js LTS, UTF-8 в терминале Windows.
 
-1. Скопируйте `.env.example` в `.env`; для чата добавьте `GROQ_API_KEY` (только локально, файл в `.gitignore`). Кабинет главного механика: `CHIEF_USERNAME`, `CHIEF_PASSWORD_HASH` (`python scripts/hash_chief_password.py`), `SESSION_SECRET`. Пароль в Git не кладётся. На HTTPS задайте `COOKIE_SECURE=true`.
+1. Скопируйте `.env.example` в `.env`; для чата и голоса добавьте `GIGACHAT_CREDENTIALS` (Authorization Key; только локально, файл в `.gitignore`). Настройка scope, модели и TLS — в [docs/GIGACHAT.md](docs/GIGACHAT.md). Кабинет главного механика: `CHIEF_USERNAME`, `CHIEF_PASSWORD_HASH` (`python scripts/hash_chief_password.py`), `SESSION_SECRET`. Пароль в Git не кладётся. На HTTPS задайте `COOKIE_SECURE=true`.
 2. **PDF (этап 02):** положите шесть оригиналов в `materials/manuals/` (папка в `.gitignore`) по [docs/SOURCES.md](docs/SOURCES.md). Быстрое копирование, если файлы уже в `Documents`:
 
 ```powershell
@@ -64,7 +64,7 @@ npm install
 npm run dev
 ```
 
-Откройте `http://127.0.0.1:5173`. Health: `GET /api/health` — `mock_ml`, `mock_toir`, `manuals_index`, `groq_agent` (при подключённых PDF и ключе Groq).
+Откройте `http://127.0.0.1:5173`. Health: `GET /api/health` — `mock_ml`, `mock_toir`, `manuals_index`, `gigachat_agent` (configured означает только наличие Authorization Key; live доступ проверяется командой `python scripts/gigachat_smoke.py`).
 
 **RAG API:** `POST /api/manuals/search`, `GET /api/sources/evidence/{id}`, `GET /api/sources/pdf/{doc_id}`.
 
@@ -76,9 +76,9 @@ npm run dev
 
 **Языки (этап 06):** переключатель в шапке — ru, uz, kk, tg, ky, hi, bn; ответ агента на выбранном языке, RAG по русским техтерминам.
 
-Переиндексация: `scripts\build_manual_index.py`. Контроль RAG: `scripts\verify_rag_queries.py`. Контроль агента (live Groq + mocks): `backend\.venv\Scripts\python.exe scripts\verify_agent_scenarios.py`.
+Переиндексация: `scripts\build_manual_index.py`. Контроль RAG: `scripts\verify_rag_queries.py`. Контроль агента (live GigaChat + mocks): `backend\.venv\Scripts\python.exe scripts\verify_agent_scenarios.py`.
 
-**Groq (этап 03):** добавьте `GROQ_API_KEY` в локальный `.env` (см. `.env.example`, в Git не коммитить). После смены кода перезапускайте backend с `--reload`. Чат в UI; сценарии: `backend\.venv\Scripts\python.exe scripts\verify_agent_scenarios.py`.
+**GigaChat (этап 03):** добавьте Authorization Key в `GIGACHAT_CREDENTIALS` локального `.env` (см. [docs/GIGACHAT.md](docs/GIGACHAT.md), в Git не коммитить). После смены кода перезапускайте backend с `--reload`. Чат в UI; сценарии: `backend\.venv\Scripts\python.exe scripts\verify_agent_scenarios.py`.
 
 ### Быстрые smoke-тесты
 
@@ -112,9 +112,9 @@ npx playwright install chromium
 npm run e2e
 ```
 
-Playwright поднимает полностью изолированный тестовый стенд: ML `:8005`, ТОиР `:8003`, детерминированный LLM stub `:8004`, backend `:8091`, frontend `:5174` и свежую SQLite. Синтетические PDF создаются автоматически. Тестовые учётные данные генерируются на запуск, контрольная заявка создаётся через API с реальным RAG и Mock ТОиР. Рабочий стенд и Groq не используются. При необходимости задайте `E2E_PYTHON` (путь к Python с зависимостями). `E2E_SKIP_SERVERS=1` предназначен только для самостоятельно поднятого одноразового тестового стенда — не для рабочей базы.
+Playwright поднимает полностью изолированный тестовый стенд: ML `:8005`, ТОиР `:8003`, детерминированный LLM stub `:8004`, backend `:8091`, frontend `:5174` и свежую SQLite. Синтетические PDF создаются автоматически. Тестовые учётные данные генерируются на запуск, контрольная заявка создаётся через API с реальным RAG и Mock ТОиР. Внешний GigaChat API не используется: E2E запускает локальную детерминированную заглушку нативного function-calling протокола. При необходимости задайте `E2E_PYTHON` (путь к Python с зависимостями). `E2E_SKIP_SERVERS=1` предназначен только для самостоятельно поднятого одноразового тестового стенда — не для рабочей базы.
 
-Набор: **56 сценариев** — три статуса ML, warning, RAG/PDF/чат, related sources, черновик и подтверждение заявки с защитой от дублей, потеря Groq и сохранение текста, полный список 50 машин и поиск в кириллице/латинице, сессии, смена контекста во время запроса, изоляция графика истории, источники черновика в PDF, двойное нажатие диагностики, локализованные ошибки и retry, язык/тема/системный режим, mobile/tablet/desktop, автопарк со статус-фильтром, заявки и кабинет главного механика, обучение/помощь и семантика рекомендации карантина. Матрица — [docs/REQUIREMENTS_MATRIX.md](docs/REQUIREMENTS_MATRIX.md); сценарий демо ≤3 мин — [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md).
+Набор: **56 сценариев** — три статуса ML, warning, RAG/PDF/чат, related sources, черновик и подтверждение заявки с защитой от дублей, недоступность LLM-провайдера и сохранение текста, полный список 50 машин и поиск в кириллице/латинице, сессии, смена контекста во время запроса, изоляция графика истории, источники черновика в PDF, двойное нажатие диагностики, локализованные ошибки и retry, язык/тема/системный режим, mobile/tablet/desktop, автопарк со статус-фильтром, заявки и кабинет главного механика, обучение/помощь и семантика рекомендации карантина. Матрица — [docs/REQUIREMENTS_MATRIX.md](docs/REQUIREMENTS_MATRIX.md); сценарий демо ≤3 мин — [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md).
 
 ### UI
 
@@ -151,7 +151,7 @@ Playwright поднимает полностью изолированный те
 - История, график динамики и сводка главного механика.
 - Голосовой ввод и мультиязычный адаптивный интерфейс.
 
-Планируемый стек: React + TypeScript + Vite, FastAPI, SQLite, Groq GPT-OSS 120B, Whisper, локальная база знаний и PDF.js. Прототип не обучает акустическую ML-модель, не подтверждает техническую исправность двигателя и не заменяет специалиста. Публикация полных PDF требует ясности прав на распространение. Оригинальные Mock API и синтетические данные уже находятся в vendor/neurodvs_mock; шесть полных PDF подключаются по инструкции из docs/SOURCES.md.
+Стек: React + TypeScript + Vite, FastAPI, SQLite, GigaChat-3-Ultra (или доступная модель), GigaChat audio attachments для STT, локальная база знаний и PDF.js. Прототип не обучает акустическую ML-модель, не подтверждает техническую исправность двигателя и не заменяет специалиста. Публикация полных PDF требует ясности прав на распространение. Оригинальные Mock API и синтетические данные уже находятся в vendor/neurodvs_mock; шесть полных PDF подключаются по инструкции из docs/SOURCES.md.
 
 Ориентир завершения: 28.11.2026 10:00 МСК; рабочий стенд требуется согласно актуальным правилам хакатона. Текущее состояние всегда в PROGRESS.md.
 
@@ -159,7 +159,7 @@ Playwright поднимает полностью изолированный те
 
 - Контейнерная конфигурация HTTPS: [docs/DEPLOY_HTTPS.md](docs/DEPLOY_HTTPS.md) (`compose.yaml`, Caddy, Poppler).
 - Детерминированная проверка настоящих vendor mock routes, PDF и SQLite в отдельной БД:
-  `python scripts/verify_submission_regressions.py` (6 PDF в PDF_DIR, без Groq/сети).
+  `python scripts/verify_submission_regressions.py` (6 PDF в PDF_DIR, без GigaChat/сети).
 - Live-проверка: `python scripts/verify_agent_scenarios.py`; `--only check_failed` выполняет только C3, а `--confirm` явно разрешает тестовый POST заявки.
 - [Сценарий демо](docs/DEMO_SCRIPT.md), [матрица требований](docs/REQUIREMENTS_MATRIX.md), [пакет сдачи](docs/SUBMISSION.md), [Excel usage](submission/USAGE_EVIDENCE.md).
 

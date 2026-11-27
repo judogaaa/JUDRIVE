@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Real vendor ASGI routes, real PDFs, isolated SQLite; no network/Groq/spending."""
+"""Real vendor ASGI routes, real PDFs, isolated SQLite; no external LLM API or provider spending."""
 from __future__ import annotations
 
 import asyncio
@@ -49,7 +49,7 @@ def main():
         os.environ.update(DB_PATH=str(Path(tmp) / "test.sqlite"), PDF_DIR=str(original_settings.pdf_dir),
                           MOCK_ML_URL="http://mock:8001", MOCK_TOIR_URL="http://mock:8002",
                           CHIEF_USERNAME="test-chief", CHIEF_PASSWORD_HASH=hash_password("temporary-test-only", "test-salt"),
-                          SESSION_SECRET="test-only-session-secret", COOKIE_SECURE="false", GROQ_API_KEY="")
+                          SESSION_SECRET="test-only-session-secret", COOKIE_SECURE="false", GIGACHAT_CREDENTIALS="")
         get_settings.cache_clear()
         from app import main as backend
         original = httpx.AsyncClient

@@ -14,7 +14,7 @@ from app import config
 
 @lru_cache
 def test_settings():
-    return config.Settings(_env_file=None, groq_api_key=None)
+    return config.Settings(_env_file=None, gigachat_credentials=None)
 
 
 config.get_settings = test_settings

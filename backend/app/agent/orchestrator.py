@@ -8,7 +8,8 @@ import re
 from fastapi import HTTPException
 import httpx
 
-from app.agent.groq_client import GroqClient, GroqRateLimitError
+from app.agent.gigachat_client import GigaChatAgentClient
+from app.services.gigachat import GigaChatAPI, GigaChatAPIError, GigaChatRateLimitError
 from app.agent.presentation import format_answer
 from app.agent.locale import agent_language_instruction, normalize_locale, failed_recording_reply, insufficient_evidence_reply
 from app.agent.evidence import operating_prohibition, quantities_supported
@@ -48,25 +49,26 @@ class AgentOrchestrator:
         mock_ml: MockMlClient,
         rag: ManualRagService,
         repo: AppRepository,
+        gigachat_api: GigaChatAPI,
     ) -> None:
         self._settings = settings
         self._fleet = fleet
         self._mock_ml = mock_ml
         self._rag = rag
         self._repo = repo
+        self._gigachat_api = gigachat_api
 
     def provider_ready(self) -> bool:
-        return bool(self._settings.groq_api_key)
+        return bool((self._settings.gigachat_credentials or "").strip())
 
-    def _groq(self) -> GroqClient:
-        if not self._settings.groq_api_key:
-            raise HTTPException(status_code=503, detail="GROQ_API_KEY не настроен")
-        return GroqClient(
-            self._settings.groq_api_key,
-            self._settings.groq_model,
-            base_url=self._settings.groq_base_url,
-            max_tokens=self._settings.groq_max_tokens,
-            timeout_s=self._settings.groq_timeout_s,
+    def _gigachat(self) -> GigaChatAgentClient:
+        if not (self._settings.gigachat_credentials or "").strip():
+            raise HTTPException(status_code=503, detail="GIGACHAT_CREDENTIALS не настроен")
+        return GigaChatAgentClient(
+            self._gigachat_api,
+            self._settings.gigachat_model,
+            max_tokens=self._settings.gigachat_max_tokens,
+            timeout_s=self._settings.gigachat_timeout_s,
         )
 
     def create_conversation(self, vehicle_id: str, session_id: str) -> dict:
@@ -191,24 +193,31 @@ class AgentOrchestrator:
                 }
             )
 
-        groq = self._groq()
-        if isinstance(groq, GroqClient):
-            groq.on_usage = lambda stage, usage: self._repo.log_usage_step(conversation_id, stage, usage)
+        gigachat = self._gigachat()
+        if isinstance(gigachat, GigaChatAgentClient):
+            gigachat.on_usage = lambda stage, usage: self._repo.log_usage_step(
+                conversation_id, stage, usage, provider="gigachat"
+            )
         try:
-            reply, tool_trace, usage = await groq.run_with_tools(
+            reply, tool_trace, usage = await gigachat.run_with_tools(
                 llm_messages,
                 TOOL_DEFINITIONS,
                 runtime.execute,
                 max_steps=self._settings.agent_max_tool_steps,
             )
-        except GroqRateLimitError as exc:
-            logger.warning("Groq rate limit: %s", exc)
-            raise HTTPException(status_code=429, detail="Лимит запросов Groq. Повторите позже.") from exc
+        except GigaChatRateLimitError as exc:
+            logger.warning("GigaChat rate limit")
+            raise HTTPException(status_code=429, detail="Лимит запросов GigaChat. Повторите позже.") from exc
+        except GigaChatAPIError as exc:
+            if exc.status_code in {401, 403}:
+                raise HTTPException(status_code=503, detail="GigaChat не принял ключ или scope API.") from exc
+            logger.warning("GigaChat API error (HTTP %s)", exc.status_code)
+            raise HTTPException(status_code=502, detail="Не удалось получить ответ от GigaChat.") from exc
         except httpx.TimeoutException as exc:
-            logger.warning("Agent timeout")
+            logger.warning("GigaChat timeout")
             raise HTTPException(status_code=504, detail="Не удалось дождаться ответа помощника. Повторите позже.") from exc
         except Exception as exc:  # noqa: BLE001
-            logger.warning("Agent call failed (%s)", type(exc).__name__)
+            logger.warning("GigaChat call failed (%s)", type(exc).__name__)
             raise HTTPException(status_code=502, detail="Не удалось получить ответ агента. Повторите позже.") from exc
 
         self._repo.log_usage(
@@ -217,6 +226,8 @@ class AgentOrchestrator:
             usage.get("completion_tokens", 0),
             usage.get("total_tokens", 0),
             usage.get("latency_ms", 0),
+            provider="gigachat",
+            stage="agent_total",
         )
 
         reply, sources = format_answer(reply, runtime.sources)

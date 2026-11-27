@@ -13,7 +13,7 @@
 - **Excel usage:** `submission/JUDRIVE_usage_cost_2026-11-26.xlsx` в репозитории.
 - **Краткое описание:** см. раздел ниже.
 - **Ограничения:** Mock ML/ТОиР, нет реального ремонта/допуска/прогноза отказа;
-  live Groq C1 ограничен квотой; публичный стенд не развёрнут.
+  На ветке feat/gigachat-integration добавлена миграция на GigaChat; live C1 с Authorization Key владельца ещё не проверен; публичный стенд не развёрнут.
 
 ## Описание решения для формы
 
@@ -36,7 +36,7 @@ JUDRIVE — цифровое рабочее место механика груз
 парком, PDF и заявками.
 
 Стек: React/TypeScript/Vite, FastAPI/Python, SQLite FTS5, pypdf/pdfplumber/Poppler,
-PDF.js, Groq GPT-OSS 120B с tool calling, Whisper для STT; оригинальные
+PDF.js, GigaChat API с нативными functions/function_call и audio attachments для STT; оригинальные
 Mock ML/ТОиР без изменения. Запуск: README, Docker Compose + Caddy для HTTPS,
 PDF и переменные окружения предоставляются отдельно. Нет реальной ML-модели
 для анализа звука двигателя, выполнения ремонта, подтверждения выпуска ТС,
@@ -49,24 +49,24 @@ PDF и переменные окружения предоставляются о
 - Независимая приёмка: `pytest` 69 passed (включая vendor и новые регрессии); production `npm run build` без warning о размере чанков.
 - Независимый Playwright 52 passed, **0 skipped**: полностью изолированный стенд,
   генерируемые тестовые chief credentials, Mock ML/ТОиР, отдельная SQLite и
-  детерминированный OpenAI-совместимый stub агента (без квоты Groq). C1 seed через
+  детерминированная локальная заглушка нативного GigaChat function-calling протокола (без внешнего API). C1 seed через
   API проверяет реальный RAG, применимые PDF 33–34 и подтверждение Mock ТОиР.
 - `scripts/verify_submission_regressions.py`, `verify_rag_queries.py` 8/8, deterministic check_failed/C2 — OK; live STT smoke HTTP 200.
 - Локализация 397 ключей × 7, даты и ошибки проверены; PDF.js лениво вынесен в отдельный chunk; onboarding/help не вызывают LLM.
 - Семантика карантина: `quarantine_recommended` отделён от `quarantine_confirmed=false`; UI никогда не пишет «Карантин (подтверждено)»; pytest + E2E + submission regression.
 - `docker compose config --quiet` OK; полная сборка не запускалась: Docker Desktop/daemon на машине отсутствует (служба `com.docker.service` остановлена, запуск требует прав администратора).
-- Live Groq C1 26.11 остановлен на 429; повторные запросы не выполнялись. Ранее реальные TKT (0008/0010/0015) сохранены; это блокер квоты, не mock-подмена.
+- Исторический live Groq C1 26.11 остановлен на 429; повторные запросы не выполнялись. Ветка GigaChat-интеграции добавлена отдельно; live GigaChat C1 с пользовательским ключом ещё не проверен. Ранее реальные TKT (0008/0010/0015) сохранены.
 - Публичный HTTPS URL, видео и Excel-артефакт требуют финальной ссылки; публичный стенд не подтверждён.
 
 ## Поля и финальные блокеры
 
 - [x] Пакет сдачи в репозитории: README, матрица, демо-скрипт, Excel usage.
 - [x] Excel: `submission/JUDRIVE_usage_cost_2026-11-26.xlsx` (официальный шаблон,
-  фактические токены, тариф Groq $0,15/$0,60, курс ЦБ 82,313 ₽),
+  фактические исторические токены Groq, не тариф GigaChat),
   методика — `submission/USAGE_EVIDENCE.md`.
 - [ ] Ссылка публичного репозитория, принять конкурсную ветку после live-регресса.
 - [ ] Публичный HTTPS URL, открыть из другой сети и приватного окна.
-- [ ] C1 live Groq → RAG → черновик → confirm → новый реальный TKT
+- [ ] C1 live GigaChat → RAG → черновик → confirm → новый реальный TKT
   (текущий прогон: HTTP 429).
 - [ ] C2/C3/chief/голос/мобильный smoke — автоматизированы локально; нужен
   повтор на публичном стенде.
@@ -89,9 +89,14 @@ PDF и переменные окружения предоставляются о
 
 Локальный замер на 26.11: **55** завершённых LLM-сообщений,
 178 787 total tokens (151 498 input, 27 289 output), средняя задержка 4 334 мс.
-С подтверждёнными тарифами Groq ($0,15/$0,60 за 1 млн) и курсом ЦБ 82,313 ₽:
+Исторический замер Groq (тариф $0,15/$0,60 за 1 млн и курс ЦБ 82,313 ₽):
 ≈ $0,000711 / 0,0585 ₽ на сообщение, ≈ $0,0391 / 3,22 ₽ за весь замер.
 Excel: `submission/JUDRIVE_usage_cost_2026-11-26.xlsx`; исходный CSV —
 `submission/usage_cost.csv`; методика и ограничения — `submission/USAGE_EVIDENCE.md`.
-STT: Whisper Large v3 Turbo $0,04/час; live smoke 0,4 с, минимально оплачиваются 10 с ≈ 0,00915 ₽.
+Исторический STT-замер относился к Whisper Large v3 Turbo. Текущий GigaChat STT тарифицируется по фактическому usage/условиям аккаунта и требует нового замера.
 Инфраструктура локальная, платный сервер не использовался (0 ₽).
+
+
+## Обновление 27.11.2026 — GigaChat
+
+В ветке feat/gigachat-integration Groq заменяется на GigaChat API: нативные пользовательские functions для агента и аудиовложения для STT. Исторический Excel/CSV с тарифами Groq не является расчётом стоимости GigaChat. До финальной сдачи обязательны: добавление Authorization Key только в локальный .env, scripts/gigachat_smoke.py, live C1–C3 и новый экспорт usage с проверенными тарифами аккаунта.

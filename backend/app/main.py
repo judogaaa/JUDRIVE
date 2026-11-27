@@ -25,7 +25,8 @@ from app.services.fleet import FleetService
 from app.services.mock_clients import MockMlClient, MockMlResponseError, MockToirClient
 from app.services.tickets import TicketService
 from app.services.voice import VoiceService
-from app.agent.locale import WHISPER_LANG, normalize_locale
+from app.services.gigachat import GigaChatAPI
+from app.agent.locale import normalize_locale
 from app.storage.repository import AppRepository
 
 settings = get_settings()
@@ -34,14 +35,44 @@ mock_ml = MockMlClient(settings.mock_ml_url)
 mock_toir = MockToirClient(settings.mock_toir_url)
 rag_service = ManualRagService(settings.db_path, settings.pdf_dir)
 app_repo = AppRepository(settings.db_path)
-agent = AgentOrchestrator(settings, fleet, mock_ml, rag_service, app_repo)
+gigachat_api = GigaChatAPI(
+    settings.gigachat_credentials,
+    scope=settings.gigachat_scope,
+    base_url=settings.gigachat_base_url,
+    auth_url=settings.gigachat_auth_url,
+    timeout_s=settings.gigachat_timeout_s,
+    ca_bundle=settings.gigachat_ca_bundle,
+)
+agent = AgentOrchestrator(settings, fleet, mock_ml, rag_service, app_repo, gigachat_api)
 ticket_service = TicketService(app_repo, fleet, mock_ml, mock_toir, rag_service)
 fleet_analytics = FleetAnalyticsService(fleet, app_repo, settings.fleet_data_path)
-voice_service = VoiceService(settings.groq_api_key, settings.groq_stt_model, settings.groq_stt_timeout_s)
+
+
+def _build_voice_service(api: GigaChatAPI, current_settings, repository: AppRepository) -> VoiceService:
+    def record_usage(usage: dict) -> None:
+        repository.log_usage(
+            None,
+            int(usage.get("prompt_tokens", 0) or 0),
+            int(usage.get("completion_tokens", 0) or 0),
+            int(usage.get("total_tokens", 0) or 0),
+            int(usage.get("latency_ms", 0) or 0),
+            provider="gigachat",
+            stage="voice_stt",
+        )
+
+    return VoiceService(
+        api,
+        current_settings.gigachat_stt_model,
+        current_settings.gigachat_stt_timeout_s,
+        on_usage=record_usage,
+    )
+
+
+voice_service = _build_voice_service(gigachat_api, settings, app_repo)
 
 
 def _refresh_settings() -> None:
-    global settings, fleet, mock_ml, mock_toir, rag_service, app_repo, agent, ticket_service, fleet_analytics, voice_service
+    global settings, fleet, mock_ml, mock_toir, rag_service, app_repo, gigachat_api, agent, ticket_service, fleet_analytics, voice_service
     get_settings.cache_clear()
     settings = get_settings()
     fleet = FleetService(settings.fleet_data_path)
@@ -49,10 +80,18 @@ def _refresh_settings() -> None:
     mock_toir = MockToirClient(settings.mock_toir_url)
     rag_service = ManualRagService(settings.db_path, settings.pdf_dir)
     app_repo = AppRepository(settings.db_path)
-    agent = AgentOrchestrator(settings, fleet, mock_ml, rag_service, app_repo)
+    gigachat_api = GigaChatAPI(
+        settings.gigachat_credentials,
+        scope=settings.gigachat_scope,
+        base_url=settings.gigachat_base_url,
+        auth_url=settings.gigachat_auth_url,
+        timeout_s=settings.gigachat_timeout_s,
+        ca_bundle=settings.gigachat_ca_bundle,
+    )
+    agent = AgentOrchestrator(settings, fleet, mock_ml, rag_service, app_repo, gigachat_api)
     ticket_service = TicketService(app_repo, fleet, mock_ml, mock_toir, rag_service)
     fleet_analytics = FleetAnalyticsService(fleet, app_repo, settings.fleet_data_path)
-    voice_service = VoiceService(settings.groq_api_key, settings.groq_stt_model, settings.groq_stt_timeout_s)
+    voice_service = _build_voice_service(gigachat_api, settings, app_repo)
 
 
 @asynccontextmanager
@@ -89,14 +128,14 @@ async def health() -> HealthResponse:
         toir_ok = False
     rag_status = rag_service.status()
     rag_ok = rag_status.get("index_current") and not rag_status.get("missing_files")
-    groq_ready = agent.provider_ready()
-    status = "ok" if ml_ok and toir_ok and rag_ok and groq_ready else "degraded"
+    gigachat_ready = agent.provider_ready()
+    status = "ok" if ml_ok and toir_ok and rag_ok and gigachat_ready else "degraded"
     return HealthResponse(
         status=status,
         mock_ml="up" if ml_ok else "down",
         mock_toir="up" if toir_ok else "down",
         manuals_index="ready" if rag_ok else "missing",
-        groq_agent="configured" if groq_ready else "missing_key",
+        gigachat_agent="configured" if gigachat_ready else "missing_key",
     )
 
 
@@ -263,13 +302,12 @@ async def conversation_send(conversation_id: str, body: ChatMessageRequest, resp
     )
 
 
-@app.post(f"{settings.api_prefix}/voice/transcribe")
+@app.post(f"{settings.api_prefix}/voice/transcribe", dependencies=[Depends(_chief_guard)])
 async def voice_transcribe(
     file: UploadFile = File(...),
     locale: str = Form(default="ru"),
 ):
-    lang = WHISPER_LANG.get(normalize_locale(locale))
-    return await voice_service.transcribe(file, language=lang)
+    return await voice_service.transcribe(file, language=normalize_locale(locale))
 
 
 @app.get(f"{settings.api_prefix}/tickets/drafts/{{draft_id}}", dependencies=[Depends(_chief_guard)])

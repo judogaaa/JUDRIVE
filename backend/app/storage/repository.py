@@ -42,6 +42,21 @@ class AppRepository:
     def _init_schema(self) -> None:
         with self._connection() as conn:
             conn.executescript(APP_SCHEMA_SQL)
+            # Preserve historical Groq measurements while moving new writes to
+            # provider-neutral tables. INSERT OR IGNORE makes this idempotent.
+            conn.execute("""
+                INSERT OR IGNORE INTO llm_usage_steps
+                (id, provider, conversation_id, stage, prompt_tokens, completion_tokens, total_tokens, created_at)
+                SELECT id, 'groq', conversation_id, stage, prompt_tokens, completion_tokens, total_tokens, created_at
+                FROM groq_usage_steps
+            """)
+            conn.execute("""
+                INSERT OR IGNORE INTO llm_usage
+                (id, provider, stage, conversation_id, prompt_tokens, completion_tokens, total_tokens, latency_ms, created_at)
+                SELECT id, 'groq', 'agent_total', conversation_id, prompt_tokens, completion_tokens,
+                       total_tokens, latency_ms, created_at
+                FROM groq_usage
+            """)
 
     def create_conversation(self, vehicle_id: str, session_id: str, engine_model: str, context_hash: str) -> str:
         conversation_id = str(uuid.uuid4())
@@ -307,13 +322,20 @@ class AppRepository:
             raise
         return local_id
 
-    def log_usage_step(self, conversation_id: str, stage: str, usage: dict) -> None:
+    def log_usage_step(
+        self,
+        conversation_id: str,
+        stage: str,
+        usage: dict,
+        *,
+        provider: str = "gigachat",
+    ) -> None:
         with self._connection() as conn:
             conn.execute(
-                """INSERT INTO groq_usage_steps
-                   (conversation_id, stage, prompt_tokens, completion_tokens, total_tokens, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?)""",
-                (conversation_id, stage, usage.get("prompt_tokens", 0), usage.get("completion_tokens", 0),
+                """INSERT INTO llm_usage_steps
+                   (provider, conversation_id, stage, prompt_tokens, completion_tokens, total_tokens, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (provider, conversation_id, stage, usage.get("prompt_tokens", 0), usage.get("completion_tokens", 0),
                  usage.get("total_tokens", 0), _now()),
             )
 
@@ -324,14 +346,18 @@ class AppRepository:
         completion_tokens: int,
         total_tokens: int,
         latency_ms: int,
+        *,
+        provider: str = "gigachat",
+        stage: str = "agent_total",
     ) -> None:
         with self._connection() as conn:
             conn.execute(
                 """
-                INSERT INTO groq_usage (conversation_id, prompt_tokens, completion_tokens, total_tokens, latency_ms, created_at)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO llm_usage
+                (provider, stage, conversation_id, prompt_tokens, completion_tokens, total_tokens, latency_ms, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (conversation_id, prompt_tokens, completion_tokens, total_tokens, latency_ms, _now()),
+                (provider, stage, conversation_id, prompt_tokens, completion_tokens, total_tokens, latency_ms, _now()),
             )
             conn.commit()
 

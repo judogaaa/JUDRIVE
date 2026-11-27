@@ -20,8 +20,8 @@
 | B1 | Память по машине и заявкам | get_vehicle_history: проверки и последние созданные заявки; выполнение ремонта не подтверждается |
 | B2 | График последних валидных записей | реальные точки из истории, failed не превращается в ноль |
 | B3 | Кабинет главного механика | 50 ТС, кликабельные категории, приоритеты, история; отдельная запись рекомендации chief с основанием. `quarantine_recommended` — рекомендация, `quarantine_confirmed` всегда `false`, пока нет фактического workflow карантина |
-| UX1 | 7 языков UI/агента | 402 ключа × 7; kk/tg/ky/hi/bn без uz-fallback и mojibake, даты локализованы; onboarding/help/FAQ переведены; качество live-агента ограничено квотой Groq |
-| UX2 | Голос STT | `POST /api/voice/transcribe`; live smoke 26.11.2026 — HTTP 200 (`whisper-large-v3-turbo`) |
+| UX1 | 7 языков UI/агента | 409 ключей × 7; kk/tg/ky/hi/bn без uz-fallback и mojibake, даты локализованы; onboarding/help/FAQ переведены; GigaChat provider integration added, live quality/C1 pending credential test |
+| UX2 | Голос STT | `POST /api/voice/transcribe`; GigaChat audio attachments, file cleanup, chief session and 8 MB cap; live smoke pending |
 | UX3 | Мобильный UI, темы, переходы, PDF | Playwright 48/48: 1920/1440/1280/768/390, light/dark/system, lazy PDF viewer, локализованные ошибки/retry, Hindi fallback |
 | UX4 | Источники и действия диагностики | автоматический поиск после anomaly, related sources, реальные PDF, без лишних токенов LLM |
 | UX5 | Обязательное обучение первого входа | 7 шагов, подтверждение обязательно, крестик и Escape заблокированы до галочки, состояние в localStorage, focus trap, ARIA, mobile, `prefers-reduced-motion`; `e2e/onboarding-help.spec.ts` |
@@ -34,7 +34,7 @@
 |----|----------|--------|
 | D1 | Видео ≤3 мин, сценарии С1–С3 | Скрипт: `docs/DEMO_SCRIPT.md`; запись ещё не выполнена |
 | D2 | HTTPS URL | Инструкция: `docs/DEPLOY_HTTPS.md` + `scripts/deploy_https.ps1`; `compose.yaml` с healthchecks и Caddy проверен через `docker compose config`; публичный URL не заявлен |
-| D3 | Excel стоимости | `submission/JUDRIVE_usage_cost_2026-11-26.xlsx` + `submission/USAGE_EVIDENCE.md`: 55 сообщений, 178 787 токенов, тариф Groq $0,15/$0,60, курс ЦБ 82,313 ₽ |
+| D3 | Excel стоимости | `submission/JUDRIVE_usage_cost_2026-11-26.xlsx` + `submission/USAGE_EVIDENCE.md`: 55 исторических Groq-сообщений, 178 787 токенов; не использовать как стоимость GigaChat |
 | D4 | Форма ЛК сдачи | Текст и чек-лист: `docs/SUBMISSION.md`; отправить вручную до 28.11.2026 10:00 МСК |
 
 ## Ручной минимум (не автоматизировано)
@@ -44,14 +44,14 @@
 - Инъекции T792HO98 / H142OX78 / E622KM47 — pytest + разовый чат-smoke.
 - Живой браузер: визуальный проход 1440×900 по диагностике, чату, руководствам, PDF, автопарку, заявкам, кабинету chief и помощи; горизонтальный overflow 0 на 1920/1440/1280/768/390.
 
-Ограничения: квота Groq (26.11 C1 остановлен на HTTP 429, повторы не выполнялись); полные PDF вне Git; Docker daemon/Desktop на машине приёмки недоступны, поэтому полная сборка образов не запускалась. Публичный хост/домен для HTTPS не предоставлен — localhost не выдаётся за конкурсный стенд.
+Ограничения: исторический Groq C1 26.11 остановлен на HTTP 429; live GigaChat C1 pending; полные PDF вне Git; Docker daemon/Desktop на машине приёмки недоступны, поэтому полная сборка образов не запускалась. Публичный хост/домен для HTTPS не предоставлен — localhost не выдаётся за конкурсный стенд.
 
 ## Независимый регресс ветки сдачи
 
 `python scripts/verify_submission_regressions.py`: оригинальные HTTP-маршруты
 vendor через ASGI transport, 195 проверок, три инъекции, реальный Mock ТОиР,
 двойная отправка, неизвестный исход, B1, chief 401/пароль/рекомендация,
-7 локалей failed, C2, PDF 68. Изолированная SQLite, без внешнего Groq.
+7 локалей failed, C2, PDF 68. Изолированная SQLite, без внешнего GigaChat.
 Соединения SQLite закрываются, temp cleanup не блокирует Windows.
 RAG: шесть исходных PDF, 1743 физические страницы, 8/8 контрольных запросов;
 Poppler layout устраняет смешение строк таблицы 68. 73 страницы остаются sparse
@@ -59,7 +59,7 @@ Poppler layout устраняет смешение строк таблицы 68.
 Playwright **50 passed / 0 skipped**, production build без предупреждения о
 размере чанков (vendor 229,74 KB, locales 229,98 KB, SourceViewer 449,69 KB).
 `docker compose config --quiet` проверен с тестовым доменом; сборка образов и
-live Groq C1 требуют запущенного Docker daemon/доступной квоты.
+live GigaChat C1 требует Authorization Key и доступной квоты аккаунта.
 Контейнерный HTTPS-конфиг подготовлен; реальный хост/видео пока не подтверждены.
 
 ### Повторная независимая приёмка 27.11.2026

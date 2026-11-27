@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Контрольные сценарии этапа 03: Mock ML + live Groq agent (ключ только из .env)."""
+"""Контрольные сценарии этапа 03: Mock ML + live GigaChat agent (ключ только из .env)."""
 
 from __future__ import annotations
 
@@ -143,12 +143,12 @@ async def run_scenario(
     return result
 
 
-def sum_groq_usage(db_path: Path) -> dict[str, int]:
+def sum_llm_usage(db_path: Path) -> dict[str, int]:
     if not db_path.is_file():
         return {"rows": 0, "total_tokens": 0}
     with sqlite3.connect(db_path) as conn:
         row = conn.execute(
-            "SELECT COUNT(*), COALESCE(SUM(total_tokens), 0) FROM groq_usage",
+            "SELECT COUNT(*), COALESCE(SUM(total_tokens), 0) FROM llm_usage WHERE provider = 'gigachat'",
         ).fetchone()
     return {"rows": int(row[0]), "total_tokens": int(row[1])}
 
@@ -172,8 +172,8 @@ async def main() -> int:
 
     get_settings.cache_clear()
     settings = get_settings()
-    if not settings.groq_api_key and args.only not in {"check_failed", "drive_permission"}:
-        print("FAIL: GROQ_API_KEY не загружен из .env")
+    if not settings.gigachat_credentials and args.only not in {"check_failed", "drive_permission"}:
+        print("FAIL: GIGACHAT_CREDENTIALS не загружен из .env")
         return 2
 
     async with httpx.AsyncClient(base_url=args.base_url, timeout=120.0) as client:
@@ -198,7 +198,7 @@ async def main() -> int:
         h = health.json()
         print(
             f"health: {h.get('status')} ml={h.get('mock_ml')} toir={h.get('mock_toir')} "
-            f"manuals={h.get('manuals_index')} groq={h.get('groq_agent')}"
+            f"manuals={h.get('manuals_index')} gigachat={h.get('gigachat_agent')}"
         )
 
         scenarios_spec = {
@@ -240,8 +240,8 @@ async def main() -> int:
         if s.usage:
             print(f"  tokens: {s.usage}")
 
-    db_usage = sum_groq_usage(settings.db_path)
-    print(f"\nGroq usage в SQLite: {db_usage['rows']} записей, Σ total_tokens={db_usage['total_tokens']}")
+    db_usage = sum_llm_usage(settings.db_path)
+    print(f"\nGigaChat usage в SQLite: {db_usage['rows']} записей, Σ total_tokens={db_usage['total_tokens']}")
     print(f"Сумма токенов за прогон сценариев: {usage_totals}")
 
     return 1 if failed else 0

@@ -56,6 +56,39 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_ticket_pair_inflight
 ON ticket_submissions(vehicle_id, session_id)
 WHERE submit_status IN ('sending', 'created', 'unknown');
 
+-- New provider-neutral usage tables. Legacy Groq tables below are retained for
+-- backwards compatibility and are migrated into these tables on startup.
+CREATE TABLE IF NOT EXISTS llm_usage_steps (
+    id INTEGER PRIMARY KEY,
+    provider TEXT NOT NULL,
+    conversation_id TEXT NOT NULL,
+    stage TEXT NOT NULL,
+    prompt_tokens INTEGER NOT NULL,
+    completion_tokens INTEGER NOT NULL,
+    total_tokens INTEGER NOT NULL,
+    created_at TEXT NOT NULL
+);
+
+CREATE VIEW IF NOT EXISTS llm_usage_by_check AS
+SELECT u.provider, c.vehicle_id, c.session_id, u.stage, COUNT(*) AS calls,
+       SUM(u.prompt_tokens) AS prompt_tokens, SUM(u.completion_tokens) AS completion_tokens,
+       SUM(u.total_tokens) AS total_tokens
+FROM llm_usage_steps u JOIN chat_conversations c ON c.id = u.conversation_id
+GROUP BY u.provider, c.vehicle_id, c.session_id, u.stage;
+
+CREATE TABLE IF NOT EXISTS llm_usage (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    provider TEXT NOT NULL,
+    stage TEXT NOT NULL,
+    conversation_id TEXT,
+    prompt_tokens INTEGER NOT NULL,
+    completion_tokens INTEGER NOT NULL,
+    total_tokens INTEGER NOT NULL,
+    latency_ms INTEGER NOT NULL,
+    created_at TEXT NOT NULL
+);
+
+-- Historical Groq tables are not written by the current application.
 CREATE TABLE IF NOT EXISTS groq_usage_steps (
     id INTEGER PRIMARY KEY,
     conversation_id TEXT NOT NULL,
@@ -82,6 +115,7 @@ CREATE TABLE IF NOT EXISTS groq_usage (
     latency_ms INTEGER NOT NULL,
     created_at TEXT NOT NULL
 );
+
 CREATE TABLE IF NOT EXISTS chief_quarantine_events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     vehicle_id TEXT NOT NULL,
