@@ -4,7 +4,7 @@ import re
 
 
 def valve_temperature_conflict(engine: str, query: str, load_page) -> list[dict]:
-    if engine != "ЯМЗ-236М2" or not re.search(r"зазор|клапан|valve", query, re.I):
+    if engine != "ЯМЗ-236М2" or not re.search(r"зазор|клапан\w*\s+механизм|valve\s+clearance", query, re.I):
         return []
     candidates = (
         ("y236-re:p0031", r"холодн\w*\s+двигател\w*"),

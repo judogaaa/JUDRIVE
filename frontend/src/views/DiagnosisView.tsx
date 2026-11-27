@@ -20,6 +20,7 @@ import {
 } from '../lib/workflow'
 
 interface DiagnosisViewProps {
+  documentsAuthorized: boolean
   vehicles: VehicleSummary[]
   fleetError: string | null
   onRetryFleet?: () => void
@@ -35,6 +36,7 @@ interface DiagnosisViewProps {
 }
 
 export function DiagnosisView({
+  documentsAuthorized,
   vehicles,
   fleetError,
   onRetryFleet,
@@ -334,8 +336,8 @@ export function DiagnosisView({
             ) : null}
           </section>
 
-          {activeResult && usableStatus(activeResult) === 'anomaly' && engineModel ? (
-            <RelatedManuals key={contextKey} engineModel={engineModel} query={manualQueryFromDiagnosis(activeResult)} />
+          {documentsAuthorized && activeResult && usableStatus(activeResult) === 'anomaly' && engineModel ? (
+            <RelatedManuals key={contextKey} vehicleId={vehicleId} sessionId={sessionId} engineModel={engineModel} query={manualQueryFromDiagnosis(activeResult)} />
           ) : null}
           <section className="diag-history" id="diagnosis-history" tabIndex={-1}>
             <VehicleHistoryPanel
@@ -349,8 +351,9 @@ export function DiagnosisView({
         </div>
 
         <section className="diag-chat" id="diagnosis-chat" tabIndex={-1}>
-          {activeSession ? (
+          {activeSession && documentsAuthorized ? (
             <AgentChat
+              engineModel={engineModel ?? ''}
               key={contextKey}
               vehicleId={vehicleId}
               sessionId={sessionId}

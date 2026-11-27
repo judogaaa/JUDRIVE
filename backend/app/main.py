@@ -10,7 +10,7 @@ from app.agent.orchestrator import AgentOrchestrator
 from app.auth.chief_session import clear_session, login as chief_login, require_chief, session_ok
 from app.rag.catalog import MANUAL_SPECS
 from app.config import get_settings
-from app.rag.catalog import SPECS_BY_ID
+from app.rag.catalog import allowed_doc_ids
 from app.rag.service import ManualRagService
 from app.schemas.analytics import QuarantineRecommendationRequest
 from app.schemas.chat import ChatMessageRequest, ConversationCreate
@@ -89,7 +89,7 @@ async def health() -> HealthResponse:
         toir_ok = False
     rag_status = rag_service.status()
     rag_ok = rag_status.get("index_current") and not rag_status.get("missing_files")
-    groq_ready = bool(settings.groq_api_key)
+    groq_ready = agent.provider_ready()
     status = "ok" if ml_ok and toir_ok and rag_ok and groq_ready else "degraded"
     return HealthResponse(
         status=status,
@@ -158,7 +158,7 @@ async def auth_session(request: Request):
     return {"authenticated": session_ok(request, get_settings())}
 
 
-@app.get(f"{settings.api_prefix}/manuals/catalog")
+@app.get(f"{settings.api_prefix}/manuals/catalog", dependencies=[Depends(_chief_guard)])
 async def manuals_catalog():
     groups: dict[str, list[dict[str, str | int]]] = {}
     for spec in MANUAL_SPECS:
@@ -173,19 +173,20 @@ async def manuals_catalog():
     return {"engines": [{"engine_model": engine, "documents": docs} for engine, docs in groups.items()]}
 
 
-@app.get(f"{settings.api_prefix}/manuals/status")
+@app.get(f"{settings.api_prefix}/manuals/status", dependencies=[Depends(_chief_guard)])
 async def manuals_status():
     status = rag_service.status()
     return {key: status[key] for key in ("index_current", "documents", "pages", "missing_files")}
 
 
-@app.post(f"{settings.api_prefix}/manuals/search", response_model=ManualSearchResponse)
+@app.post(f"{settings.api_prefix}/manuals/search", dependencies=[Depends(_chief_guard)], response_model=ManualSearchResponse)
 async def manuals_search(body: ManualSearchRequest, response: Response) -> ManualSearchResponse:
     import asyncio
 
     response.headers["Cache-Control"] = "private, no-store"
     response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
-    payload = await asyncio.to_thread(rag_service.search, body.engine_model, body.query, limit=body.limit)
+    engine = _document_engine(body.engine_model, body.vehicle_id, body.session_id)
+    payload = await asyncio.to_thread(rag_service.search, engine, body.query, limit=body.limit)
     hits = [ManualSearchHit.model_validate(item) for item in payload.get("results", [])]
     return ManualSearchResponse(
         status=payload["status"],
@@ -199,19 +200,31 @@ async def manuals_search(body: ManualSearchRequest, response: Response) -> Manua
     )
 
 
-@app.get(f"{settings.api_prefix}/sources/evidence/{{evidence_id}}")
-async def get_source_evidence(evidence_id: str, response: Response):
+def _document_engine(engine_model: str, vehicle_id: str | None, session_id: str | None) -> str:
+    if vehicle_id is not None or session_id is not None:
+        if not vehicle_id or not session_id or fleet.session_engine(vehicle_id, session_id) != engine_model:
+            raise HTTPException(status_code=404, detail="Источник недоступен для этой проверки")
+    return engine_model
+
+
+@app.get(f"{settings.api_prefix}/sources/evidence/{{evidence_id}}", dependencies=[Depends(_chief_guard)])
+async def get_source_evidence(evidence_id: str, response: Response, engine_model: str,
+                              vehicle_id: str | None = None, session_id: str | None = None):
+    engine = _document_engine(engine_model, vehicle_id, session_id)
+    if evidence_id.split(":")[0] not in allowed_doc_ids(engine):
+        raise HTTPException(status_code=404, detail="Источник недоступен")
     evidence = rag_service.get_evidence(evidence_id)
-    if not evidence or not rag_service.resolve_pdf_path(evidence["doc_id"]):
+    if not evidence or evidence["doc_id"] not in allowed_doc_ids(engine) or not rag_service.resolve_pdf_path(evidence["doc_id"]):
         raise HTTPException(status_code=404, detail="Источник недоступен")
     response.headers["Cache-Control"] = "private, no-store"
     response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
-    return evidence
+    return {key: value for key, value in evidence.items() if key != "filename"}
 
 
-@app.get(f"{settings.api_prefix}/sources/pdf/{{doc_id}}")
-async def get_source_pdf(doc_id: str):
-    if doc_id not in SPECS_BY_ID:
+@app.get(f"{settings.api_prefix}/sources/pdf/{{doc_id}}", dependencies=[Depends(_chief_guard)])
+async def get_source_pdf(doc_id: str, engine_model: str,
+                         vehicle_id: str | None = None, session_id: str | None = None):
+    if doc_id not in allowed_doc_ids(_document_engine(engine_model, vehicle_id, session_id)):
         raise HTTPException(status_code=404, detail="Неизвестный документ")
     path = rag_service.resolve_pdf_path(doc_id)
     if not path:
@@ -219,7 +232,7 @@ async def get_source_pdf(doc_id: str):
     return FileResponse(
         path,
         media_type="application/pdf",
-        filename=path.name,
+        filename=f"{doc_id}.pdf",
         content_disposition_type="inline",
         headers={"Accept-Ranges": "bytes", "Cache-Control": "private, no-store",
                  "Cross-Origin-Resource-Policy": "same-origin"},
@@ -231,13 +244,15 @@ async def create_conversation(body: ConversationCreate):
     return agent.create_conversation(body.vehicle_id, body.session_id)
 
 
-@app.get(f"{settings.api_prefix}/conversations/{{conversation_id}}/messages")
-async def conversation_messages(conversation_id: str):
+@app.get(f"{settings.api_prefix}/conversations/{{conversation_id}}/messages", dependencies=[Depends(_chief_guard)])
+async def conversation_messages(conversation_id: str, response: Response):
+    response.headers["Cache-Control"] = "private, no-store"
     return {"messages": agent.get_conversation_messages(conversation_id)}
 
 
-@app.post(f"{settings.api_prefix}/conversations/{{conversation_id}}/messages")
-async def conversation_send(conversation_id: str, body: ChatMessageRequest):
+@app.post(f"{settings.api_prefix}/conversations/{{conversation_id}}/messages", dependencies=[Depends(_chief_guard)])
+async def conversation_send(conversation_id: str, body: ChatMessageRequest, response: Response):
+    response.headers["Cache-Control"] = "private, no-store"
     return await agent.send_message(
         conversation_id,
         body.message,
@@ -257,7 +272,7 @@ async def voice_transcribe(
     return await voice_service.transcribe(file, language=lang)
 
 
-@app.get(f"{settings.api_prefix}/tickets/drafts/{{draft_id}}")
+@app.get(f"{settings.api_prefix}/tickets/drafts/{{draft_id}}", dependencies=[Depends(_chief_guard)])
 async def get_ticket_draft(draft_id: str):
     draft = app_repo.get_draft(draft_id)
     if not draft:
@@ -271,14 +286,14 @@ async def get_ticket_draft(draft_id: str):
     }
 
 
-@app.post(f"{settings.api_prefix}/tickets/drafts/{{draft_id}}/confirm")
+@app.post(f"{settings.api_prefix}/tickets/drafts/{{draft_id}}/confirm", dependencies=[Depends(_chief_guard)])
 async def confirm_ticket_draft(draft_id: str, body: TicketConfirmRequest):
     if not body.acknowledge:
         raise HTTPException(status_code=400, detail="Требуется явное подтверждение")
     return await ticket_service.confirm(draft_id, body.confirm_nonce, warning_acknowledged=body.warning_acknowledged, urgency=body.urgency)
 
 
-@app.get(f"{settings.api_prefix}/tickets")
+@app.get(f"{settings.api_prefix}/tickets", dependencies=[Depends(_chief_guard)])
 async def list_submitted_tickets(vehicle_id: str | None = None):
     return {"tickets": app_repo.list_tickets(vehicle_id)}
 

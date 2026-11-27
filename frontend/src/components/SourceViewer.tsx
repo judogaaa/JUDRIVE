@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { ArrowLeft, ChevronLeft, ChevronRight, ExternalLink, Maximize2, Minimize2, Minus, Plus, RotateCcw, X } from 'lucide-react'
 import * as pdfjs from 'pdfjs-dist'
 import type { PDFDocumentProxy, RenderTask } from 'pdfjs-dist'
-import type { ManualSearchHit } from '../api/manuals'
+import type { DocumentScope, ManualSearchHit } from '../api/manuals'
 import { pdfDocUrl, pdfSourceUrl } from '../api/manuals'
 import { useI18n } from '../i18n/I18nContext'
 import { rememberManualPage, type RecentPage } from '../lib/manuals'
@@ -12,6 +12,7 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.m
 
 interface SourceViewerProps {
   hit: ManualSearchHit | null
+  scope: DocumentScope
   onClose: () => void
   onRecentChange?: (pages: RecentPage[]) => void
 }
@@ -20,8 +21,9 @@ export function SourceViewer({ hit, ...props }: SourceViewerProps) {
   return hit ? <SourceViewerBody key={`${hit.doc_id}:${hit.pdf_page}`} hit={hit} {...props} /> : null
 }
 
-function SourceViewerBody({ hit, onClose, onRecentChange }: Omit<SourceViewerProps, 'hit'> & { hit: ManualSearchHit }) {
+function SourceViewerBody({ hit, scope, onClose, onRecentChange }: Omit<SourceViewerProps, 'hit'> & { hit: ManualSearchHit }) {
   const { t } = useI18n()
+  const url = pdfDocUrl(hit.doc_id, scope)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
   const closeRef = useRef<HTMLButtonElement>(null)
@@ -82,7 +84,7 @@ function SourceViewerBody({ hit, onClose, onRecentChange }: Omit<SourceViewerPro
     setFailed(false)
     setLoadingPdf(true)
     setRendering(true)
-    const loadingTask = pdfjs.getDocument({ url: pdfDocUrl(hit.doc_id) })
+    const loadingTask = pdfjs.getDocument({ url })
     void loadingTask.promise.then((pdf) => {
       if (cancelled) return
       if (hit.pdf_page < 1 || hit.pdf_page > pdf.numPages) throw new Error('Source page outside document')
@@ -96,7 +98,7 @@ function SourceViewerBody({ hit, onClose, onRecentChange }: Omit<SourceViewerPro
       cancelled = true
       void loadingTask.destroy().catch(() => undefined)
     }
-  }, [hit.doc_id, hit.pdf_page, loadRetry])
+  }, [url, hit.pdf_page, loadRetry])
 
   useEffect(() => {
     if (!pdfDoc) return
@@ -189,7 +191,7 @@ function SourceViewerBody({ hit, onClose, onRecentChange }: Omit<SourceViewerPro
           {failed ? <div className="pdf-status" role="alert"><p>{t('error.pdfRender')}</p><button className="btn btn--secondary" type="button" onClick={() => pdfDoc ? setRenderRetry((n) => n + 1) : setLoadRetry((n) => n + 1)}><RotateCcw size={16} />{t('history.retry')}</button></div> : null}
           <canvas ref={canvasRef} aria-label={`${hit.manual_title}, ${t('source.pdfPage', { page: pageNumber })}`} style={{ visibility: failed || loadingPdf || rendering ? 'hidden' : 'visible' }} />
         </div>
-        <a className="ghost-button source-external" href={pdfSourceUrl(hit.doc_id, pageNumber)} target="_blank" rel="noreferrer"><ExternalLink size={16} aria-hidden />{t('source.openPdf')}</a>
+        <a className="ghost-button source-external" href={pdfSourceUrl(hit.doc_id, pageNumber, scope)} target="_blank" rel="noreferrer"><ExternalLink size={16} aria-hidden />{t('source.openPdf')}</a>
       </div>
     </div>
   )

@@ -5,6 +5,7 @@ import type { Page } from '@playwright/test'
 const REPO_ROOT = join(__dirname, '..', '..')
 
 export function loadDotEnv(): void {
+  if (process.env.JUDRIVE_E2E_MANAGED) return
   const path = join(REPO_ROOT, '.env')
   if (!existsSync(path)) return
   for (const line of readFileSync(path, 'utf8').split(/\r?\n/)) {

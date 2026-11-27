@@ -1,7 +1,9 @@
 import { expect, test } from '@playwright/test'
 import { chiefCredentials, loadDotEnv, openNav } from './helpers/common'
 
-test.beforeAll(() => loadDotEnv())
+test.use({ storageState: { cookies: [], origins: [] } })
+
+test.beforeAll(() => { if (!process.env.JUDRIVE_E2E_MANAGED) loadDotEnv() })
 
 test.describe('Chief mechanic auth and filters', () => {
   test('rejects a wrong password and protects the dashboard API', async ({ page, request }) => {
@@ -11,6 +13,7 @@ test.describe('Chief mechanic auth and filters', () => {
     const user = process.env.CHIEF_USERNAME
     test.skip(!user, 'Задайте CHIEF_USERNAME для проверки формы входа')
 
+    await page.addInitScript(() => localStorage.setItem('judrive-onboarding', JSON.stringify({ version: 1, status: 'completed', step: 6, acknowledged: true })))
     await page.goto('/')
     await openNav(page, /Главный механик/)
     await expect(page.getByRole('heading', { name: 'Вход главного механика' })).toBeVisible()
@@ -28,6 +31,7 @@ test.describe('Chief mechanic auth and filters', () => {
     const creds = chiefCredentials()
     test.skip(!creds, 'Задайте E2E_CHIEF_PASSWORD (и CHIEF_USERNAME в .env) для полного входа')
 
+    await page.addInitScript(() => localStorage.setItem('judrive-onboarding', JSON.stringify({ version: 1, status: 'completed', step: 6, acknowledged: true })))
     await page.goto('/')
     await openNav(page, /Главный механик/)
     await page.getByLabel('Имя').fill(creds.user)

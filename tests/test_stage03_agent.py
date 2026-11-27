@@ -96,8 +96,8 @@ def test_health_reports_groq_field():
     assert body["groq_agent"] in {"configured", "missing_key"}
 
 
-def test_conversation_create_and_invalid_pair():
-    client = TestClient(app)
+def test_conversation_create_and_invalid_pair(auth_client):
+    client = auth_client
     ok = client.post(
         "/api/conversations",
         json={"vehicle_id": "M333YK47", "session_id": "S-0006"},
@@ -132,8 +132,8 @@ def test_acceptance_diagnose_statuses():
 
 
 @pytest.mark.integration
-def test_ticket_confirm_refused_for_normal_session():
-    client = TestClient(app)
+def test_ticket_confirm_refused_for_normal_session(auth_client):
+    client = auth_client
     diag = client.post(
         "/api/diagnose",
         json={"vehicle_id": "M333YK47", "session_id": "S-0006"},
@@ -165,12 +165,12 @@ def test_ticket_confirm_refused_for_normal_session():
     ("hi", "क्या गाड़ी चला सकता हूँ?"),
     ("bn", "আমি কি গাড়ি চালাতে পারি?"),
 ])
-def test_clearance_intents_are_refused_without_llm(locale, question, monkeypatch, tmp_path):
+def test_clearance_intents_are_refused_without_llm(locale, question, monkeypatch, tmp_path, auth_client):
     from app.agent.locale import insufficient_evidence_reply
     from app.main import agent
     from app.storage.repository import AppRepository
     monkeypatch.setattr(agent, "_repo", AppRepository(tmp_path / "clearance.sqlite"))
-    client = TestClient(app)
+    client = auth_client
     created = client.post("/api/conversations", json={"vehicle_id": "B418HK98", "session_id": "S-0009"})
     assert created.status_code == 200
     cid = created.json()["conversation_id"]
@@ -187,7 +187,7 @@ def test_manual_intents_across_locales(question):
     assert _is_manual_question(question)
 
 
-def test_context_action_retry_keeps_one_complete_turn(monkeypatch, tmp_path):
+def test_context_action_retry_keeps_one_complete_turn(monkeypatch, tmp_path, auth_client):
     from app.agent.groq_client import GroqRateLimitError
     from app.main import agent
     from app.storage.repository import AppRepository
@@ -218,7 +218,7 @@ def test_context_action_retry_keeps_one_complete_turn(monkeypatch, tmp_path):
     monkeypatch.setattr(agent._mock_ml, "diagnose", diagnose)
     monkeypatch.setattr(agent, "_groq", lambda: provider)
 
-    client = TestClient(app)
+    client = auth_client
     created = client.post("/api/conversations", json={"vehicle_id": "M333YK47", "session_id": "S-0006"})
     url = f"/api/conversations/{created.json()['conversation_id']}/messages"
     body = {"message": "Что проверить?", "action": "explain"}
@@ -232,14 +232,14 @@ def test_context_action_retry_keeps_one_complete_turn(monkeypatch, tmp_path):
     assert checked == [("M333YK47", "S-0006")] * 2
 
 
-def test_chat_rejects_missing_and_other_engine_source(monkeypatch, tmp_path):
+def test_chat_rejects_missing_and_other_engine_source(monkeypatch, tmp_path, auth_client):
     from app.main import agent
     from app.storage.repository import AppRepository
 
     monkeypatch.setattr(agent, "_repo", AppRepository(tmp_path / "attachment.sqlite"))
     monkeypatch.setattr(agent._rag, "get_evidence", lambda evidence_id:
                         {"doc_id": "z409-rk"} if evidence_id == "other:p0001" else None)
-    client = TestClient(app)
+    client = auth_client
     response = client.post("/api/conversations", json={"vehicle_id": "B418HK98", "session_id": "S-0009"})
     url = f"/api/conversations/{response.json()['conversation_id']}/messages"
 
@@ -250,7 +250,7 @@ def test_chat_rejects_missing_and_other_engine_source(monkeypatch, tmp_path):
     assert client.get(url).json()["messages"] == []
 
 
-def test_valid_attached_page_is_grounded_and_cannot_prepare_ticket(monkeypatch, tmp_path):
+def test_valid_attached_page_is_grounded_and_cannot_prepare_ticket(monkeypatch, tmp_path, auth_client):
     from app.main import agent
     from app.storage.repository import AppRepository
 
@@ -273,7 +273,7 @@ def test_valid_attached_page_is_grounded_and_cannot_prepare_ticket(monkeypatch, 
 
     monkeypatch.setattr(agent._mock_ml, "diagnose", diagnose)
     monkeypatch.setattr(agent, "_groq", lambda: Provider())
-    client = TestClient(app)
+    client = auth_client
     created = client.post("/api/conversations", json={"vehicle_id": "B418HK98", "session_id": "S-0009"})
     assert created.status_code == 200
     url = f"/api/conversations/{created.json()['conversation_id']}/messages"

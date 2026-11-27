@@ -18,6 +18,7 @@ interface ManualsViewProps {
   isVisible: boolean
   chatEngineModel: string | null
   chatTargetLabel?: string
+  vehicleContext?: { vehicleId: string; sessionId: string; engineModel: string }
   searchIntent?: ManualSearchIntent | null
   onSearchIntentConsumed?: () => void
   onAskInChat?: (text: string, engine: string, evidenceId: string, evidenceLabel: string) => void
@@ -27,7 +28,7 @@ interface ManualsViewProps {
 
 const FAV_KEY = 'judrive-manual-fav'
 
-export function ManualsView({ engineModel, isVisible, chatEngineModel, chatTargetLabel, searchIntent, onSearchIntentConsumed, onAskInChat, onBack, backLabel }: ManualsViewProps) {
+export function ManualsView({ engineModel, isVisible, chatEngineModel, chatTargetLabel, vehicleContext, searchIntent, onSearchIntentConsumed, onAskInChat, onBack, backLabel }: ManualsViewProps) {
   const { t } = useI18n()
   const [engines, setEngines] = useState<{ engine_model: string; documents: CatalogDoc[] }[]>([])
   const [catalogLoading, setCatalogLoading] = useState(true)
@@ -100,7 +101,9 @@ export function ManualsView({ engineModel, isVisible, chatEngineModel, chatTarge
       .some((field) => field.toLowerCase().includes(query)))
   }, [allDocs, catalogQuery, engine, favorites, recent, tab])
 
-  const openDoc = (doc: CatalogDoc, page: number) => {
+  const [openedEngine, setOpenedEngine] = useState('')
+  const openDoc = (doc: CatalogDoc & { engines: string[] }, page: number) => {
+    setOpenedEngine(doc.engines.includes(engine) ? engine : doc.engines[0])
     setOpen({
       evidence_id: doc.doc_id,
       doc_id: doc.doc_id,
@@ -236,6 +239,7 @@ export function ManualsView({ engineModel, isVisible, chatEngineModel, chatTarge
 
       <ManualSearchPanel
         isVisible={isVisible}
+        vehicleContext={vehicleContext}
         chatTargetLabel={chatTargetLabel}
         engineModel={(searchIntent?.engineModel ?? engine) || null}
         searchIntent={searchIntent}
@@ -243,7 +247,7 @@ export function ManualsView({ engineModel, isVisible, chatEngineModel, chatTarge
         onAskInChat={engine === chatEngineModel ? onAskInChat : undefined}
         onRecentChange={setRecent}
       />
-      <SourceDrawer hit={isVisible ? open : null} onClose={() => setOpen(null)} onRecentChange={setRecent} />
+      <SourceDrawer scope={{ engineModel: openedEngine }} hit={isVisible ? open : null} onClose={() => setOpen(null)} onRecentChange={setRecent} />
     </div>
   )
 }

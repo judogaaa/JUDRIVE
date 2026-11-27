@@ -13,6 +13,7 @@ interface ManualSearchPanelProps {
   engineModel: string | null
   isVisible?: boolean
   chatTargetLabel?: string
+  vehicleContext?: { vehicleId: string; sessionId: string; engineModel: string }
   searchIntent?: ManualSearchIntent | null
   onSearchIntentConsumed?: () => void
   onAskInChat?: (text: string, engine: string, evidenceId: string, evidenceLabel: string) => void
@@ -27,7 +28,8 @@ const QUICK_QUERIES = [
 
 const GENERAL_INSPECTION_QUERY = 'осмотр двигателя техническое обслуживание'
 
-export function ManualSearchPanel({ engineModel, isVisible = true, chatTargetLabel, searchIntent, onSearchIntentConsumed, onAskInChat, onRecentChange }: ManualSearchPanelProps) {
+export function ManualSearchPanel({ engineModel, isVisible = true, chatTargetLabel, vehicleContext, searchIntent, onSearchIntentConsumed, onAskInChat, onRecentChange }: ManualSearchPanelProps) {
+  const context = vehicleContext?.engineModel === engineModel ? vehicleContext : undefined
   const { locale, t } = useI18n()
   const [query, setQuery] = useState(searchIntent?.query ?? '')
   const [loading, setLoading] = useState(false)
@@ -67,7 +69,7 @@ export function ManualSearchPanel({ engineModel, isVisible = true, chatTargetLab
   const hint = useMemo(() => {
     if (!engineModel) return t('manual.hintNoVehicle')
     return `${t('manual.hintEngine')} «${engineModel}».`
-  }, [engineModel, t])
+  }, [engineModel, t, context])
 
   const runSearch = useCallback(
     async (q: string, autoOpenSingle?: boolean) => {
@@ -80,7 +82,7 @@ export function ManualSearchPanel({ engineModel, isVisible = true, chatTargetLab
       setPayload(null)
       setActive(null)
       try {
-        const result = await searchManuals(engineModel, q.trim(), 6, request.signal)
+        const result = await searchManuals(engineModel, q.trim(), 6, request.signal, context)
         if (!mountedRef.current || request.signal.aborted) return
         setPayload(result)
         if (visibleRef.current && autoOpenSingle && result.status === 'ok' && result.results.length === 1) {
@@ -231,7 +233,7 @@ export function ManualSearchPanel({ engineModel, isVisible = true, chatTargetLab
         </ul>
       ) : null}
 
-      <SourceDrawer hit={isVisible ? active : null} onClose={() => setActive(null)} onRecentChange={onRecentChange} />
+      <SourceDrawer scope={{ engineModel: engineModel ?? '', vehicleId: context?.vehicleId, sessionId: context?.sessionId }} hit={isVisible ? active : null} onClose={() => setActive(null)} onRecentChange={onRecentChange} />
     </section>
   )
 }

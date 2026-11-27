@@ -7,7 +7,7 @@ import { useOnboarding } from './hooks/useOnboarding'
 import { useTheme } from './hooks/useTheme'
 import { useI18n } from './i18n/I18nContext'
 import { HelpView } from './views/HelpView'
-import { ChiefMechanicView } from './views/ChiefMechanicView'
+import { ChiefLogin, ChiefMechanicView } from './views/ChiefMechanicView'
 import { DiagnosisView } from './views/DiagnosisView'
 import { FleetView } from './views/FleetView'
 import { ManualsView } from './views/ManualsView'
@@ -37,6 +37,22 @@ export default function App() {
     setVisited((current) => current.includes(next) ? current : [...current, next])
     setView(next)
   }
+  const [authenticated, setAuthenticated] = useState<boolean | null>(null)
+  useEffect(() => {
+    const request = new AbortController()
+    const checkSession = () => fetch('/api/auth/session', { signal: request.signal, cache: 'no-store' })
+      .then((response) => response.json())
+      .then((body) => { if (!request.signal.aborted) setAuthenticated(body.authenticated === true) })
+      .catch(() => { if (!request.signal.aborted) setAuthenticated(false) })
+    void checkSession()
+    window.addEventListener('judrive-auth-change', checkSession)
+    window.addEventListener('focus', checkSession)
+    return () => {
+      window.removeEventListener('judrive-auth-change', checkSession)
+      window.removeEventListener('focus', checkSession)
+      request.abort()
+    }
+  }, [view])
   const [vehicles, setVehicles] = useState<VehicleSummary[]>([])
   const [fleetError, setFleetError] = useState<string | null>(null)
   const [fleetRevision, setFleetRevision] = useState(0)
@@ -148,6 +164,12 @@ export default function App() {
   return (
     <>
       <WorkspaceShell modalOpen={onboarding.open} view={view} onViewChange={navigate} themeMode={themeMode} onThemeChange={setThemeMode}>
+        {authenticated === false && ['diagnosis', 'manuals', 'tickets'].includes(view) && (
+          <details className="panel" open={view !== 'diagnosis'}>
+            <summary>{t('auth.submit')} · {t('nav.manuals')} / {t('nav.tickets')}</summary>
+            <ChiefLogin onSuccess={() => setAuthenticated(true)} />
+          </details>
+        )}
         <div hidden={view !== 'diagnosis'}>
           {diagnosisOrigin && diagnosisOrigin !== 'diagnosis' && (
             <button type="button" className="btn btn--secondary context-return" onClick={() => navigate(diagnosisOrigin)}>
@@ -156,6 +178,7 @@ export default function App() {
           )}
           <DiagnosisView
             vehicles={vehicles}
+            documentsAuthorized={authenticated === true}
             fleetError={fleetError}
             onRetryFleet={retryFleet}
             vehicleId={vehicleId}
@@ -187,13 +210,14 @@ export default function App() {
             onThemeChange={setThemeMode}
           />
         ) : null}
-        {visited.includes('manuals') ? (
+        {authenticated && visited.includes('manuals') ? (
           <div hidden={view !== 'manuals'}>
             <ManualsView
               key={manualRevision}
               engineModel={manualEngine ?? currentEngine}
               isVisible={view === 'manuals'}
               chatEngineModel={manualChatTarget?.engineModel ?? null}
+              vehicleContext={manualChatTarget ?? undefined}
               chatTargetLabel={manualChatTarget ? `${manualChatTarget.vehicleId} · ${manualChatTarget.sessionId}` : undefined}
               searchIntent={manualIntent}
               onSearchIntentConsumed={() => setManualIntent(null)}
@@ -227,10 +251,11 @@ export default function App() {
             />
           </div>
         ) : null}
-        {visited.includes('tickets') ? (
+        {authenticated && visited.includes('tickets') ? (
           <div hidden={view !== 'tickets'}>
             <TicketsView
               isVisible={view === 'tickets'}
+              engineForVehicle={(id) => vehicles.find((vehicle) => vehicle.vehicle_id === id)?.engine_model ?? ''}
               filterVehicleId={ticketsVehicleFilter}
               linkedTicketId={linkedTicket}
               onLinkedTicketConsumed={() => setLinkedTicket(undefined)}

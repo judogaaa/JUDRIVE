@@ -5,7 +5,7 @@ import { useI18n } from '../i18n/I18nContext'
 import { SourceDrawer } from './SourceDrawer'
 
 /** Search data only; these are leads for investigation, not a diagnosis or repair authorization. */
-export function RelatedManuals({ engineModel, query }: { engineModel: string; query: string }) {
+export function RelatedManuals({ engineModel, query, vehicleId, sessionId }: { engineModel: string; query: string; vehicleId: string; sessionId: string }) {
   const { locale, t } = useI18n()
   const [data, setData] = useState<ManualSearchResponse | null>(null)
   const [error, setError] = useState(false)
@@ -15,11 +15,11 @@ export function RelatedManuals({ engineModel, query }: { engineModel: string; qu
     const ctrl = new AbortController()
     setData(null)
     setError(false)
-    searchManuals(engineModel, query, 8, ctrl.signal)
+    searchManuals(engineModel, query, 8, ctrl.signal, { vehicleId, sessionId })
       .then((response) => { if (!ctrl.signal.aborted) setData(response) })
       .catch(() => { if (!ctrl.signal.aborted) setError(true) })
     return () => ctrl.abort()
-  }, [engineModel, query, retry])
+  }, [engineModel, query, retry, vehicleId, sessionId])
   return (
     <section className="panel related-manuals" aria-live="polite">
       <h3 className="panel__title"><BookOpen size={17} aria-hidden /> {t('verdict.related.title')}</h3>
@@ -47,7 +47,7 @@ export function RelatedManuals({ engineModel, query }: { engineModel: string; qu
           ))}
         </ul>
       )}
-      <SourceDrawer hit={opened} onClose={() => setOpened(null)} />
+      <SourceDrawer scope={{ engineModel, vehicleId, sessionId }} hit={opened} onClose={() => setOpened(null)} />
     </section>
   )
 }

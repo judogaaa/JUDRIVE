@@ -161,8 +161,14 @@ async def main() -> int:
         choices=("normal", "anomaly", "check_failed", "drive_permission"),
         help="Выполнить один сценарий (например anomaly — B418HK98/S-0009 + TKT)",
     )
+    parser.add_argument("--live", action="store_true", help="Явно разрешить вызовы настроенного провайдера")
     parser.add_argument("--confirm", action="store_true", help="Явно разрешить создание тестовой заявки в Mock ТОиР")
     args = parser.parse_args()
+
+    requires_provider = args.only not in {"check_failed", "drive_permission"}
+    if requires_provider and not args.live:
+        print("BLOCKED: для live-сценария необходимо явное разрешение --live")
+        return 2
 
     get_settings.cache_clear()
     settings = get_settings()
@@ -171,6 +177,20 @@ async def main() -> int:
         return 2
 
     async with httpx.AsyncClient(base_url=args.base_url, timeout=120.0) as client:
+        from getpass import getpass
+        from urllib.parse import urlsplit
+
+        url = urlsplit(args.base_url)
+        if url.scheme != "https" and url.hostname not in {"localhost", "127.0.0.1", "::1"}:
+            print("BLOCKED: удалённый вход требует HTTPS")
+            return 2
+        username = settings.chief_username or input("Имя главного механика: ")
+        login = await client.post("/api/auth/login", json={
+            "username": username, "password": getpass("Пароль: "),
+        })
+        if login.status_code != 200:
+            print(f"BLOCKED: вход HTTP {login.status_code}")
+            return 2
         health = await client.get("/api/health")
         if health.status_code != 200:
             print(f"FAIL: backend {args.base_url} недоступен")

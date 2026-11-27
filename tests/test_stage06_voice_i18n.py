@@ -66,8 +66,8 @@ def test_locale_values_have_no_placeholder_or_mojibake_artifacts():
             assert "Ð" not in text, f"{name}/{key} contains mojibake: {text!r}"
 
 
-def test_chat_accepts_locale_field():
-    client = TestClient(app)
+def test_chat_accepts_locale_field(auth_client):
+    client = auth_client
     conv = client.post(
         "/api/conversations",
         json={"vehicle_id": "M333YK47", "session_id": "S-0006", "locale": "uz"},

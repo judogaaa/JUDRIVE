@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react'
-import type { ManualSearchHit } from '../api/manuals'
+import type { DocumentScope, ManualSearchHit } from '../api/manuals'
 import type { RecentPage } from '../lib/manuals'
 import { useI18n } from '../i18n/I18nContext'
 
@@ -9,6 +9,7 @@ const LazySourceViewer = lazy(() =>
 
 interface SourceDrawerProps {
   hit: ManualSearchHit | null
+  scope: DocumentScope
   onClose: () => void
   onRecentChange?: (pages: RecentPage[]) => void
 }
@@ -17,11 +18,11 @@ interface SourceDrawerProps {
  * PDF.js is loaded only when a mechanic actually opens a source.
  * This keeps the initial workspace bundle free of the viewer dependency.
  */
-export function SourceDrawer({ hit, onClose, onRecentChange }: SourceDrawerProps) {
+export function SourceDrawer({ hit, scope, onClose, onRecentChange }: SourceDrawerProps) {
   if (!hit) return null
   return (
     <Suspense fallback={<SourceLoading hit={hit} onClose={onClose} />}>
-      <LazySourceViewer hit={hit} onClose={onClose} onRecentChange={onRecentChange} />
+      <LazySourceViewer hit={hit} scope={scope} onClose={onClose} onRecentChange={onRecentChange} />
     </Suspense>
   )
 }

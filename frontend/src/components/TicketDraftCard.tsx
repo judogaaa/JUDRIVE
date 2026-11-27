@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { CheckCircle2, ShieldCheck } from 'lucide-react'
 import { confirmTicketDraft, type DraftPayload } from '../api/chat'
-import type { ManualSearchHit } from '../api/manuals'
+import type { DocumentScope, ManualSearchHit } from '../api/manuals'
 import { useI18n } from '../i18n/I18nContext'
 import type { TranslationKey } from '../i18n/translations'
 import { resolveErrorMessage } from '../lib/i18nError'
@@ -9,22 +9,25 @@ import { docIdFromManualTitle } from '../lib/manuals'
 import { SourceDrawer } from './SourceDrawer'
 
 interface TicketDraftCardProps {
+  scope: DocumentScope
   draft: DraftPayload | null
   onConfirmed: (ticketId: string) => void
   onReplace?: () => void
 }
 
-export function TicketDraftCard({ draft, onConfirmed, onReplace }: TicketDraftCardProps) {
+export function TicketDraftCard({ draft, scope, onConfirmed, onReplace }: TicketDraftCardProps) {
   if (!draft?.draft_id || !draft.confirm_nonce) return null
-  return <TicketDraftBody key={draft.draft_id} draft={draft} onConfirmed={onConfirmed} onReplace={onReplace} />
+  return <TicketDraftBody key={draft.draft_id} draft={draft} scope={scope} onConfirmed={onConfirmed} onReplace={onReplace} />
 }
 
 function TicketDraftBody({
   draft,
+  scope,
   onConfirmed,
   onReplace,
 }: {
   draft: DraftPayload
+  scope: DocumentScope
   onConfirmed: (ticketId: string) => void
   onReplace?: () => void
 }) {
@@ -231,7 +234,7 @@ function TicketDraftBody({
         {phase === 'sending' ? t('ticket.draft.sending') : t('ticket.confirmBtn')}
       </button>
       </section>
-      <SourceDrawer hit={source} onClose={() => setSource(null)} />
+      <SourceDrawer scope={scope} hit={source} onClose={() => setSource(null)} />
     </>
   )
 }

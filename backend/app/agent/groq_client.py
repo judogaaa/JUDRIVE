@@ -39,7 +39,7 @@ class GroqRateLimitError(RuntimeError):
 class GroqClient:
     def __init__(
         self,
-        api_key: str,
+        api_key: str | None,
         model: str,
         *,
         base_url: str = "https://api.groq.com/openai/v1",
@@ -79,7 +79,7 @@ class GroqClient:
             async with httpx.AsyncClient(timeout=self._timeout_s) as client:
                 response = await client.post(
                     f"{self._base}/chat/completions",
-                    headers={"Authorization": f"Bearer {self._api_key}"},
+                    headers={"Authorization": f"Bearer {self._api_key}"} if self._api_key else {},
                     json=payload,
                 )
                 if response.status_code == 429:

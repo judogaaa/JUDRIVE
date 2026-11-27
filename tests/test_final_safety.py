@@ -205,3 +205,26 @@ def test_analytical_priority_uses_recorded_facts(code, score, quality, priority)
     history = [{"session_id": diag.session_id, "checked_at": "2026-11-26T00:00:00Z"}]
     fleet = SimpleNamespace(vehicle_history=lambda *_: history)
     assert diagnosis_review_priority(fleet, diag) == priority
+
+
+_EXPECTED_CANDIDATES = {
+    "ЯМЗ-236М2": {1, 2, 3, 4, 5, 6, 7, 8},
+    "ЯМЗ-536": {1, 2, 3, 4, 5, 6, 7, 8, 9},
+    "ЗМЗ-5234.10": {1, 2, 3, 4, 5, 6, 7, 12, 13},
+    "ЗМЗ-40904.10": {1, 2, 3, 4, 5, 6, 7, 12, 13, 14},
+    "ЗМЗ-40905.10": {1, 2, 3, 4, 5, 6, 7, 12, 13, 14},
+}
+
+
+@pytest.mark.parametrize(("engine", "number"), [
+    (engine, number) for engine in [*_EXPECTED_CANDIDATES, "unverified"] for number in range(1, 15)
+])
+def test_fault_matrix(engine, number):
+    code = f"F{number:02d}"
+    result = apply_engine_context(diagnosis(anomaly_type=code), engine)
+    if number in _EXPECTED_CANDIDATES.get(engine, set()):
+        assert result.anomaly_type == code and result.status == "anomaly"
+    else:
+        assert result.status == "check_failed"
+        assert result.anomaly_type is None and code in result.description
+        assert not can_create_ticket(result)[0]

@@ -13,6 +13,7 @@ import { resolveErrorMessage } from '../lib/i18nError'
 import { docIdFromManualTitle } from '../lib/manuals'
 
 interface TicketsViewProps {
+  engineForVehicle: (id: string) => string
   isVisible: boolean
   linkedTicketId?: string
   onLinkedTicketConsumed?: () => void
@@ -41,7 +42,7 @@ function parsePayload(snapshot: string | null): TicketPayload | null {
   }
 }
 
-export function TicketsView({ isVisible, filterVehicleId, linkedTicketId, onLinkedTicketConsumed, onFilterConsumed, onOpenDiagnosis }: TicketsViewProps) {
+export function TicketsView({ engineForVehicle, isVisible, filterVehicleId, linkedTicketId, onLinkedTicketConsumed, onFilterConsumed, onOpenDiagnosis }: TicketsViewProps) {
   const { t, locale } = useI18n()
   const [tickets, setTickets] = useState<TicketSubmission[]>([])
   const [loading, setLoading] = useState(true)
@@ -170,10 +171,11 @@ export function TicketsView({ isVisible, filterVehicleId, linkedTicketId, onLink
   }
 
   const openReviewSource = async (hit: SourceHit) => {
+    if (!open) return
     const generation = ++sourceGen.current
     setReviewError(null)
     try {
-      const record = await fetchEvidence(hit.evidence_id)
+      const record = await fetchEvidence(hit.evidence_id, { engineModel: engineForVehicle(open.vehicle_id), vehicleId: open.vehicle_id, sessionId: open.session_id })
       if (generation === sourceGen.current) setSource(record)
     } catch {
       if (generation === sourceGen.current) setReviewError(t('error.source'))
@@ -442,7 +444,7 @@ export function TicketsView({ isVisible, filterVehicleId, linkedTicketId, onLink
           </aside>
         </div>
       ) : null}
-      <SourceDrawer hit={isVisible ? source : null} onClose={() => setSource(null)} />
+      <SourceDrawer scope={open ? { engineModel: engineForVehicle(open.vehicle_id), vehicleId: open.vehicle_id, sessionId: open.session_id } : { engineModel: '' }} hit={isVisible ? source : null} onClose={() => setSource(null)} />
     </>
   )
 }

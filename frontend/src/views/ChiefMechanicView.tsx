@@ -103,6 +103,7 @@ export function ChiefMechanicView({ onOpenDiagnosis, onOpenTickets }: ChiefMecha
       if (!response.ok) throw new Error()
       setData(null)
       setAuthed(false)
+      window.dispatchEvent(new Event('judrive-auth-change'))
     } catch {
       setError(t('error.network'))
     } finally {
@@ -438,7 +439,7 @@ function SummaryCard({
   )
 }
 
-function ChiefLogin({ onSuccess }: { onSuccess: () => void }) {
+export function ChiefLogin({ onSuccess }: { onSuccess: () => void }) {
   const { t } = useI18n()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -462,6 +463,7 @@ function ChiefLogin({ onSuccess }: { onSuccess: () => void }) {
         return
       }
       onSuccess()
+      window.dispatchEvent(new Event('judrive-auth-change'))
     } catch {
       setError(t('auth.error'))
     } finally {

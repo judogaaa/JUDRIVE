@@ -55,6 +55,9 @@ class AgentOrchestrator:
         self._rag = rag
         self._repo = repo
 
+    def provider_ready(self) -> bool:
+        return bool(self._settings.groq_api_key)
+
     def _groq(self) -> GroqClient:
         if not self._settings.groq_api_key:
             raise HTTPException(status_code=503, detail="GROQ_API_KEY не настроен")

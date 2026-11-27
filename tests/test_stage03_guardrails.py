@@ -85,13 +85,13 @@ def test_ml_facts_filters_instruction_tone():
     assert "IGNORE" not in facts["ml_observation"].upper()
 
 
-def test_live_pipeline_b418_requires_mocks():
+def test_live_pipeline_b418_requires_mocks(synthetic_rag):
     import asyncio
 
-    asyncio.run(_pipeline_b418())
+    asyncio.run(_pipeline_b418(synthetic_rag))
 
 
-async def _pipeline_b418():
+async def _pipeline_b418(rag):
     httpx = pytest.importorskip("httpx")
     settings = get_settings()
     try:
@@ -103,7 +103,6 @@ async def _pipeline_b418():
     except httpx.HTTPError:
         pytest.skip("Mocks unavailable")
 
-    from app.rag.service import ManualRagService
     from app.services.fleet import FleetService
     from app.services.mock_clients import MockMlClient, MockToirClient
     from app.services.tickets import TicketService
@@ -113,9 +112,6 @@ async def _pipeline_b418():
     import tempfile
 
     fleet = FleetService(settings.fleet_data_path)
-    rag = ManualRagService(settings.db_path, settings.pdf_dir)
-    if rag.status().get("missing_files"):
-        pytest.skip("PDF missing")
     repo = AppRepository(Path(tempfile.mkdtemp()) / "guardrails.sqlite")
 
     conv_id = repo.create_conversation("B418HK98", "S-0009", "ЯМЗ-236М2", "test")

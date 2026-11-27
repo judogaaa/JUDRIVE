@@ -20,6 +20,7 @@ import { MessageText, readableAnswer } from './MessageText'
 import { manualTopic, usableStatus, type DiagnosisAction, type ChatIntent } from '../lib/workflow'
 
 interface AgentChatProps {
+  engineModel: string
   vehicleId: string
   sessionId: string
   diagnoseResult?: DiagnoseResponse | null
@@ -46,6 +47,7 @@ function isDiagnoseVoiceCommand(text: string, localizedPhrase: string, localized
 }
 
 export function AgentChat({
+  engineModel,
   vehicleId,
   sessionId,
   diagnoseResult,
@@ -229,6 +231,7 @@ export function AgentChat({
     void send(text, action)
   }, [chatIntent, conversationId, loading, send])
 
+  const documentScope = { engineModel, vehicleId, sessionId }
   const openEvidence = async (hit: SourceHit) => {
     const request = ++sourceRequest.current
     setSourceError(null)
@@ -247,7 +250,7 @@ export function AgentChat({
     }
     setSourceLoadingId(hit.evidence_id)
     try {
-      const row = await fetchEvidence(hit.evidence_id)
+      const row = await fetchEvidence(hit.evidence_id, documentScope)
       if (request !== sourceRequest.current) return
       setEvidenceHit({ ...row, score: 'score' in row ? Number(row.score) || 0 : 0 })
     } catch {
@@ -382,7 +385,7 @@ export function AgentChat({
             ) : null}
           </article>
         ))}
-        <TicketDraftCard
+        <TicketDraftCard scope={documentScope}
           onReplace={ticketEligible && !loading && conversationId
             ? () => void send(t('chat.suggest3'), 'prepare_ticket') : undefined}
           draft={status === 'check_failed' ? null : draft} onConfirmed={(id) => setTicketId(id)} />
@@ -483,7 +486,7 @@ export function AgentChat({
         </div>
       </form>
 
-      <SourceDrawer hit={evidenceHit} onClose={() => setEvidenceHit(null)} />
+      <SourceDrawer scope={documentScope} hit={evidenceHit} onClose={() => setEvidenceHit(null)} />
     </section>
   )
 }

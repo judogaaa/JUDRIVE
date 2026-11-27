@@ -140,7 +140,8 @@ test.describe('Help center and onboarding restart', () => {
     await expect(page.locator('.verdict-card--anomaly')).toBeVisible()
   })
 
-  test('chief still requires authentication after help', async ({ page }) => {
+  test('chief still requires authentication after help', async ({ page, context }) => {
+    await context.clearCookies()
     await page.goto('/')
     await openNav(page, /Помощь и обучение/)
     await openNav(page, /Главный механик/)

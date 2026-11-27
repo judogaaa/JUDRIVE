@@ -11,6 +11,7 @@ const isolatedFrontend = 'http://127.0.0.1:5174'
 const external = Boolean(process.env.E2E_SKIP_SERVERS)
 const mainURL = external ? (process.env.E2E_BASE_URL ?? 'http://127.0.0.1:5173') : isolatedFrontend
 const ticketURL = external ? (process.env.E2E_ISOLATED_BASE_URL ?? isolatedFrontend) : isolatedFrontend
+const statePath = join(root, 'local-data', 'e2e-auth.json')
 const state = (url: string) => ({ cookies: [], origins: [{ origin: new URL(url).origin, localStorage: [{
   name: 'judrive-onboarding', value: JSON.stringify({ version: 1, status: 'completed', step: 6, acknowledged: true }),
 }] }] })
@@ -41,12 +42,12 @@ export default defineConfig({
     baseURL: mainURL,
     trace: 'on-first-retry',
     viewport: { width: 1280, height: 720 },
-    storageState: state(mainURL),
+    storageState: external ? state(mainURL) : statePath,
     launchOptions: process.env.E2E_CHROMIUM_EXECUTABLE ? { executablePath: process.env.E2E_CHROMIUM_EXECUTABLE } : undefined,
   },
   projects: [
     { name: 'main', testIgnore: /ticket-journal\.spec\.ts/ },
-    { name: 'tickets', testMatch: /ticket-journal\.spec\.ts/, use: { baseURL: ticketURL, storageState: state(ticketURL) } },
+    { name: 'tickets', testMatch: /ticket-journal\.spec\.ts/, use: { baseURL: ticketURL, storageState: external ? state(ticketURL) : statePath } },
   ],
   webServer: external ? undefined : [
     {
@@ -65,9 +66,8 @@ export default defineConfig({
     },
     {
       command: `"${python}" e2e/fixtures/isolated_backend.py`, cwd: root,
-      env: { ...localEnv, PYTHONPATH: 'backend', DB_PATH: 'local-data/e2e/judrive-e2e.sqlite',
+      env: { ...localEnv, PYTHONPATH: 'backend',
         MOCK_ML_URL: 'http://127.0.0.1:8005', MOCK_TOIR_URL: 'http://127.0.0.1:8003',
-        GROQ_API_KEY: 'e2e-local-stub', GROQ_BASE_URL: 'http://127.0.0.1:8004/openai/v1',
       },
       url: `${isolatedBackend}/api/health`, reuseExistingServer: false, timeout: 300_000,
     },
