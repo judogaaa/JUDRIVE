@@ -10,6 +10,16 @@ from app.services.gigachat import GigaChatAPI, GigaChatAPIError, GigaChatRateLim
 ExecuteTool = Callable[[str, dict[str, Any]], Awaitable[dict[str, Any]]]
 
 
+def _clean_schema(value: Any) -> Any:
+    if isinstance(value, dict):
+        # GigaChat documents a JSON Schema subset; additionalProperties is
+        # enforced by ToolRuntime, so omit this OpenAI-specific keyword.
+        return {key: _clean_schema(item) for key, item in value.items() if key != "additionalProperties"}
+    if isinstance(value, list):
+        return [_clean_schema(item) for item in value]
+    return value
+
+
 def _to_functions(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
     functions: list[dict[str, Any]] = []
     for item in tools:
@@ -23,10 +33,10 @@ def _to_functions(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
             {
                 "name": name,
                 "description": str(function.get("description") or ""),
-                "parameters": function.get("parameters") or {
+                "parameters": _clean_schema(function.get("parameters") or {
                     "type": "object",
                     "properties": {},
-                },
+                }),
             }
         )
     return functions
