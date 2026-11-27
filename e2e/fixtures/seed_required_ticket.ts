@@ -1,7 +1,6 @@
 import { request } from '@playwright/test'
 import assert from 'node:assert/strict'
-import { mkdir } from 'node:fs/promises'
-import { join } from 'node:path'
+import { writeFile } from 'node:fs/promises'
 
 /** Prepare the genuine C1 ticket through our API + real RAG/ML/TOiR + local LLM stub. */
 export default async function seedRequiredTicket() {
@@ -16,11 +15,9 @@ export default async function seedRequiredTicket() {
     state.origins = [{ origin, localStorage: [{ name: 'judrive-onboarding',
       value: JSON.stringify({ version: 1, status: 'completed', step: 6, acknowledged: true }),
     }] }]
-    const directory = join(__dirname, '..', '..', 'local-data')
-    await mkdir(directory, { recursive: true })
-    // The browser shares the host-scoped real session cookie on the Vite port.
-    const { writeFile } = await import('node:fs/promises')
-    await writeFile(join(directory, 'e2e-auth.json'), JSON.stringify(state), { mode: 0o600 })
+    const authPath = process.env.E2E_AUTH_PATH
+    assert.ok(authPath)
+    await writeFile(authPath, JSON.stringify(state), { mode: 0o600 })
     const pair = { vehicle_id: 'B418HK98', session_id: 'S-0009' }
     const created = await api.post('/api/conversations', { data: pair })
     assert.equal(created.status(), 200)

@@ -1,5 +1,7 @@
 """Opt-in validation of permitted originals; no calls to an LLM."""
 import argparse
+from hashlib import file_digest
+import json
 from pathlib import Path
 import sys
 from tempfile import TemporaryDirectory
@@ -16,6 +18,14 @@ def main() -> int:
     if any(not (args.pdf_dir / spec.filename).is_file() for spec in MANUAL_SPECS):
         print("BLOCKED: подключите все разрешённые оригиналы руководств")
         return 2
+    root = Path(__file__).resolve().parents[1]
+    manifest = json.loads((root / "docs" / "SOURCE_MANIFEST.json").read_text(encoding="utf-8"))
+    hashes = {item["filename"]: item["sha256"] for item in manifest["source_files"]}
+    for spec in MANUAL_SPECS:
+        with (args.pdf_dir / spec.filename).open("rb") as handle:
+            if file_digest(handle, "sha256").hexdigest() != hashes.get(spec.filename):
+                print(f"BLOCKED: SHA-256 не соответствует разрешённому комплекту ({spec.doc_id})")
+                return 2
     expected = {"y236-re:p0031", "y236-rk:p0269", "y236-rk:p0276"}
     with TemporaryDirectory(prefix="judrive-originals-") as temp:
         rag = ManualRagService(Path(temp) / "index.sqlite", args.pdf_dir)

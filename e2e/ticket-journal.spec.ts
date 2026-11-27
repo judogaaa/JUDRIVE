@@ -10,8 +10,8 @@ test.beforeAll(() => loadDotEnv())
 test.describe('Ticket draft → confirm → journal', () => {
   test('ticket draft is prepared from sources, confirmed and protected from duplicates', async ({ page, request }) => {
     test.setTimeout(180_000)
-    const health = (await (await request.get('/api/health')).json()) as { groq_agent?: string }
-    expect(health.groq_agent).toBe('configured')
+    const health = (await (await request.get('/api/health')).json()) as { gigachat_agent?: string }
+    expect(health.gigachat_agent).toBe('ready')
 
     let draftId = ''
     let confirmNonce = ''
@@ -69,8 +69,8 @@ test.describe('Ticket draft → confirm → journal', () => {
   test('UI confirm S-0008 and duplicate confirm blocked', async ({ page, request }) => {
     test.setTimeout(180_000)
     const health = await request.get('/api/health')
-    const h = (await health.json()) as { groq_agent?: string }
-    expect(h.groq_agent).toBe('configured')
+    const h = (await health.json()) as { gigachat_agent?: string }
+    expect(h.gigachat_agent).toBe('ready')
 
     let draftId = ''
     let confirmNonce = ''

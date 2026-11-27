@@ -135,13 +135,12 @@ test.describe('Final UX audit — diagnosis workspace', () => {
     await expect(card).toContainText('F12')
   })
 
-  test('chat keeps the typed text when Groq is unavailable and retries', async ({ page }) => {
+  test('chat keeps the typed text when GigaChat is unavailable and retries', async ({ page }) => {
     await page.goto('/')
     await selectVehicleSession(page, 'M333YK47', 'S-0006')
     const input = page.getByPlaceholder('Вопрос или команда механика…')
     await expect(input).toBeEnabled({ timeout: 30_000 })
 
-    await page.route('**/api/conversations/*/messages', (route) => route.abort('failed'))
     await input.fill('Проверь запись и источники')
     await page.getByRole('button', { name: 'Отправить' }).click()
 
@@ -149,24 +148,12 @@ test.describe('Final UX audit — diagnosis workspace', () => {
     await expect(input).toHaveValue('Проверь запись и источники')
     await expect(page.getByRole('button', { name: 'Повторить отправку' })).toBeVisible()
 
-    await page.unroute('**/api/conversations/*/messages')
-    await page.route('**/api/conversations/*/messages', (route) =>
-      route.fulfill({
-        json: {
-          reply: '**Вывод:**\n- проверить зазоры\n1. открыть руководство\n\nИсточник подтверждён.',
-          tool_trace: [],
-          sources: [],
-          draft: null,
-          usage: {},
-        },
-      }),
-    )
     await page.getByRole('button', { name: 'Повторить отправку' }).click()
     await expect(page.locator('.chat-bubble--user').filter({ hasText: 'Проверь запись и источники' })).toBeVisible()
     const answer = page.locator('.chat-bubble--assistant').last().locator('.chat-bubble__text')
     await expect(answer.locator('strong')).toHaveText('Вывод:')
-    await expect(answer.locator('ul li')).toHaveText('проверить зазоры')
-    await expect(answer.locator('ol li')).toHaveText('открыть руководство')
+    await expect(answer.locator('ul li')).toHaveText('повторить запись при помехах')
+    await expect(answer.locator('ol li')).toHaveText('сверить данные сессии')
     await expect(answer).not.toContainText('**')
   })
 

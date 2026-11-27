@@ -46,6 +46,9 @@ def main() -> int:
     parser.add_argument("--locale", default="ru", help="Язык интерфейса/подсказки, например ru или kk")
     args = parser.parse_args()
 
+    if os.getenv("JUDRIVE_LIVE_GIGACHAT") != "1":
+        print("BLOCKED: задайте JUDRIVE_LIVE_GIGACHAT=1 для явного разрешения live-запроса")
+        return 2
     settings = get_settings()
     if not settings.gigachat_credentials:
         print("BLOCKED: добавьте GIGACHAT_CREDENTIALS в локальный .env")

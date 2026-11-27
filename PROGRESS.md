@@ -505,3 +505,8 @@
 - E2E использует локальную заглушку GigaChat-native function calling; добавлены целевые тесты OAuth cache, function loop и voice upload/cleanup.
 - Добавлены docs/GIGACHAT.md и scripts/gigachat_smoke.py. Live-проверка пока BLOCKED до настройки Authorization Key владельца; ключ в Git не добавлялся.
 - Не заявлять, что GigaChat уже проверен live или что стоимость равна историческим Groq-замерам. Следующий шаг: внести Authorization Key в локальный .env, выполнить smoke, проверить C1–C3 и voice STT, затем запустить pytest/E2E/build.
+
+
+## Интеграция GigaChat Ultra и граница публикации
+
+PR №2 интегрирован в `fix/submission-hardening` через fast-forward. Добавлены проверка модели через readiness, единый системный промпт, OAuth с миллисекундами, контроль бюджета, защита автопарка и аудио, секретонезависимый CI. Закрытые файлы удалены из текущего дерева, исторические коммиты сохранены. Результаты последнего прогона и блокеры находятся в [отчёте](docs/FINAL_VERIFICATION.md).

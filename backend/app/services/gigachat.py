@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import asyncio
+import math
+from contextlib import nullcontext
 import time
 import uuid
 from pathlib import Path
 from typing import Any
 
 import httpx
+
+from app.services.usage_budget import UsageBudget
 
 
 class GigaChatAPIError(RuntimeError):
@@ -37,6 +41,7 @@ class GigaChatAPI:
         timeout_s: float = 60.0,
         ca_bundle: Path | str | None = None,
         transport: httpx.AsyncBaseTransport | None = None,
+        budget: UsageBudget | None = None,
     ) -> None:
         self._credentials = (credentials or "").strip()
         self._scope = scope.strip() or "GIGACHAT_API_PERS"
@@ -45,6 +50,7 @@ class GigaChatAPI:
         self._timeout_s = timeout_s
         self._verify: bool | str = str(ca_bundle) if ca_bundle else True
         self._transport = transport
+        self._budget = budget
         self._access_token: str | None = None
         self._token_expires_monotonic = 0.0
         self._token_lock = asyncio.Lock()
@@ -52,6 +58,9 @@ class GigaChatAPI:
     @property
     def configured(self) -> bool:
         return bool(self._credentials)
+
+    def budget_scope(self):
+        return self._budget.request() if self._budget else nullcontext()
 
     async def _send(
         self,
@@ -79,15 +88,15 @@ class GigaChatAPI:
             pass
         return response.text[:300] or f"HTTP {response.status_code}"
 
-    async def _get_access_token(self, *, force: bool = False) -> str:
+    async def _get_access_token(self) -> str:
         if not self.configured:
             raise GigaChatAPIError(503, "GIGACHAT_CREDENTIALS is not configured")
 
-        if not force and self._access_token and time.monotonic() < self._token_expires_monotonic:
+        if self._access_token and time.monotonic() < self._token_expires_monotonic:
             return self._access_token
 
         async with self._token_lock:
-            if not force and self._access_token and time.monotonic() < self._token_expires_monotonic:
+            if self._access_token and time.monotonic() < self._token_expires_monotonic:
                 return self._access_token
 
             key = self._credentials
@@ -123,15 +132,17 @@ class GigaChatAPI:
             expires_at = payload.get("expires_at")
             expires_in = payload.get("expires_in")
             if isinstance(expires_at, (int, float)):
-                ttl = max(0.0, float(expires_at) - time.time())
+                expires_at_seconds = expires_at / 1000 if expires_at >= 100_000_000_000 else expires_at
+                ttl = expires_at_seconds - time.time()
             elif isinstance(expires_in, (int, float)):
-                ttl = max(0.0, float(expires_in))
+                ttl = float(expires_in)
             else:
-                ttl = 1800.0
+                raise GigaChatAPIError(502, "GigaChat OAuth returned no expiration")
+            if not math.isfinite(ttl) or ttl <= 0:
+                raise GigaChatAPIError(502, "GigaChat OAuth returned an expired token")
 
             self._access_token = token
-            # Refresh one minute before expiry; never keep an already-expired token.
-            self._token_expires_monotonic = time.monotonic() + max(1.0, ttl - 60.0)
+            self._token_expires_monotonic = time.monotonic() + ttl - min(60.0, ttl / 2)
             return token
 
     async def request_json(
@@ -145,6 +156,8 @@ class GigaChatAPI:
         token = await self._get_access_token()
         url = f"{self._base_url}/{path.lstrip('/')}"
         extra_headers = kwargs.pop("headers", {}) or {}
+        budget = self._budget if method == "POST" and path == "/v1/chat/completions" else None
+        reservation = budget.reserve(kwargs["json"]) if budget else None
         for attempt in range(2):
             response = await self._send(
                 method,
@@ -162,8 +175,10 @@ class GigaChatAPI:
                     if self._access_token == token:
                         self._access_token = None
                         self._token_expires_monotonic = 0.0
-                token = await self._get_access_token(force=True)
+                token = await self._get_access_token()
                 continue
+            if budget and reservation and 400 <= response.status_code < 500:
+                budget.settle(reservation, 0)
             if response.status_code == 429:
                 raise GigaChatRateLimitError(429, "GigaChat API rate limit")
             if response.status_code >= 400:
@@ -176,6 +191,11 @@ class GigaChatAPI:
                 raise GigaChatAPIError(502, "GigaChat API returned invalid JSON") from exc
             if not isinstance(payload, dict):
                 raise GigaChatAPIError(502, "GigaChat API returned an unexpected response")
+            if budget and reservation:
+                usage = payload.get("usage")
+                total = usage.get("total_tokens") if isinstance(usage, dict) else None
+                if type(total) is int and total >= 0:
+                    budget.settle(reservation, total)
             return payload
         raise GigaChatAPIError(401, "GigaChat access token was rejected")
 

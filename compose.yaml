@@ -1,4 +1,5 @@
 x-runtime: &runtime
+  image: judrive-runtime:local
   build:
     context: .
     dockerfile: deploy/Dockerfile.backend
@@ -8,6 +9,10 @@ services:
   ml:
     <<: *runtime
     command: ["python", "-m", "uvicorn", "mock_ml.app:app", "--host", "0.0.0.0", "--port", "8001"]
+    environment:
+      MOCK_DATA_PATH: /run/judrive-fixtures/vehicles.json
+    volumes:
+      - ${JUDRIVE_FLEET_DIR:-./local-data/external}:/run/judrive-fixtures:ro
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=3)"]
       interval: 10s
@@ -17,6 +22,10 @@ services:
   toir:
     <<: *runtime
     command: ["python", "-m", "uvicorn", "mock_toir.app:app", "--host", "0.0.0.0", "--port", "8002"]
+    environment:
+      MOCK_DATA_PATH: /run/judrive-fixtures/vehicles.json
+    volumes:
+      - ${JUDRIVE_FLEET_DIR:-./local-data/external}:/run/judrive-fixtures:ro
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8002/health', timeout=3)"]
       interval: 10s
@@ -25,11 +34,13 @@ services:
       start_period: 10s
   backend:
     <<: *runtime
-    env_file: .env
+    env_file:
+      - path: .env
+        required: false
     environment:
       MOCK_ML_URL: http://ml:8001
       MOCK_TOIR_URL: http://toir:8002
-      FLEET_DATA_PATH: /app/vendor/neurodvs_mock/data/vehicles.json
+      FLEET_DATA_PATH: /run/judrive-fixtures/vehicles.json
       PDF_DIR: /app/materials/manuals
       DB_PATH: /app/local-data/judrive.sqlite
       COOKIE_SECURE: "true"
@@ -39,13 +50,14 @@ services:
       toir:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "import json, urllib.request; assert json.load(urllib.request.urlopen('http://127.0.0.1:8090/api/health', timeout=5))['status'] == 'ok'"]
+      test: ["CMD", "python", "-c", "import json, urllib.request; assert json.load(urllib.request.urlopen('http://127.0.0.1:8090/api/ready', timeout=5))['status'] == 'ok'"]
       interval: 20s
       timeout: 10s
       retries: 30
       start_period: 180s
     volumes:
-      - ./materials/manuals:/app/materials/manuals:ro
+      - ${JUDRIVE_FLEET_DIR:-./local-data/external}:/run/judrive-fixtures:ro
+      - ${JUDRIVE_MANUALS_DIR:-./materials/manuals}:/app/materials/manuals:ro
       - ./local-data:/app/local-data
   web:
     build:

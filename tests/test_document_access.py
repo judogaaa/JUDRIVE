@@ -5,6 +5,12 @@ from app import main
 
 
 @pytest.mark.parametrize(("method", "url"), [
+    ("GET", "/api/vehicles"),
+    ("POST", "/api/diagnose"),
+    ("POST", "/api/conversations"),
+    ("GET", "/api/vehicles/B418HK98/diagnosis-history"),
+    ("POST", "/api/voice/transcribe"),
+    ("GET", "/api/fleet/dashboard"),
     ("GET", "/api/manuals/catalog"),
     ("GET", "/api/manuals/status"),
     ("POST", "/api/manuals/search"),

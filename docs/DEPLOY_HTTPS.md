@@ -8,7 +8,7 @@ DNS имени с A/AAAA на сервер, свободных входящих 
 ## Подготовка
 
 1. На сервере checkout конкурсной ветки (после приёмки — main); Docker Engine и Compose v2.
-2. Поместить 6 оригинальных PDF в materials/manuals/ с именами из docs/SOURCES.md.
+2. Поместить оригиналы в приватный каталог и указать `JUDRIVE_MANUALS_DIR`. Так же задать `JUDRIVE_FLEET_DIR` для разрешённого `vehicles.json`. [Подключение материалов](SOURCES.md)
    Не коммитить PDF; не раскрывать их вне разрешённого организаторами режима.
 3. Скопировать .env.example в .env. Указать собственные JUDRIVE_DOMAIN (только доменное имя),
    GIGACHAT_CREDENTIALS (Authorization Key из кабинета GigaChat API), GIGACHAT_SCOPE,
@@ -23,7 +23,8 @@ DNS имени с A/AAAA на сервер, свободных входящих 
 
 ~~~sh
 docker compose config --quiet
-docker compose up -d --build
+docker compose build backend web
+docker compose up -d --no-build
 docker compose logs -f backend
 ~~~
 
@@ -38,10 +39,9 @@ Caddy получает HTTPS-сертификат через ACME при дос�
 
 ## Приёмка снаружи
 
-- Из приватного окна на телефоне открыть https://<домен> и /api/health.
-  Ожидать ok, up, ready, configured. configured означает наличие Authorization Key, но не подтверждает live-доступ.
-- Выполнить python scripts/gigachat_smoke.py на сервере: проверяются OAuth, список моделей и короткий запрос к настроенной модели.
-- Прогнать python scripts/verify_agent_scenarios.py --base-url https://<домен>
+- Открыть `https://<домен>/api/live` и `/api/ready` из внешней сети. Readiness проверяет доступность настроенной модели, ML, ТОиР и индекса. На HTTPS используйте Secure cookie и перечислите разрешённые дополнительные origins в `CORS_ORIGINS`.
+- Выполнить `JUDRIVE_LIVE_GIGACHAT=1 python scripts/gigachat_smoke.py` на сервере: проверяются OAuth, список моделей и короткий запрос к настроенной модели.
+- Прогнать python scripts/verify_agent_scenarios.py --live --base-url https://<домен>
   с настоящим ключом в локальном окружении. --confirm отдельно разрешает фактический POST в Mock ТОиР.
 - Открыть точную страницу PDF (inline, full screen), проверить микрофон/голос, все роли и обе темы.
 - Вход chief: новый пароль, без cookie 401, после входа 200, cookie Secure/HttpOnly.

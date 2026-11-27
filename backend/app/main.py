@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
 import json
+from time import monotonic
 
 import httpx
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile
@@ -25,7 +26,8 @@ from app.services.fleet import FleetService
 from app.services.mock_clients import MockMlClient, MockMlResponseError, MockToirClient
 from app.services.tickets import TicketService
 from app.services.voice import VoiceService
-from app.services.gigachat import GigaChatAPI
+from app.services.usage_budget import UsageBudget
+from app.services.gigachat import GigaChatAPI, GigaChatAPIError
 from app.agent.locale import normalize_locale
 from app.storage.repository import AppRepository
 
@@ -42,6 +44,7 @@ gigachat_api = GigaChatAPI(
     auth_url=settings.gigachat_auth_url,
     timeout_s=settings.gigachat_timeout_s,
     ca_bundle=settings.gigachat_ca_bundle,
+    budget=UsageBudget(settings),
 )
 agent = AgentOrchestrator(settings, fleet, mock_ml, rag_service, app_repo, gigachat_api)
 ticket_service = TicketService(app_repo, fleet, mock_ml, mock_toir, rag_service)
@@ -87,6 +90,7 @@ def _refresh_settings() -> None:
         auth_url=settings.gigachat_auth_url,
         timeout_s=settings.gigachat_timeout_s,
         ca_bundle=settings.gigachat_ca_bundle,
+        budget=UsageBudget(settings),
     )
     agent = AgentOrchestrator(settings, fleet, mock_ml, rag_service, app_repo, gigachat_api)
     ticket_service = TicketService(app_repo, fleet, mock_ml, mock_toir, rag_service)
@@ -107,13 +111,53 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title="JUDRIVE API", lifespan=lifespan)
 
+def _chief_guard(request: Request, response: Response) -> None:
+    require_chief(request, get_settings())
+    response.headers["Cache-Control"] = "private, no-store"
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://127.0.0.1:5173", "http://localhost:5173"],
+    allow_origins=[origin.strip() for origin in settings.cors_origins.split(",") if origin.strip()],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.get(f"{settings.api_prefix}/live")
+async def live() -> dict:
+    return {"status": "ok"}
+
+
+_provider_probe: tuple[GigaChatAPI, float, bool] | None = None
+
+
+async def _provider_available() -> bool:
+    global _provider_probe
+    if not gigachat_api.configured:
+        return False
+    now = monotonic()
+    if _provider_probe and _provider_probe[0] is gigachat_api and now < _provider_probe[1]:
+        return _provider_probe[2]
+    try:
+        models = await gigachat_api.request_json("GET", "/v1/models", timeout_s=3)
+        available = any(
+            isinstance(model, dict) and model.get("id") == settings.gigachat_model
+            for model in (models.get("data") or [])
+        )
+    except (GigaChatAPIError, httpx.HTTPError):
+        available = False
+    _provider_probe = (gigachat_api, monotonic() + (60 if available else 10), available)
+    return available
+
+
+@app.get(f"{settings.api_prefix}/ready", response_model=HealthResponse)
+async def ready(response: Response) -> HealthResponse:
+    result = await health()
+    if result.status != "ok":
+        response.status_code = 503
+    return result
 
 
 @app.get(f"{settings.api_prefix}/health", response_model=HealthResponse)
@@ -128,23 +172,23 @@ async def health() -> HealthResponse:
         toir_ok = False
     rag_status = rag_service.status()
     rag_ok = rag_status.get("index_current") and not rag_status.get("missing_files")
-    gigachat_ready = agent.provider_ready()
+    gigachat_ready = await _provider_available()
     status = "ok" if ml_ok and toir_ok and rag_ok and gigachat_ready else "degraded"
     return HealthResponse(
         status=status,
         mock_ml="up" if ml_ok else "down",
         mock_toir="up" if toir_ok else "down",
         manuals_index="ready" if rag_ok else "missing",
-        gigachat_agent="configured" if gigachat_ready else "missing_key",
+        gigachat_agent="ready" if gigachat_ready else ("unavailable" if gigachat_api.configured else "missing_key"),
     )
 
 
-@app.get(f"{settings.api_prefix}/vehicles")
+@app.get(f"{settings.api_prefix}/vehicles", dependencies=[Depends(_chief_guard)])
 async def list_vehicles():
     return {"vehicles": fleet.list_vehicles()}
 
 
-@app.get(f"{settings.api_prefix}/vehicles/{{vehicle_id}}/diagnosis-history", response_model=VehicleDiagnosisHistory)
+@app.get(f"{settings.api_prefix}/vehicles/{{vehicle_id}}/diagnosis-history", dependencies=[Depends(_chief_guard)], response_model=VehicleDiagnosisHistory)
 async def vehicle_diagnosis_history(vehicle_id: str):
     if not fleet.vehicle_known(vehicle_id):
         raise HTTPException(status_code=404, detail="Транспорт не найден")
@@ -154,7 +198,7 @@ async def vehicle_diagnosis_history(vehicle_id: str):
     )
 
 
-@app.post(f"{settings.api_prefix}/diagnose", response_model=DiagnoseResponse)
+@app.post(f"{settings.api_prefix}/diagnose", dependencies=[Depends(_chief_guard)], response_model=DiagnoseResponse)
 async def diagnose(body: DiagnoseRequest) -> DiagnoseResponse:
     if not fleet.validate_pair(body.vehicle_id, body.session_id):
         raise HTTPException(
@@ -172,10 +216,6 @@ async def diagnose(body: DiagnoseRequest) -> DiagnoseResponse:
     result.description = sanitize_ml_observation(result.description)
     result.review_priority = diagnosis_review_priority(fleet, result)
     return result
-
-
-def _chief_guard(request: Request) -> None:
-    require_chief(request, get_settings())
 
 
 @app.post(f"{settings.api_prefix}/auth/login")
@@ -278,7 +318,7 @@ async def get_source_pdf(doc_id: str, engine_model: str,
     )
 
 
-@app.post(f"{settings.api_prefix}/conversations")
+@app.post(f"{settings.api_prefix}/conversations", dependencies=[Depends(_chief_guard)])
 async def create_conversation(body: ConversationCreate):
     return agent.create_conversation(body.vehicle_id, body.session_id)
 

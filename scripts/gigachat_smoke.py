@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import sys
 from pathlib import Path
 
@@ -16,6 +17,9 @@ from app.services.gigachat import GigaChatAPI, GigaChatAPIError, GigaChatRateLim
 
 
 async def run() -> int:
+    if os.getenv("JUDRIVE_LIVE_GIGACHAT") != "1":
+        print("BLOCKED: живой запрос разрешается только через JUDRIVE_LIVE_GIGACHAT=1")
+        return 2
     settings = get_settings()
     if not settings.gigachat_credentials:
         print("BLOCKED: GIGACHAT_CREDENTIALS отсутствует в локальном .env")
@@ -37,7 +41,7 @@ async def run() -> int:
         print("Модели:", ", ".join(model_ids[:30]) or "(список пуст)")
         if settings.gigachat_model not in model_ids:
             print(f"BLOCKED: настроенная модель {settings.gigachat_model!r} не найдена в GET /v1/models")
-            print("Измените GIGACHAT_MODEL на один из идентификаторов выше.")
+            print("Проверьте доступ к выбранной модели в кабинете GigaChat.")
             return 2
 
         result = await api.request_json(
@@ -69,7 +73,7 @@ async def run() -> int:
         print("FAIL: GigaChat вернул 429 rate limit. Повторите позже; ключ не выводится.")
         return 2
     except GigaChatAPIError as exc:
-        print(f"FAIL: GigaChat HTTP {exc.status_code}: {exc}")
+        print(f"FAIL: GigaChat HTTP {exc.status_code}")
         return 2
     except httpx.TimeoutException:
         print("FAIL: таймаут GigaChat. Проверьте сеть и доступность API.")

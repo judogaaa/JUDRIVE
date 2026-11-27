@@ -120,6 +120,13 @@ export default function App() {
   }
 
   useEffect(() => {
+    if (authenticated !== true) {
+      setVehicles([])
+      setVehicleId('')
+      setSessionId('')
+      setFleetError(null)
+      return
+    }
     let cancelled = false
     fetchVehicles()
       .then((list) => {
@@ -140,7 +147,7 @@ export default function App() {
     return () => {
       cancelled = true
     }
-  }, [fleetRevision])
+  }, [authenticated, fleetRevision])
 
   const retryFleet = () => {
     setFleetError(null)
@@ -164,9 +171,9 @@ export default function App() {
   return (
     <>
       <WorkspaceShell modalOpen={onboarding.open} view={view} onViewChange={navigate} themeMode={themeMode} onThemeChange={setThemeMode}>
-        {authenticated === false && ['diagnosis', 'manuals', 'tickets'].includes(view) && (
+        {authenticated === false && ['diagnosis', 'fleet', 'manuals', 'tickets'].includes(view) && (
           <details className="panel" open={view !== 'diagnosis'}>
-            <summary>{t('auth.submit')} · {t('nav.manuals')} / {t('nav.tickets')}</summary>
+            <summary>{t('auth.submit')}</summary>
             <ChiefLogin onSuccess={() => setAuthenticated(true)} />
           </details>
         )}

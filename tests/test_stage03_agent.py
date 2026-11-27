@@ -93,7 +93,7 @@ def test_health_reports_gigachat_field():
     client = TestClient(app)
     body = client.get("/api/health").json()
     assert "gigachat_agent" in body
-    assert body["gigachat_agent"] in {"configured", "missing_key"}
+    assert body["gigachat_agent"] in {"ready", "unavailable", "missing_key"}
 
 
 def test_conversation_create_and_invalid_pair(auth_client):
@@ -113,16 +113,13 @@ def test_conversation_create_and_invalid_pair(auth_client):
 
 
 @pytest.mark.integration
-def test_acceptance_diagnose_statuses():
-    """Требует Mock ML на :8001."""
-    client = TestClient(app)
+def test_acceptance_diagnose_statuses(auth_client):
+    client = auth_client
     for vehicle_id, session_id, expected in ACCEPTANCE_PAIRS:
         response = client.post(
             "/api/diagnose",
             json={"vehicle_id": vehicle_id, "session_id": session_id},
         )
-        if response.status_code == 502:
-            pytest.skip("Mock ML недоступен")
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == expected
@@ -138,8 +135,7 @@ def test_ticket_confirm_refused_for_normal_session(auth_client):
         "/api/diagnose",
         json={"vehicle_id": "M333YK47", "session_id": "S-0006"},
     )
-    if diag.status_code == 502:
-        pytest.skip("Mock ML недоступен")
+    assert diag.status_code == 200
 
     client.post(
         "/api/conversations",

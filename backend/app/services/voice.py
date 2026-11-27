@@ -5,6 +5,8 @@ import time
 from typing import Any, Callable
 
 import httpx
+
+from app.services.usage_budget import BudgetExceeded
 from fastapi import HTTPException, UploadFile
 
 from app.agent.locale import LOCALE_LABELS
@@ -21,10 +23,29 @@ MIME_ALIASES = {
     "audio/x-ogg": ("audio/x-ogg", "speech.ogg"),
     "audio/wav": ("audio/wav", "speech.wav"),
     "audio/x-wav": ("audio/x-wav", "speech.wav"),
+    "audio/wave": ("audio/wav", "speech.wav"),
+    "audio/x-pn-wav": ("audio/wav", "speech.wav"),
     "audio/mpeg": ("audio/mp3", "speech.mp3"),
     "audio/mp3": ("audio/mp3", "speech.mp3"),
     "audio/opus": ("audio/opus", "speech.opus"),
 }
+
+
+def _container_matches(filename: str, data: bytes) -> bool:
+    if filename.endswith(".wav"):
+        return (len(data) >= 44 and data[:4] == b"RIFF" and data[8:12] == b"WAVE"
+                and int.from_bytes(data[4:8], "little") == len(data) - 8
+                and b"data" in data[12:])
+    if filename.endswith(".webm"):
+        return (len(data) > 32 and data.startswith(b"\x1a\x45\xdf\xa3")
+                and b"webm" in data[:64] and b"\x1f\x43\xb6\x75" in data)
+    if filename.endswith((".mp4", ".m4a")):
+        return len(data) >= 24 and data[4:8] == b"ftyp"
+    if filename.endswith(".mp3"):
+        return len(data) >= 16 and (data.startswith(b"ID3") or (data[0] == 0xff and data[1] & 0xe0 == 0xe0))
+    return len(data) >= 28 and data.startswith(b"OggS") and (
+        not filename.endswith(".opus") or b"OpusHead" in data[:512]
+    )
 
 
 class VoiceService:
@@ -70,9 +91,10 @@ class VoiceService:
         supplied_mime = (upload.content_type or "audio/webm").split(";")[0].strip().lower()
         mime_entry = MIME_ALIASES.get(supplied_mime)
         if not mime_entry:
-            raise HTTPException(status_code=415, detail=f"Неподдерживаемый аудиоформат: {supplied_mime}")
-        mime, default_filename = mime_entry
-        filename = upload.filename or default_filename
+            raise HTTPException(status_code=415, detail="Неподдерживаемый аудиоформат")
+        mime, filename = mime_entry
+        if not _container_matches(filename, content):
+            raise HTTPException(status_code=422, detail="Повреждённый аудиофайл или неверный формат")
         file_id: str | None = None
 
         language_label = LOCALE_LABELS.get(language or "", "язык оригинала")
@@ -125,6 +147,8 @@ class VoiceService:
             if not text:
                 raise HTTPException(status_code=422, detail="Речь не распознана — повторите или введите текст")
             return {"text": text, "language": language}
+        except BudgetExceeded as exc:
+            raise HTTPException(status_code=429, detail="Достигнут лимит расходов помощника.") from exc
         except GigaChatRateLimitError as exc:
             raise HTTPException(status_code=429, detail="Лимит запросов GigaChat. Повторите позже.") from exc
         except GigaChatAPIError as exc:

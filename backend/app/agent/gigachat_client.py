@@ -68,7 +68,14 @@ class GigaChatAgentClient:
         max_steps: int = 4,
     ) -> tuple[str, list[dict[str, Any]], dict[str, int]]:
         tool_trace: list[dict[str, Any]] = []
-        transcript = [{"role": "system", "content": SYSTEM_PROMPT}, *messages]
+        system_context = [SYSTEM_PROMPT]
+        transcript: list[dict[str, Any]] = []
+        for message in messages:
+            if message["role"] == "system":
+                system_context.append(message["content"])
+            else:
+                transcript.append(message)
+        transcript.insert(0, {"role": "system", "content": "\n\n".join(system_context)})
         functions = _to_functions(tools)
         usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
         started = time.perf_counter()
@@ -114,12 +121,12 @@ class GigaChatAgentClient:
                 if isinstance(raw_arguments, str):
                     try:
                         arguments = json.loads(raw_arguments)
-                    except json.JSONDecodeError:
-                        arguments = {}
+                    except json.JSONDecodeError as exc:
+                        raise GigaChatAPIError(502, "GigaChat returned invalid function arguments") from exc
                 else:
                     arguments = raw_arguments
                 if not isinstance(arguments, dict):
-                    arguments = {}
+                    raise GigaChatAPIError(502, "GigaChat returned invalid function arguments")
 
                 assistant_message: dict[str, Any] = {
                     "role": "assistant",

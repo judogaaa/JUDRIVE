@@ -8,6 +8,8 @@ import re
 from fastapi import HTTPException
 import httpx
 
+from app.services.usage_budget import BudgetExceeded
+
 from app.agent.gigachat_client import GigaChatAgentClient
 from app.services.gigachat import GigaChatAPI, GigaChatAPIError, GigaChatRateLimitError
 from app.agent.presentation import format_answer
@@ -57,9 +59,6 @@ class AgentOrchestrator:
         self._rag = rag
         self._repo = repo
         self._gigachat_api = gigachat_api
-
-    def provider_ready(self) -> bool:
-        return bool((self._settings.gigachat_credentials or "").strip())
 
     def _gigachat(self) -> GigaChatAgentClient:
         if not (self._settings.gigachat_credentials or "").strip():
@@ -119,7 +118,7 @@ class AgentOrchestrator:
                 reply = f'«{prohibition}» [{attached["evidence_id"]}]\n\n{reply}'
             self._repo.add_chat_turn(conversation_id, content, reply, sources=sources)
             return {"reply": reply, "tool_trace": [], "sources": sources, "draft": None, "usage": {}}
-        if not analysis_only:
+        if not analysis_only and (action is not None or (not attached and not _is_manual_question(content))):
             try:
                 diag = await self._mock_ml.diagnose(conv["vehicle_id"], conv["session_id"])
             except httpx.TimeoutException as exc:
@@ -199,12 +198,15 @@ class AgentOrchestrator:
                 conversation_id, stage, usage, provider="gigachat"
             )
         try:
-            reply, tool_trace, usage = await gigachat.run_with_tools(
-                llm_messages,
-                TOOL_DEFINITIONS,
-                runtime.execute,
-                max_steps=self._settings.agent_max_tool_steps,
-            )
+            with self._gigachat_api.budget_scope():
+                reply, tool_trace, usage = await gigachat.run_with_tools(
+                    llm_messages,
+                    TOOL_DEFINITIONS,
+                    runtime.execute,
+                    max_steps=self._settings.agent_max_tool_steps,
+                )
+        except BudgetExceeded as exc:
+            raise HTTPException(status_code=429, detail="Достигнут лимит расходов помощника.") from exc
         except GigaChatRateLimitError as exc:
             logger.warning("GigaChat rate limit")
             raise HTTPException(status_code=429, detail="Лимит запросов GigaChat. Повторите позже.") from exc

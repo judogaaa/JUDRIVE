@@ -49,10 +49,11 @@ def main() -> None:
     tokens_out = sum(int(row[3]) for row in stages)
     total = sum(int(row[4]) for row in stages)
     weighted_latency = sum(Decimal(int(row[1])) * Decimal(str(row[5])) for row in stages) / count
+    billed_input = max(0, total - tokens_out) if args.provider == "gigachat" else tokens_in
     cost = None
     if args.input_rub_per_million is not None and args.output_rub_per_million is not None:
         cost = (
-            Decimal(tokens_in) * args.input_rub_per_million
+            Decimal(billed_input) * args.input_rub_per_million
             + Decimal(tokens_out) * args.output_rub_per_million
         ) / Decimal(1_000_000)
 
@@ -60,11 +61,12 @@ def main() -> None:
         ("Провайдер", args.provider),
         ("Завершённые запросы", count),
         ("Входные токены", tokens_in),
+        ("Оплачиваемые входные токены", billed_input),
         ("Выходные токены", tokens_out),
         ("Всего токенов", total),
         ("Средняя задержка, мс", round(float(weighted_latency), 1)),
-        ("Тариф вход, RUB/1 млн", args.input_rub_per_million or ""),
-        ("Тариф выход, RUB/1 млн", args.output_rub_per_million or ""),
+        ("Тариф вход, RUB/1 млн", args.input_rub_per_million if args.input_rub_per_million is not None else ""),
+        ("Тариф выход, RUB/1 млн", args.output_rub_per_million if args.output_rub_per_million is not None else ""),
         ("Оценочная стоимость, RUB", str(cost) if cost is not None else ""),
         ("Ограничение", "Только ответы с usage; сверяйте тарифы и биллинг GigaChat в личном кабинете."),
     ]

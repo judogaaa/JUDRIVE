@@ -1,5 +1,7 @@
 import { join } from 'node:path'
-import { existsSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { execFileSync } from 'node:child_process'
 import { pbkdf2Sync, randomBytes } from 'node:crypto'
 import { defineConfig } from '@playwright/test'
 
@@ -11,7 +13,6 @@ const isolatedFrontend = 'http://127.0.0.1:5174'
 const external = Boolean(process.env.E2E_SKIP_SERVERS)
 const mainURL = external ? (process.env.E2E_BASE_URL ?? 'http://127.0.0.1:5173') : isolatedFrontend
 const ticketURL = external ? (process.env.E2E_ISOLATED_BASE_URL ?? isolatedFrontend) : isolatedFrontend
-const statePath = join(root, 'local-data', 'e2e-auth.json')
 const state = (url: string) => ({ cookies: [], origins: [{ origin: new URL(url).origin, localStorage: [{
   name: 'judrive-onboarding', value: JSON.stringify({ version: 1, status: 'completed', step: 6, acknowledged: true }),
 }] }] })
@@ -28,7 +29,15 @@ if (!external && !process.env.JUDRIVE_E2E_MANAGED) {
   process.env.CHIEF_PASSWORD_HASH = `${salt}$${pbkdf2Sync(password, salt, 200000, 32, 'sha256').toString('hex')}`
   process.env.SESSION_SECRET = randomBytes(32).toString('hex')
   process.env.COOKIE_SECURE = 'false'
+  const directory = mkdtempSync(join(tmpdir(), 'judrive-playwright-'))
+  process.on('exit', () => rmSync(directory, { recursive: true, force: true }))
+  const dataset = join(directory, 'vehicles.json')
+  execFileSync(python, [join(root, 'e2e', 'fixtures', 'synthetic_fleet.py'), dataset])
+  process.env.MOCK_DATA_PATH = dataset
+  process.env.FLEET_DATA_PATH = dataset
+  process.env.E2E_AUTH_PATH = join(directory, 'auth.json')
 }
+const statePath = process.env.E2E_AUTH_PATH
 const localEnv = { ...process.env, NO_PROXY: '127.0.0.1,localhost', no_proxy: '127.0.0.1,localhost' }
 
 export default defineConfig({

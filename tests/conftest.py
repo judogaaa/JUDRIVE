@@ -60,7 +60,14 @@ def pytest_sessionstart(session):
 
     session._judrive_runtime = TemporaryDirectory(prefix="judrive-pytest-")
     session._judrive_processes = []
-    os.environ["DB_PATH"] = str(Path(session._judrive_runtime.name) / "app.sqlite")
+    from synthetic_fleet import generate
+
+    runtime = Path(session._judrive_runtime.name)
+    dataset = runtime / "vehicles.json"
+    generate(dataset)
+    os.environ["DB_PATH"] = str(runtime / "app.sqlite")
+    os.environ["FLEET_DATA_PATH"] = str(dataset)
+    os.environ["MOCK_DATA_PATH"] = str(dataset)
     opener = build_opener(ProxyHandler({}))
     for variable, module in (("MOCK_ML_URL", "mock_ml.app"), ("MOCK_TOIR_URL", "mock_toir.app")):
         with socket.socket() as listener:

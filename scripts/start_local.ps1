@@ -34,15 +34,19 @@ function Start-Bg([string]$Title, [string]$Exe, [string[]]$ProcessArgs, [hashtab
   }
 }
 
+$FleetFile = if ($env:MOCK_DATA_PATH) { $env:MOCK_DATA_PATH } else { Join-Path $Root "local-data\external\vehicles.json" }
+if (-not (Test-Path $FleetFile -PathType Leaf)) { throw "Задайте MOCK_DATA_PATH для разрешённого файла vehicles.json" }
+
 if (Test-Path $MockVenv) {
-  Start-Bg "mock-ml" $MockVenv @("-m", "uvicorn", "mock_ml.app:app", "--host", "127.0.0.1", "--port", "8001") @{ PYTHONPATH = "vendor\neurodvs_mock" }
-  Start-Bg "mock-toir" $MockVenv @("-m", "uvicorn", "mock_toir.app:app", "--host", "127.0.0.1", "--port", "8002") @{ PYTHONPATH = "vendor\neurodvs_mock" }
+  Start-Bg "mock-ml" $MockVenv @("-m", "uvicorn", "mock_ml.app:app", "--host", "127.0.0.1", "--port", "8001") @{ PYTHONPATH = "vendor\neurodvs_mock"; MOCK_DATA_PATH = $FleetFile }
+  Start-Bg "mock-toir" $MockVenv @("-m", "uvicorn", "mock_toir.app:app", "--host", "127.0.0.1", "--port", "8002") @{ PYTHONPATH = "vendor\neurodvs_mock"; MOCK_DATA_PATH = $FleetFile }
 } else {
   Write-Warning "vendor/neurodvs_mock/.venv не найден — заглушки не запущены"
 }
 
 Start-Bg "backend" $Python @("-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", $BackendPort) @{
   PYTHONPATH = "backend"
+  FLEET_DATA_PATH = $FleetFile
 }
 
 Write-Host ""

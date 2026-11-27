@@ -6,7 +6,7 @@ AI-powered engine diagnostics and intelligent fleet management platform.
 
 ## Статус
 
-**27.11.2026 — активная ветка `feat/gigachat-integration`: основной LLM и STT переведены на GigaChat; live smoke с Authorization Key владельца ещё не выполнен.** Голос (GigaChat audio attachments), 7 языков UI/агента, обязательное обучение при первом входе и центр «Помощь и обучение». Локальный стенд :8090/:5173; публичный HTTPS URL ещё не заявлен.
+**27.11.2026 — рабочая ветка `fix/submission-hardening`: основной LLM и STT переведены на GigaChat; live smoke с Authorization Key владельца ещё не выполнен.** Голос (GigaChat audio attachments), 7 языков UI/агента, обязательное обучение при первом входе и центр «Помощь и обучение». Локальный стенд :8090/:5173; публичный HTTPS URL ещё не заявлен.
 
 ## Первый вход и помощь
 
@@ -16,7 +16,7 @@ AI-powered engine diagnostics and intelligent fleet management platform.
 
 ## Локальный запуск
 
-Требования: Python 3.11+ (проверено на 3.14), Node.js LTS, UTF-8 в терминале Windows.
+Требования: Python 3.12+, Node.js 22.12+, UTF-8 в терминале Windows.
 
 1. Скопируйте `.env.example` в `.env`; для чата и голоса добавьте `GIGACHAT_CREDENTIALS` (Authorization Key; только локально, файл в `.gitignore`). Настройка scope, модели и TLS — в [docs/GIGACHAT.md](docs/GIGACHAT.md). Кабинет главного механика: `CHIEF_USERNAME`, `CHIEF_PASSWORD_HASH` (`python scripts/hash_chief_password.py`), `SESSION_SECRET`. Пароль в Git не кладётся. На HTTPS задайте `COOKIE_SECURE=true`.
 2. **PDF (этап 02):** положите шесть оригиналов в `materials/manuals/` (папка в `.gitignore`) по [docs/SOURCES.md](docs/SOURCES.md). Быстрое копирование, если файлы уже в `Documents`:
@@ -25,7 +25,7 @@ AI-powered engine diagnostics and intelligent fleet management platform.
 .\scripts\sync_manuals.ps1
 # или указать каталог: .\scripts\sync_manuals.ps1 -SourceDir "D:\path\to\pdfs"
 ```
-3. Заглушки заказчика (из корня репозитория, **не меняя** `vendor/neurodvs_mock`):
+3. Подключите разрешённый `vehicles.json` вне Git (по умолчанию `local-data/external/vehicles.json`). Для ручного запуска задайте один абсолютный путь в `MOCK_DATA_PATH` у обеих заглушек и в `FLEET_DATA_PATH` у backend. Установите backend-зависимости командой `pip install -r backend/requirements.txt`. Запуск заглушек:
 
 ```powershell
 cd vendor/neurodvs_mock
@@ -64,7 +64,7 @@ npm install
 npm run dev
 ```
 
-Откройте `http://127.0.0.1:5173`. Health: `GET /api/health` — `mock_ml`, `mock_toir`, `manuals_index`, `gigachat_agent` (configured означает только наличие Authorization Key; live доступ проверяется командой `python scripts/gigachat_smoke.py`).
+Откройте `http://127.0.0.1:5173`. Проверка процесса — `GET /api/live`. Готовность ML, ТОиР, индекса и выбранной модели — `GET /api/ready` (503 при недоступности). `GET /api/health` возвращает статусы зависимостей.
 
 **RAG API:** `POST /api/manuals/search`, `GET /api/sources/evidence/{id}`, `GET /api/sources/pdf/{doc_id}`.
 
@@ -76,9 +76,9 @@ npm run dev
 
 **Языки (этап 06):** переключатель в шапке — ru, uz, kk, tg, ky, hi, bn; ответ агента на выбранном языке, RAG по русским техтерминам.
 
-Переиндексация: `scripts\build_manual_index.py`. Контроль RAG: `scripts\verify_rag_queries.py`. Контроль агента (live GigaChat + mocks): `backend\.venv\Scripts\python.exe scripts\verify_agent_scenarios.py`.
+Переиндексация: `scripts\build_manual_index.py`. Контроль RAG: `scripts\verify_rag_queries.py`. Контроль агента (live GigaChat + mocks): `backend\.venv\Scripts\python.exe scripts\verify_agent_scenarios.py --live`.
 
-**GigaChat (этап 03):** добавьте Authorization Key в `GIGACHAT_CREDENTIALS` локального `.env` (см. [docs/GIGACHAT.md](docs/GIGACHAT.md), в Git не коммитить). После смены кода перезапускайте backend с `--reload`. Чат в UI; сценарии: `backend\.venv\Scripts\python.exe scripts\verify_agent_scenarios.py`.
+**GigaChat (этап 03):** добавьте Authorization Key в `GIGACHAT_CREDENTIALS` локального `.env` (см. [docs/GIGACHAT.md](docs/GIGACHAT.md), в Git не коммитить). После смены кода перезапускайте backend с `--reload`. Чат в UI; сценарии: `backend\.venv\Scripts\python.exe scripts\verify_agent_scenarios.py --live`.
 
 ### Быстрые smoke-тесты
 
@@ -90,7 +90,7 @@ cd ..
 pytest -q tests/
 ```
 
-Параметрические вызовы Mock ML в `test_stage01_fleet.py` выполняются только если заглушка на порту 8001 уже запущена.
+Pytest поднимает заглушки на временных локальных портах.
 
 ### Контрольные пары (docs/ACCEPTANCE.md)
 
@@ -114,7 +114,7 @@ npm run e2e
 
 Playwright поднимает полностью изолированный тестовый стенд: ML `:8005`, ТОиР `:8003`, детерминированный LLM stub `:8004`, backend `:8091`, frontend `:5174` и свежую SQLite. Синтетические PDF создаются автоматически. Тестовые учётные данные генерируются на запуск, контрольная заявка создаётся через API с реальным RAG и Mock ТОиР. Внешний GigaChat API не используется: E2E запускает локальную детерминированную заглушку нативного function-calling протокола. При необходимости задайте `E2E_PYTHON` (путь к Python с зависимостями). `E2E_SKIP_SERVERS=1` предназначен только для самостоятельно поднятого одноразового тестового стенда — не для рабочей базы.
 
-Набор: **56 сценариев** — три статуса ML, warning, RAG/PDF/чат, related sources, черновик и подтверждение заявки с защитой от дублей, недоступность LLM-провайдера и сохранение текста, полный список 50 машин и поиск в кириллице/латинице, сессии, смена контекста во время запроса, изоляция графика истории, источники черновика в PDF, двойное нажатие диагностики, локализованные ошибки и retry, язык/тема/системный режим, mobile/tablet/desktop, автопарк со статус-фильтром, заявки и кабинет главного механика, обучение/помощь и семантика рекомендации карантина. Матрица — [docs/REQUIREMENTS_MATRIX.md](docs/REQUIREMENTS_MATRIX.md); сценарий демо ≤3 мин — [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md).
+Набор Playwright — три статуса ML, warning, RAG/PDF/чат, related sources, черновик и подтверждение заявки с защитой от дублей, недоступность LLM-провайдера и сохранение текста, полный список 50 машин и поиск в кириллице/латинице, сессии, смена контекста во время запроса, изоляция графика истории, источники черновика в PDF, двойное нажатие диагностики, локализованные ошибки и retry, язык/тема/системный режим, mobile/tablet/desktop, автопарк со статус-фильтром, заявки и кабинет главного механика, обучение/помощь и семантика рекомендации карантина. Матрица — [docs/REQUIREMENTS_MATRIX.md](docs/REQUIREMENTS_MATRIX.md); сценарий демо ≤3 мин — [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md).
 
 ### UI
 
@@ -141,7 +141,7 @@ Playwright поднимает полностью изолированный те
 11. [docs/SOURCE_MANIFEST.json](docs/SOURCE_MANIFEST.json) — контрольные SHA-256 оригиналов и заглушек.
 12. [docs/REGULATION.md](docs/REGULATION.md) — актуальная система отбора, оценки и сдачи; оставшиеся материалы.
 13. [docs/START_HERE.md](docs/START_HERE.md) — первый этап и переход между Cursor/OpenCode.
-14. [vendor/neurodvs_mock/](vendor/neurodvs_mock/) — оригинальные заглушки, OpenAPI, тесты и синтетический набор заказчика.
+14. [vendor/neurodvs_mock/](vendor/neurodvs_mock/) — код заглушек, OpenAPI и тесты.
 
 ## Возможности
 
@@ -151,7 +151,7 @@ Playwright поднимает полностью изолированный те
 - История, график динамики и сводка главного механика.
 - Голосовой ввод и мультиязычный адаптивный интерфейс.
 
-Стек: React + TypeScript + Vite, FastAPI, SQLite, GigaChat-2-Max (или доступная модель), GigaChat audio attachments для STT, локальная база знаний и PDF.js. Прототип не обучает акустическую ML-модель, не подтверждает техническую исправность двигателя и не заменяет специалиста. Публикация полных PDF требует ясности прав на распространение. Оригинальные Mock API и синтетические данные уже находятся в vendor/neurodvs_mock; шесть полных PDF подключаются по инструкции из docs/SOURCES.md.
+Стек: React + TypeScript + Vite, FastAPI, SQLite, GigaChat-3-Ultra для агента, GigaChat-2-Max с аудиовложениями для голоса, локальная база знаний и PDF.js. Прототип не обучает акустическую ML-модель, не подтверждает техническую исправность двигателя и не заменяет специалиста. Публикация полных PDF требует ясности прав на распространение. Код Mock API находится в `vendor/neurodvs_mock`. Разрешённый автопарк и PDF подключаются по [инструкции](docs/SOURCES.md).
 
 Ориентир завершения: 28.11.2026 10:00 МСК; рабочий стенд требуется согласно актуальным правилам хакатона. Текущее состояние всегда в PROGRESS.md.
 
@@ -160,7 +160,7 @@ Playwright поднимает полностью изолированный те
 - Контейнерная конфигурация HTTPS: [docs/DEPLOY_HTTPS.md](docs/DEPLOY_HTTPS.md) (`compose.yaml`, Caddy, Poppler).
 - Детерминированная проверка настоящих vendor mock routes, PDF и SQLite в отдельной БД:
   `python scripts/verify_submission_regressions.py` (6 PDF в PDF_DIR, без GigaChat/сети).
-- Live-проверка: `python scripts/verify_agent_scenarios.py`; `--only check_failed` выполняет только C3, а `--confirm` явно разрешает тестовый POST заявки.
+- Live-проверка: `python scripts/verify_agent_scenarios.py --live`; `--only check_failed` выполняет только C3, а `--confirm` явно разрешает тестовый POST заявки.
 - [Сценарий демо](docs/DEMO_SCRIPT.md), [матрица требований](docs/REQUIREMENTS_MATRIX.md), [пакет сдачи](docs/SUBMISSION.md), [Excel usage](submission/USAGE_EVIDENCE.md).
 
 ## Инженерное уточнение
@@ -171,8 +171,8 @@ Playwright поднимает полностью изолированный те
 
 Установите зависимости backend и `tests/requirements-dev.txt`, затем выполните `python -m pytest`. Pytest запускает оригинальные Mock ML и Mock ТОиР на временных локальных портах и использует отдельную SQLite. Для браузерной проверки нужны Node.js, зависимости корня и frontend (`npm ci` в обеих папках) и Chromium (`npm run e2e:install` либо `E2E_CHROMIUM_EXECUTABLE`). Запустите `npm run e2e` с `E2E_PYTHON`, если Python с тестовыми зависимостями отсутствует в PATH. При необходимости укажите локальный кириллический TTF через `E2E_CYRILLIC_FONT`.
 
-По умолчанию тесты генерируют синтетические PDF нужной длины и индексируют их реальным RAG. Браузерный стенд использует локальный LLM stub без заголовка авторизации, новую SQLite и временную сессию главного механика. Рабочий корпус, рабочая база, файл окружения и внешний провайдер для этих проверок не нужны.
+По умолчанию тесты генерируют синтетические PDF нужной длины и индексируют их реальным RAG. Браузерный стенд использует локальный LLM stub с тестовыми учётными данными, новую SQLite и временную сессию главного механика. Рабочий корпус, рабочая база, файл окружения и внешний провайдер для этих проверок не нужны.
 
-Закрытые руководства, чат с RAG и журнал ТОиР требуют входа через существующую сессию главного механика. Диагностика и базовый список машин доступны до входа.
+Автопарк, диагностика и её история, руководства, чат, голос и заявки требуют сессию главного механика. [Итоги проверки](docs/FINAL_VERIFICATION.md) · [Методика стоимости](docs/COST.md)
 
 Оригиналы проверяются отдельно командой `python scripts/verify_original_manuals.py --pdf-dir materials/manuals`. Без разрешённых файлов команда возвращает BLOCKED. Live C1 проверяется только на подготовленном изолированном стенде с оригиналами и настроенным провайдером: `python scripts/verify_agent_scenarios.py --only anomaly --live`. Скрипт запрашивает пароль без вывода на экран. Опциональный флаг `--confirm` отправляет тестовую заявку в Mock ТОиР.

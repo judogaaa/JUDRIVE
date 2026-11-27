@@ -1,7 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import field_validator
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -20,7 +20,7 @@ class Settings(BaseSettings):
 
     mock_ml_url: str = "http://127.0.0.1:8001"
     mock_toir_url: str = "http://127.0.0.1:8002"
-    fleet_data_path: Path = PROJECT_ROOT / "vendor" / "neurodvs_mock" / "data" / "vehicles.json"
+    fleet_data_path: Path = PROJECT_ROOT / "local-data" / "external" / "vehicles.json"
     pdf_dir: Path = PROJECT_ROOT / "materials" / "manuals"
     db_path: Path = PROJECT_ROOT / "local-data" / "judrive.sqlite"
     api_prefix: str = "/api"
@@ -30,9 +30,16 @@ class Settings(BaseSettings):
     gigachat_scope: str = "GIGACHAT_API_PERS"
     gigachat_base_url: str = "https://api.giga.chat"
     gigachat_auth_url: str = "https://ngw.devices.sberbank.ru:9443/api/v2/oauth"
-    gigachat_model: str = "GigaChat-2-Max"
+    gigachat_model: str = "GigaChat-3-Ultra"
     gigachat_stt_model: str = "GigaChat-2-Max"
-    gigachat_max_tokens: int = 1200
+    gigachat_max_tokens: int = Field(default=1200, gt=0)
+    gigachat_request_tokens: int = Field(default=0, ge=0)
+    gigachat_voice_reserve_tokens: int = Field(default=128_000, gt=0)
+    gigachat_chat_microrub_per_token: int | None = Field(default=None, ge=0)
+    gigachat_voice_microrub_per_token: int | None = Field(default=None, ge=0)
+    gigachat_request_budget_microrub: int = Field(default=0, ge=0)
+    gigachat_daily_budget_microrub: int = Field(default=0, ge=0)
+    gigachat_monthly_budget_microrub: int = Field(default=0, ge=0)
     gigachat_timeout_s: float = 60.0
     gigachat_stt_timeout_s: float = 90.0
     gigachat_ca_bundle: Path | None = None
@@ -42,6 +49,18 @@ class Settings(BaseSettings):
     chief_password_hash: str | None = None
     session_secret: str | None = None
     cookie_secure: bool = False
+    cors_origins: str = "http://127.0.0.1:5173,http://localhost:5173"
+
+    @field_validator("cors_origins")
+    @classmethod
+    def _validate_origins(cls, value: str) -> str:
+        from urllib.parse import urlsplit
+
+        for origin in filter(None, map(str.strip, value.split(","))):
+            url = urlsplit(origin)
+            if url.scheme not in {"http", "https"} or not url.hostname or url.path or url.query or url.fragment or url.username:
+                raise ValueError("CORS_ORIGINS must contain explicit HTTP origins")
+        return value
 
     @field_validator("fleet_data_path", "pdf_dir", "db_path", "gigachat_ca_bundle", mode="before")
     @classmethod

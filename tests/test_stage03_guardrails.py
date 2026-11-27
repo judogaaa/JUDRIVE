@@ -92,16 +92,12 @@ def test_live_pipeline_b418_requires_mocks(synthetic_rag):
 
 
 async def _pipeline_b418(rag):
-    httpx = pytest.importorskip("httpx")
+    import httpx
+
     settings = get_settings()
-    try:
-        with httpx.Client(timeout=3.0) as client:
-            if client.get(f"{settings.mock_ml_url.rstrip('/')}/health").status_code != 200:
-                pytest.skip("Mock ML off")
-            if client.get(f"{settings.mock_toir_url.rstrip('/')}/health").status_code != 200:
-                pytest.skip("Mock TOIR off")
-    except httpx.HTTPError:
-        pytest.skip("Mocks unavailable")
+    with httpx.Client(timeout=3.0) as client:
+        assert client.get(f"{settings.mock_ml_url.rstrip('/')}/health").status_code == 200
+        assert client.get(f"{settings.mock_toir_url.rstrip('/')}/health").status_code == 200
 
     from app.services.fleet import FleetService
     from app.services.mock_clients import MockMlClient, MockToirClient

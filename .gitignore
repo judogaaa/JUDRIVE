@@ -35,6 +35,8 @@ coverage/
 *.log
 /materials/
 /local-data/
+/vendor/neurodvs_mock/data/
+/e2e/storage-state.json
 /local-pdfs/
 /data/index/
 /output/

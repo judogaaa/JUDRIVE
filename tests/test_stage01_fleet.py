@@ -1,6 +1,7 @@
 import sys
 from pathlib import Path
 
+import httpx
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -28,19 +29,10 @@ def test_fleet_counts():
     ],
 )
 def test_diagnose_acceptance_pairs(vehicle_id, session_id, expected_status):
-    httpx = pytest.importorskip("httpx")
     settings = get_settings()
-    try:
-        with httpx.Client(base_url=settings.mock_ml_url, timeout=10.0) as client:
-            health = client.get("/health")
-            if health.status_code != 200:
-                pytest.skip("Mock ML не запущен")
-            response = client.post(
-                "/diagnose",
-                json={"vehicle_id": vehicle_id, "session_id": session_id},
-            )
-    except httpx.HTTPError:
-        pytest.skip("Mock ML недоступен")
+    with httpx.Client(base_url=settings.mock_ml_url, timeout=10.0) as client:
+        assert client.get("/health").status_code == 200
+        response = client.post("/diagnose", json={"vehicle_id": vehicle_id, "session_id": session_id})
 
     assert response.status_code == 200
     payload = response.json()

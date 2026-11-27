@@ -173,7 +173,7 @@ async def main() -> int:
     get_settings.cache_clear()
     settings = get_settings()
     if not settings.gigachat_credentials and args.only not in {"check_failed", "drive_permission"}:
-        print("FAIL: GIGACHAT_CREDENTIALS не загружен из .env")
+        print("BLOCKED: GIGACHAT_CREDENTIALS не загружен из .env")
         return 2
 
     async with httpx.AsyncClient(base_url=args.base_url, timeout=120.0) as client:
@@ -191,9 +191,9 @@ async def main() -> int:
         if login.status_code != 200:
             print(f"BLOCKED: вход HTTP {login.status_code}")
             return 2
-        health = await client.get("/api/health")
+        health = await client.get("/api/ready" if requires_provider else "/api/live")
         if health.status_code != 200:
-            print(f"FAIL: backend {args.base_url} недоступен")
+            print(f"BLOCKED: HTTP {health.status_code}; стенд не готов к выбранному сценарию")
             return 2
         h = health.json()
         print(

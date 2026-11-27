@@ -155,12 +155,11 @@ def test_usage_groups_all_measured_calls_of_one_check(tmp_path):
     repo.log_usage_step(one, "answer", {"total_tokens": 15})
     repo.log_usage_step(two, "answer", {"total_tokens": 17})
     with sqlite3.connect(path) as conn:
-        rows = conn.execute("SELECT stage, calls, total_tokens FROM groq_usage_by_check ORDER BY stage").fetchall()
+        rows = conn.execute("SELECT stage, calls, total_tokens FROM llm_usage_by_check WHERE provider='gigachat' ORDER BY stage").fetchall()
     assert rows == [("answer", 2, 32), ("tool_selection", 1, 12)]
 
 
-def test_control_vehicle_rejects_f14_in_public_diagnosis(monkeypatch):
-    from fastapi.testclient import TestClient
+def test_control_vehicle_rejects_f14_in_diagnosis(auth_client, monkeypatch):
     from app import main
 
     async def ml(vehicle, session):
@@ -168,8 +167,7 @@ def test_control_vehicle_rejects_f14_in_public_diagnosis(monkeypatch):
         return diagnosis(vehicle_id=vehicle, session_id=session, anomaly_type="F14")
 
     monkeypatch.setattr(main.mock_ml, "diagnose", ml)
-    client = TestClient(main.app)
-    result = client.post("/api/diagnose", json={"vehicle_id": "P854BT78", "session_id": "S-0021"})
+    result = auth_client.post("/api/diagnose", json={"vehicle_id": "P854BT78", "session_id": "S-0021"})
     assert result.status_code == 200
     row = result.json()
     assert row["diagnostic_issue"] == "engine_mismatch"
