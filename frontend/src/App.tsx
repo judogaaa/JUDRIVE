@@ -7,7 +7,8 @@ import { useOnboarding } from './hooks/useOnboarding'
 import { useTheme } from './hooks/useTheme'
 import { useI18n } from './i18n/I18nContext'
 import { HelpView } from './views/HelpView'
-import { ChiefLogin, ChiefMechanicView } from './views/ChiefMechanicView'
+import { LoginView } from './views/LoginView'
+import { ChiefMechanicView } from './views/ChiefMechanicView'
 import { DiagnosisView } from './views/DiagnosisView'
 import { FleetView } from './views/FleetView'
 import { ManualsView } from './views/ManualsView'
@@ -171,14 +172,36 @@ export default function App() {
     navigate('tickets')
   }
 
+  if (authenticated !== true) {
+    return (
+      <>
+        <LoginView
+          checking={authenticated === null}
+          themeMode={themeMode}
+          onThemeChange={setThemeMode}
+          onSuccess={() => setAuthenticated(true)}
+        />
+        <Onboarding
+          open={onboarding.open}
+          step={onboarding.state.step}
+          acknowledged={onboarding.state.acknowledged}
+          onNext={onboarding.next}
+          onBack={onboarding.back}
+          onSkip={onboarding.skip}
+          onClose={onboarding.close}
+          onAcknowledge={onboarding.setAcknowledged}
+          onStart={() => {
+            if (!onboarding.state.acknowledged) return
+            onboarding.complete()
+          }}
+        />
+      </>
+    )
+  }
+
   return (
     <>
       <WorkspaceShell modalOpen={onboarding.open} view={view} onViewChange={navigate} themeMode={themeMode} onThemeChange={setThemeMode}>
-        {authenticated === false && ['diagnosis', 'fleet', 'manuals', 'tickets'].includes(view) && (
-          <div className="auth-entry">
-            <ChiefLogin onSuccess={() => setAuthenticated(true)} />
-          </div>
-        )}
         <div hidden={view !== 'diagnosis'}>
           {diagnosisOrigin && diagnosisOrigin !== 'diagnosis' && (
             <button type="button" className="btn btn--secondary context-return" onClick={() => navigate(diagnosisOrigin)}>
