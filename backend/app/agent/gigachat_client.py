@@ -20,7 +20,7 @@ def _clean_schema(value: Any) -> Any:
     return value
 
 
-def _to_functions(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def gigachat_functions(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
     functions: list[dict[str, Any]] = []
     for item in tools:
         function = item.get("function") if isinstance(item, dict) else None
@@ -68,8 +68,15 @@ class GigaChatAgentClient:
         max_steps: int = 4,
     ) -> tuple[str, list[dict[str, Any]], dict[str, int]]:
         tool_trace: list[dict[str, Any]] = []
-        transcript = [{"role": "system", "content": SYSTEM_PROMPT}, *messages]
-        functions = _to_functions(tools)
+        instructions = [SYSTEM_PROMPT]
+        transcript = []
+        for message in messages:
+            if message["role"] == "system":
+                instructions.append(message["content"])
+            else:
+                transcript.append(message)
+        transcript.insert(0, {"role": "system", "content": "\n\n".join(instructions)})
+        functions = gigachat_functions(tools)
         usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
         started = time.perf_counter()
 
@@ -110,16 +117,16 @@ class GigaChatAgentClient:
                 name = function_call.get("name")
                 if not isinstance(name, str) or not name:
                     raise GigaChatAPIError(502, "GigaChat function call has no name")
-                raw_arguments = function_call.get("arguments") or {}
+                raw_arguments = function_call.get("arguments", {})
                 if isinstance(raw_arguments, str):
                     try:
                         arguments = json.loads(raw_arguments)
-                    except json.JSONDecodeError:
-                        arguments = {}
+                    except json.JSONDecodeError as exc:
+                        raise GigaChatAPIError(502, "GigaChat returned invalid function arguments") from exc
                 else:
                     arguments = raw_arguments
                 if not isinstance(arguments, dict):
-                    arguments = {}
+                    raise GigaChatAPIError(502, "GigaChat returned invalid function arguments")
 
                 assistant_message: dict[str, Any] = {
                     "role": "assistant",

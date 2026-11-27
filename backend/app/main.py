@@ -278,7 +278,7 @@ async def get_source_pdf(doc_id: str, engine_model: str,
     )
 
 
-@app.post(f"{settings.api_prefix}/conversations")
+@app.post(f"{settings.api_prefix}/conversations", dependencies=[Depends(_chief_guard)])
 async def create_conversation(body: ConversationCreate):
     return agent.create_conversation(body.vehicle_id, body.session_id)
 

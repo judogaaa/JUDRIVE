@@ -155,7 +155,7 @@ def test_usage_groups_all_measured_calls_of_one_check(tmp_path):
     repo.log_usage_step(one, "answer", {"total_tokens": 15})
     repo.log_usage_step(two, "answer", {"total_tokens": 17})
     with sqlite3.connect(path) as conn:
-        rows = conn.execute("SELECT stage, calls, total_tokens FROM groq_usage_by_check ORDER BY stage").fetchall()
+        rows = conn.execute("SELECT stage, calls, total_tokens FROM llm_usage_by_check WHERE provider='gigachat' ORDER BY stage").fetchall()
     assert rows == [("answer", 2, 32), ("tool_selection", 1, 12)]
 
 

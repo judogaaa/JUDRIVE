@@ -10,6 +10,8 @@ from app import main
     ("POST", "/api/manuals/search"),
     ("GET", "/api/sources/pdf/y236-re?engine_model=ЯМЗ-236М2"),
     ("GET", "/api/sources/evidence/y236-re:p0033?engine_model=ЯМЗ-236М2"),
+    ("POST", "/api/conversations"),
+    ("POST", "/api/voice/transcribe"),
     ("GET", "/api/conversations/demo/messages"),
     ("POST", "/api/conversations/demo/messages"),
     ("GET", "/api/tickets/drafts/demo"),

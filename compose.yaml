@@ -1,4 +1,5 @@
 x-runtime: &runtime
+  image: ${JUDRIVE_RUNTIME_IMAGE:-judrive-runtime:local}
   build:
     context: .
     dockerfile: deploy/Dockerfile.backend
@@ -25,7 +26,9 @@ services:
       start_period: 10s
   backend:
     <<: *runtime
-    env_file: .env
+    env_file:
+      - path: .env
+        required: false
     environment:
       MOCK_ML_URL: http://ml:8001
       MOCK_TOIR_URL: http://toir:8002

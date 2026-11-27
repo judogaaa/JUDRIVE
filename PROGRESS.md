@@ -505,3 +505,9 @@
 - E2E использует локальную заглушку GigaChat-native function calling; добавлены целевые тесты OAuth cache, function loop и voice upload/cleanup.
 - Добавлены docs/GIGACHAT.md и scripts/gigachat_smoke.py. Live-проверка пока BLOCKED до настройки Authorization Key владельца; ключ в Git не добавлялся.
 - Не заявлять, что GigaChat уже проверен live или что стоимость равна историческим Groq-замерам. Следующий шаг: внести Authorization Key в локальный .env, выполнить smoke, проверить C1–C3 и voice STT, затем запустить pytest/E2E/build.
+
+## Локальный аудит feat/gigachat-integration перед VPS
+
+Исправлены миллисекундный `expires_at`, общий refresh при параллельных HTTP 401 и единый системный промпт GigaChat. Создание диалога требует сессию механика. Smoke голосового API требует HTTPS для удалённого адреса. Команда проверки четырёх схем использует официальный валидатор.
+
+Локальные регрессии прошли на временных данных, с исходными Mock ML и ТОиР и локальной заглушкой GigaChat. Для Docker проверены сборка с CA среды, healthchecks, раздача frontend, защита источников и сохранение диалога и черновика после рестарта backend. Проверки с ключом GigaChat и оригинальными PDF остаются BLOCKED. [Команды и результаты](docs/GIGACHAT_LOCAL_AUDIT.md)

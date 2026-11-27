@@ -5,10 +5,10 @@ import json
 import time
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 
 app = FastAPI(title="JUDRIVE fake GigaChat for isolated E2E")
-LOG = Path(__file__).resolve().parents[2] / "local-data" / "fake_gigachat.log"
+LOG = Path.cwd() / "local-data" / "fake_gigachat.log"
 
 
 def _log(payload: dict) -> None:
@@ -81,13 +81,19 @@ def health() -> dict:
 
 @app.post("/api/v2/oauth")
 async def oauth(_: Request) -> dict:
-    return {"access_token": "e2e-access-token", "expires_at": int(time.time()) + 1800}
+    return {"access_token": "e2e-access-token", "expires_at": int((time.time() + 1800) * 1000)}
 
 
 @app.post("/v1/chat/completions")
 async def chat(request: Request) -> dict:
     body = await request.json()
     messages = body.get("messages") or []
+    if not messages or messages[0].get("role") != "system" or any(
+        item.get("role") == "system" for item in messages[1:]
+    ):
+        raise HTTPException(422, "Expected a single leading system message")
+    if any(item.get("function_call") and item.get("functions_state_id") != "e2e-state" for item in messages):
+        raise HTTPException(422, "Missing functions_state_id")
     session_id, scenario = _scenario(messages)
     function_messages = []
     for message in messages:
