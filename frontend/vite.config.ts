@@ -9,6 +9,10 @@ export default defineConfig(({ mode }) => {
     build: {
       rolldownOptions: {
         output: {
+          // Static servers may serve .mjs as octet-stream, which browsers reject for module workers.
+          assetFileNames(asset) {
+            return asset.names.includes('pdf.worker.min.mjs') ? 'assets/[name]-[hash].js' : 'assets/[name]-[hash][extname]'
+          },
           manualChunks(id: string) {
             if (id.includes('pdfjs-dist')) return undefined
             if (id.includes('node_modules')) return 'vendor'
