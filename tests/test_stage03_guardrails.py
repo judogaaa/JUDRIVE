@@ -153,3 +153,54 @@ async def _pipeline_b418(rag):
 
     dup = await tickets.confirm(draft_id, nonce)
     assert dup["status"] in {"duplicate", "error"}
+
+def test_conflict_offers_only_verified_inspection_candidate(synthetic_rag, tmp_path):
+    import asyncio
+
+    from app.agent.tools import ToolRuntime
+    from app.services.fleet import FleetService
+    from app.services.mock_clients import MockMlClient
+    from app.storage.repository import AppRepository
+
+    async def scenario():
+        rag = synthetic_rag
+        settings = get_settings()
+        repo = AppRepository(tmp_path / "inspection.sqlite")
+        cid = repo.create_conversation("B418HK98", "S-0009", "ЯМЗ-236М2", "test")
+        runtime = ToolRuntime(
+            fleet=FleetService(settings.fleet_data_path),
+            mock_ml=MockMlClient(settings.mock_ml_url),
+            rag=rag,
+            repo=repo,
+            vehicle_id="B418HK98",
+            session_id="S-0009",
+            engine_model="ЯМЗ-236М2",
+            conversation_id=cid,
+        )
+        await runtime.execute("get_diagnosis", {})
+        result = await runtime.execute("search_manuals", {"query": "тепловые зазоры клапанного механизма"})
+        assert result["status"] in {"conflict", "potential_conflict"}
+        assert result["ticket_policy"]["mode"] == "inspection_only"
+
+        runtime.sources = list(result["conflicting_sources"])
+        assert "candidate" not in runtime._inspection_guidance()
+        source = rag.get_evidence("y236-re:p0034")
+        assert source is not None
+        runtime.sources.append(source)
+
+        candidate = runtime._inspection_guidance()["candidate"]
+        assert candidate["evidence_ids"] == ["y236-re:p0034"]
+        assert candidate["spare_parts"] == []
+        unsafe = {**candidate, "operations": ["Проверить и отрегулировать тепловые зазоры клапанного механизма"]}
+        refused = await runtime.execute("prepare_defect_ticket", unsafe)
+        assert refused["status"] == "refused"
+        assert runtime.draft is None
+        assert refused["ticket_policy"]["candidate"] == candidate
+
+        accepted = await runtime.execute("prepare_defect_ticket", candidate)
+        assert accepted["status"] == "draft_ready"
+        assert accepted["payload"]["operations"] == candidate["operations"]
+        assert accepted["payload"]["spare_parts"] == []
+        assert accepted["payload"]["references"][0]["pdf_page"] == 34
+
+    asyncio.run(scenario())
