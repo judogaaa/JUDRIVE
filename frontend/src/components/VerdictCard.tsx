@@ -1,8 +1,10 @@
-import { AlertTriangle, CheckCircle2, HelpCircle, Loader2, Radio } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, HelpCircle, Loader2, Radio, RotateCcw } from 'lucide-react'
 import type { DiagnoseResponse } from '../api/types'
 import { useI18n } from '../i18n/I18nContext'
 import type { TranslationKey } from '../i18n/translations'
 import { formatMetric } from '../lib/verdict'
+import { usableStatus } from '../lib/workflow'
+import { HelpTip } from './HelpTip'
 import { VerdictActions, type VerdictActionsProps } from './VerdictActions'
 
 interface VerdictCardProps {
@@ -11,14 +13,15 @@ interface VerdictCardProps {
   error: string | null
   vehicleId?: string
   actions?: Omit<VerdictActionsProps, 'result'> | null
+  onRetry?: () => void
 }
 
-export function VerdictCard({ result, loading, error, vehicleId, actions }: VerdictCardProps) {
+export function VerdictCard({ result, loading, error, vehicleId, actions, onRetry }: VerdictCardProps) {
   const { t } = useI18n()
 
-  const signalLabel = (q: DiagnoseResponse['signal_quality']) => {
-    if (q === 'good') return t('verdict.signal.good')
-    if (q === 'warning') return t('verdict.signal.warning')
+  const signalLabel = (quality: DiagnoseResponse['signal_quality']) => {
+    if (quality === 'good') return t('verdict.signal.good')
+    if (quality === 'warning') return t('verdict.signal.warning')
     return t('verdict.signal.bad')
   }
 
@@ -51,6 +54,14 @@ export function VerdictCard({ result, loading, error, vehicleId, actions }: Verd
         <p className="verdict-card__eyebrow">{t('verdict.eyebrow.error')}</p>
         <h2 className="verdict-card__title">{t('verdict.error.title')}</h2>
         <p className="verdict-card__body">{error}</p>
+        {onRetry ? (
+          <div className="verdict-card__error-action">
+            <button type="button" className="btn btn--secondary" onClick={onRetry}>
+              <RotateCcw size={16} aria-hidden />
+              {t('history.retry')}
+            </button>
+          </div>
+        ) : null}
       </section>
     )
   }
@@ -68,93 +79,81 @@ export function VerdictCard({ result, loading, error, vehicleId, actions }: Verd
     )
   }
 
-  const StatusIcon =
-    result.status === 'normal' ? CheckCircle2 : result.status === 'anomaly' ? AlertTriangle : HelpCircle
+  const effective = usableStatus(result)
+  const StatusIcon = effective === 'normal' ? CheckCircle2 : effective === 'anomaly' ? AlertTriangle : HelpCircle
 
   const titleKey: TranslationKey =
-    result.status === 'normal'
+    effective === 'normal'
       ? 'verdict.normal.title'
-      : result.status === 'check_failed'
+      : effective === 'check_failed'
         ? 'verdict.failed.title'
         : 'verdict.anomaly.title'
   const leadKey: TranslationKey =
-    result.status === 'normal'
+    effective === 'normal'
       ? 'verdict.normal.lead'
-      : result.status === 'check_failed'
+      : effective === 'check_failed'
         ? 'verdict.failed.lead'
         : 'verdict.anomaly.lead'
   const footnoteKey: TranslationKey | null =
-    result.status === 'normal'
+    effective === 'normal'
       ? 'verdict.normal.footnote'
-      : result.status === 'anomaly'
+      : effective === 'anomaly'
         ? 'verdict.anomaly.footnote'
         : null
 
-  const steps = stepKeys(result.status)
+  const steps = stepKeys(effective)
+
+  const unusableRecording = effective === 'check_failed' && result.signal_quality === 'bad'
 
   return (
-    <section className={`verdict-card verdict-card--${result.status}`} aria-live="polite">
-      {vehicleId ? (
-        <p className="verdict-card__context">
-          {vehicleId} · {result.session_id}
-        </p>
-      ) : null}
-      <div className="verdict-card__status-icon" aria-hidden>
-        <StatusIcon size={22} />
-      </div>
-      <p className="verdict-card__eyebrow">{t('verdict.eyebrow')}</p>
-      <h2 className="verdict-card__title">{t(titleKey)}</h2>
-      <p className="verdict-card__lead">{t(leadKey)}</p>
+    <section className={`verdict-card verdict-card--${effective}${unusableRecording ? ' verdict-card--bad-signal' : ''}`} aria-live="polite">
+      <header className="verdict-card__header">
+        <div className="verdict-card__status-icon" aria-hidden>
+          <StatusIcon size={22} />
+        </div>
+        <div className="verdict-card__heading">
+          <p className="verdict-card__eyebrow">{t('verdict.eyebrow')}</p>
+          {vehicleId ? (
+            <p className="verdict-card__context">
+              {vehicleId} · {result.session_id}
+            </p>
+          ) : null}
+        </div>
+      </header>
 
-      {result.status === 'check_failed' ? (
-        <p className="verdict-card__action">{t('verdict.failed.action')}</p>
-      ) : (
+      <h2 className="verdict-card__title">{t(result.diagnostic_issue === 'engine_mismatch' ? 'verdict.error.title' : titleKey)}</h2>
+      {result.diagnostic_issue !== 'engine_mismatch' && <p className="verdict-card__lead">{t(leadKey)}</p>}
+
+      {effective === 'check_failed' ? (
         <>
-          {result.engine_model ? (
-            <dl className="verdict-card__meta">
-              <div>
-                <dt>{t('verdict.engine')}</dt>
-                <dd>{result.engine_model}</dd>
-              </div>
-              <div>
-                <dt>{t('verdict.signal')}</dt>
-                <dd>{signalLabel(result.signal_quality)}</dd>
-              </div>
-              <div>
-                <dt>{t('verdict.confidence')}</dt>
-                <dd>{formatMetric(result.confidence)}</dd>
-              </div>
-              {result.status === 'anomaly' ? (
-                <>
-                  <div>
-                    <dt>{t('verdict.type')}</dt>
-                    <dd>
-                      {result.anomaly_type} — {result.anomaly_title}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>{t('verdict.score')}</dt>
-                    <dd>{formatMetric(result.anomaly_score)}</dd>
-                  </div>
-                </>
-              ) : null}
+          {result.description ? (
+            <dl className="verdict-card__reason">
+              <dt>
+                {t('verdict.failed.reason')} {result.diagnostic_issue !== 'engine_mismatch' && <HelpTip text={t('help.tip.failed')} />}
+              </dt>
+              <dd>{result.description}</dd>
             </dl>
           ) : null}
+          {unusableRecording && <p className="verdict-card__quality">{t('verdict.signal')}: {signalLabel('bad')}</p>}
+          <p className="verdict-card__notice">{t('verdict.failed.action')}</p>
+        </>
+      ) : (
+        <>
           {result.description ? <p className="verdict-card__body">{result.description}</p> : null}
-          {footnoteKey ? <p className="verdict-card__footnote">{t(footnoteKey)}</p> : null}
+          {result.signal_quality === 'warning' ? (
+            <p className="verdict-card__quality">{t('verdict.signal.warningNote')}</p>
+          ) : null}
+          {effective === 'anomaly' && result.review_priority ? (
+            <p className="verdict-card__priority">
+              <strong>{t('verdict.reviewPriority')}:</strong> {t(`ticket.urgency.${result.review_priority}`)}
+            </p>
+          ) : null}
         </>
       )}
 
-      {steps.length ? (
-        <div className="verdict-card__steps">
-          <p className="verdict-card__steps-title">{t('verdict.steps.title')}</p>
-          <ol>
-            {steps.map((key) => (
-              <li key={key}>{t(key)}</li>
-            ))}
-          </ol>
-        </div>
-      ) : null}
+      {effective === 'anomaly' && (result.confidence ?? 0) < 0.50 && (
+        <p className="verdict-card__quality">{t('ticket.lowConfidence')}</p>
+      )}
       {actions ? (
         <VerdictActions
           result={result}
@@ -165,6 +164,52 @@ export function VerdictCard({ result, loading, error, vehicleId, actions }: Verd
           onCopyPlan={actions.onCopyPlan}
           onOtherSession={actions.onOtherSession}
         />
+      ) : null}
+
+      {effective !== 'check_failed' ? (
+        <>
+          <dl className="verdict-card__meta">
+            {result.engine_model ? (
+              <div>
+                <dt>{t('verdict.engine')}</dt>
+                <dd>{result.engine_model}</dd>
+              </div>
+            ) : null}
+            <div>
+              <dt>{t('verdict.signal')}</dt>
+              <dd>{signalLabel(result.signal_quality)}</dd>
+            </div>
+            <div>
+              <dt>
+                {t('verdict.confidence')} <HelpTip text={t('help.tip.confidence')} />
+              </dt>
+              <dd>{formatMetric(result.confidence)}</dd>
+            </div>
+            {effective === 'anomaly' ? (
+              <div>
+                <dt>{t('verdict.type')}</dt>
+                <dd>
+                  {result.anomaly_type} — {result.anomaly_title}
+                  <span className="verdict-card__metric-sub">
+                    {t('verdict.score')}: {formatMetric(result.anomaly_score)} <HelpTip text={t('help.tip.score')} />
+                  </span>
+                </dd>
+              </div>
+            ) : null}
+          </dl>
+          {footnoteKey ? <p className="verdict-card__footnote">{t(footnoteKey)}</p> : null}
+        </>
+      ) : null}
+
+      {steps.length ? (
+        <div className="verdict-card__steps">
+          <p className="verdict-card__steps-title">{t('verdict.steps.title')}</p>
+          <ol>
+            {steps.map((key) => (
+              <li key={key}>{t(key)}</li>
+            ))}
+          </ol>
+        </div>
       ) : null}
     </section>
   )

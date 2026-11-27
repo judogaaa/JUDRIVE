@@ -1,20 +1,21 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
-import { Activity, BookOpen, Bus, Check, ClipboardList, ChevronDown, Globe, LayoutDashboard, Monitor, Moon, Sun, Truck } from 'lucide-react'
+import { Activity, BookOpen, Bus, Check, ChevronDown, CircleHelp, ClipboardList, Globe, LayoutDashboard, Monitor, Moon, Sun, Truck } from 'lucide-react'
 import type { ThemeMode } from '../../hooks/useTheme'
 import { useI18n } from '../../i18n/I18nContext'
 import type { LocaleCode } from '../../i18n/translations'
 
-export type AppView = 'diagnosis' | 'chief' | 'fleet' | 'tickets' | 'manuals'
+export type AppView = 'diagnosis' | 'chief' | 'fleet' | 'tickets' | 'manuals' | 'help'
 
 interface WorkspaceShellProps {
   view: AppView
   onViewChange: (view: AppView) => void
   themeMode: ThemeMode
   onThemeChange: (mode: ThemeMode) => void
+  modalOpen?: boolean
   children: ReactNode
 }
 
-export function WorkspaceShell({ view, onViewChange, themeMode, onThemeChange, children }: WorkspaceShellProps) {
+export function WorkspaceShell({ view, onViewChange, themeMode, onThemeChange, modalOpen, children }: WorkspaceShellProps) {
   const { t, locale, setLocale, locales, localeLabels } = useI18n()
   const [langOpen, setLangOpen] = useState(false)
   const [themeOpen, setThemeOpen] = useState(false)
@@ -59,7 +60,7 @@ export function WorkspaceShell({ view, onViewChange, themeMode, onThemeChange, c
   const ThemeIcon = themeOptions.find((o) => o.id === themeMode)?.icon ?? Sun
 
   return (
-    <div className="shell">
+    <div className="shell" inert={modalOpen || undefined}>
       <header className="shell-top">
         <div className="shell-brand">
           <BrandIcon />
@@ -146,6 +147,17 @@ export function WorkspaceShell({ view, onViewChange, themeMode, onThemeChange, c
               </ul>
             ) : null}
           </div>
+
+          <button
+            type="button"
+            className="icon-btn shell-help-mobile"
+            aria-current={view === 'help' ? 'page' : undefined}
+            aria-label={t('nav.help')}
+            title={t('nav.help')}
+            onClick={() => onViewChange('help')}
+          >
+            <CircleHelp size={18} aria-hidden />
+          </button>
         </div>
       </header>
 
@@ -155,6 +167,7 @@ export function WorkspaceShell({ view, onViewChange, themeMode, onThemeChange, c
             key={id}
             type="button"
             className={view === id ? 'nav-item nav-item--active' : 'nav-item'}
+            aria-current={view === id ? 'page' : undefined}
             onClick={() => onViewChange(id)}
           >
             <Icon size={18} aria-hidden />
@@ -170,12 +183,24 @@ export function WorkspaceShell({ view, onViewChange, themeMode, onThemeChange, c
               key={id}
               type="button"
               className={view === id ? 'nav-item nav-item--active' : 'nav-item'}
+              aria-current={view === id ? 'page' : undefined}
               onClick={() => onViewChange(id)}
             >
               <Icon size={18} aria-hidden />
               {label}
             </button>
           ))}
+          <div className="shell-nav__footer">
+            <button
+              type="button"
+              className={view === 'help' ? 'nav-item nav-item--active' : 'nav-item'}
+              aria-current={view === 'help' ? 'page' : undefined}
+              onClick={() => onViewChange('help')}
+            >
+              <CircleHelp size={18} aria-hidden />
+              {t('nav.help')}
+            </button>
+          </div>
         </nav>
         <main className="shell-main">{children}</main>
       </div>

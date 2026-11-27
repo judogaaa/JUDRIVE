@@ -1,39 +1,67 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
+import { CheckCircle2, ShieldCheck } from 'lucide-react'
 import { confirmTicketDraft, type DraftPayload } from '../api/chat'
+import type { DocumentScope, ManualSearchHit } from '../api/manuals'
 import { useI18n } from '../i18n/I18nContext'
+import type { TranslationKey } from '../i18n/translations'
 import { resolveErrorMessage } from '../lib/i18nError'
+import { docIdFromManualTitle } from '../lib/manuals'
+import { SourceDrawer } from './SourceDrawer'
 
 interface TicketDraftCardProps {
+  scope: DocumentScope
   draft: DraftPayload | null
   onConfirmed: (ticketId: string) => void
+  onReplace?: () => void
 }
 
-export function TicketDraftCard({ draft, onConfirmed }: TicketDraftCardProps) {
+export function TicketDraftCard({ draft, scope, onConfirmed, onReplace }: TicketDraftCardProps) {
   if (!draft?.draft_id || !draft.confirm_nonce) return null
-  return <TicketDraftBody key={draft.draft_id} draft={draft} onConfirmed={onConfirmed} />
+  return <TicketDraftBody key={draft.draft_id} draft={draft} scope={scope} onConfirmed={onConfirmed} onReplace={onReplace} />
 }
 
 function TicketDraftBody({
   draft,
+  scope,
   onConfirmed,
+  onReplace,
 }: {
   draft: DraftPayload
+  scope: DocumentScope
   onConfirmed: (ticketId: string) => void
+  onReplace?: () => void
 }) {
-  const { t } = useI18n()
-  const [phase, setPhase] = useState<'idle' | 'sending' | 'created' | 'duplicate' | 'unknown'>('idle')
+  const { locale, t } = useI18n()
+  const confirming = useRef(false)
+  const [phase, setPhase] = useState<'idle' | 'sending' | 'created' | 'duplicate' | 'unknown' | 'blocked' | 'stale'>('idle')
   const [error, setError] = useState<string | null>(null)
   const [ticketId, setTicketId] = useState<string | null>(null)
+  const [warningAcknowledged, setWarningAcknowledged] = useState(false)
+  const suggested = draft.payload?.urgency
+  const [urgency, setUrgency] = useState<'low' | 'medium' | 'high'>(
+    suggested === 'low' || suggested === 'high' ? suggested : 'medium',
+  )
+  const warning = draft.signal_quality === 'warning'
+  const [acknowledged, setAcknowledged] = useState(false)
+  const [source, setSource] = useState<ManualSearchHit | null>(null)
 
   const payload = draft.payload
-  const locked = phase === 'sending' || phase === 'created' || phase === 'duplicate' || phase === 'unknown'
+  const locked = phase === 'sending' || phase === 'created' || phase === 'duplicate' || phase === 'unknown' || phase === 'blocked' || phase === 'stale'
+
+  const urgencyLabel = (urgency: string | undefined): string => {
+    if (urgency === 'low' || urgency === 'medium' || urgency === 'high') {
+      return t(`ticket.urgency.${urgency}` as TranslationKey)
+    }
+    return urgency ?? '—'
+  }
 
   const onConfirm = async () => {
-    if (locked || !draft.confirm_nonce) return
+    if (confirming.current || locked || !acknowledged || (warning && !warningAcknowledged) || !draft.confirm_nonce) return
+    confirming.current = true
     setPhase('sending')
     setError(null)
     try {
-      const result = await confirmTicketDraft(draft.draft_id, draft.confirm_nonce)
+      const result = await confirmTicketDraft(draft.draft_id, draft.confirm_nonce, warningAcknowledged, urgency)
       if (result.status === 'created' && result.ticket_id) {
         setPhase('created')
         setTicketId(result.ticket_id)
@@ -46,38 +74,57 @@ function TicketDraftBody({
           setTicketId(result.ticket_id)
           onConfirmed(result.ticket_id)
         }
-        setError(result.message || t('ticket.status.duplicate'))
+        setError(t('ticket.status.duplicate'))
         return
       }
       if (result.status === 'unknown') {
         setPhase('unknown')
-        setError(result.message || t('ticket.status.unknown'))
+        setError(t('ticket.status.unknown'))
+        return
+      }
+      if (result.status === 'refused' || result.status === 'stale') {
+        setPhase(result.status === 'stale' ? 'stale' : 'blocked')
+        setError(t('ticket.confirmBlocked'))
         return
       }
       setPhase('idle')
-      setError(result.message || t('error.confirm'))
+      setError(locale === 'ru' ? result.message || t('error.confirm') : t('error.confirm'))
     } catch (err: unknown) {
       setPhase('idle')
       setError(resolveErrorMessage(t, err, 'error.confirm'))
+    } finally {
+      confirming.current = false
     }
   }
 
   return (
-    <section className="ticket-draft panel" aria-labelledby="ticket-draft-title">
-      <h2 id="ticket-draft-title" className="panel__title">
-        {t('ticket.confirmTitle')}
-      </h2>
-      <p className="panel__subtitle">{t('ticket.draft.subtitle')}</p>
+    <>
+      <section className="ticket-draft panel" aria-labelledby="ticket-draft-title">
+      <div className="ticket-draft__head">
+        <span className="ticket-draft__icon" aria-hidden>
+          <ShieldCheck size={20} />
+        </span>
+        <div>
+          <h2 id="ticket-draft-title" className="panel__title">
+            {t('ticket.confirmTitle')}
+          </h2>
+          <p className="panel__subtitle">{t('ticket.draft.subtitle')}</p>
+        </div>
+      </div>
 
       {payload ? (
         <dl className="ticket-draft__grid">
+          {payload.vehicle_id || payload.session_id ? (
+            <div>
+              <dt>{t('diag.vehicle')}</dt>
+              <dd>
+                {payload.vehicle_id ?? '—'} · {payload.session_id ?? '—'}
+              </dd>
+            </div>
+          ) : null}
           <div>
             <dt>{t('ticket.draft.diagnosis')}</dt>
             <dd>{payload.conclusion}</dd>
-          </div>
-          <div>
-            <dt>{t('ticket.draft.priority')}</dt>
-            <dd>{payload.urgency}</dd>
           </div>
           <div>
             <dt>{t('ticket.draft.code')}</dt>
@@ -87,38 +134,107 @@ function TicketDraftBody({
             <dt>{t('ticket.draft.operations')}</dt>
             <dd>
               <ul>
-                {payload.operations.map((op) => (
-                  <li key={op}>{op}</li>
+                {(payload.operations ?? []).map((operation) => (
+                  <li key={operation}>{operation}</li>
                 ))}
               </ul>
             </dd>
           </div>
+          {!!payload.spare_parts?.length && (
+            <div>
+              <dt>{t('tickets.spareParts')}</dt>
+              <dd><ul>{payload.spare_parts.map((part) => <li key={part}>{part}</li>)}</ul></dd>
+            </div>
+          )}
           <div>
             <dt>{t('ticket.draft.sources')}</dt>
             <dd>
               <ul>
-                {payload.references.map((ref) => (
-                  <li key={`${ref.manual}-${ref.pdf_page}`}>
-                    {ref.manual}, {t('ticket.pdfPage')} {ref.pdf_page}
-                  </li>
-                ))}
+                {(payload.references ?? []).map((reference, index) => {
+                  const docId = docIdFromManualTitle(reference.manual ?? '')
+                  const page = reference.pdf_page ?? 1
+                  return (
+                    <li key={`${reference.manual}-${page}-${index}`}>
+                      {docId ? (
+                        <button
+                          type="button"
+                          className="chat-source-link"
+                          onClick={() =>
+                            setSource({
+                              evidence_id: `${docId}:${page}`,
+                              doc_id: docId,
+                              manual_title: reference.manual ?? '',
+                              pdf_page: page,
+                              quote: '',
+                              score: 0,
+                              extraction: 'text',
+                            })
+                          }
+                        >
+                          {reference.manual}, {t('ticket.pdfPage')} {page}
+                        </button>
+                      ) : (
+                        <span>
+                          {reference.manual}, {t('ticket.pdfPage')} {page}
+                        </span>
+                      )}
+                    </li>
+                  )
+                })}
               </ul>
             </dd>
           </div>
         </dl>
       ) : null}
 
-      {error ? <p className="panel__error">{error}</p> : null}
-      {phase === 'created' ? <p className="ticket-draft__ok">{t('ticket.draft.created')}</p> : null}
+      {error ? <p className="panel__error" role="alert">{error}</p> : null}
+      {phase === 'stale' && onReplace && (
+        <button type="button" className="btn btn--secondary" onClick={onReplace}>{t('chat.suggest3')}</button>
+      )}
+      {phase === 'created' ? (
+        <p className="ticket-draft__ok">
+          <CheckCircle2 size={16} aria-hidden />
+          {t('ticket.draft.created')}
+        </p>
+      ) : null}
       {ticketId && phase !== 'created' ? (
         <p className="ticket-draft__ok">
           {t('ticket.confirmedId')}: {ticketId}
         </p>
       ) : null}
 
-      <button type="button" className="btn btn--primary btn--block" disabled={locked} onClick={() => void onConfirm()}>
+      <label className="field">
+        <span>{t('ticket.draft.priority')}</span>
+        <select value={urgency} disabled={locked} onChange={(event) => setUrgency(event.target.value as typeof urgency)}>
+          {(['low', 'medium', 'high'] as const).map((value) => <option key={value} value={value}>{urgencyLabel(value)}</option>)}
+        </select>
+        <small>{t(`ticket.priorityAction.${urgency}`)}</small>
+      </label>
+      {warning && <label className="ticket-ack">
+        <input type="checkbox" checked={warningAcknowledged} disabled={locked}
+          onChange={(event) => setWarningAcknowledged(event.target.checked)} />
+        <span>{t('ticket.warningAck')}</span>
+      </label>}
+      <label className={locked ? 'ticket-ack ticket-ack--locked' : 'ticket-ack'}>
+        <input
+          type="checkbox"
+          checked={acknowledged}
+          disabled={locked}
+          onChange={(event) => setAcknowledged(event.target.checked)}
+        />
+        <span>{t('ticket.ack')}</span>
+      </label>
+
+      <button
+        type="button"
+        className="btn btn--primary btn--block"
+        disabled={locked || !acknowledged || (warning && !warningAcknowledged)}
+        onClick={() => void onConfirm()}
+      >
         {phase === 'sending' ? t('ticket.draft.sending') : t('ticket.confirmBtn')}
       </button>
-    </section>
+      </section>
+      <SourceDrawer scope={scope} hit={source} onClose={() => setSource(null)} />
+    </>
   )
 }

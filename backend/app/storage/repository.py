@@ -3,8 +3,10 @@ from __future__ import annotations
 import json
 import sqlite3
 import uuid
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Iterator
 
 from app.storage.schema import APP_SCHEMA_SQL
 
@@ -20,17 +22,45 @@ class AppRepository:
         self._init_schema()
 
     def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self._db_path)
+        conn = sqlite3.connect(self._db_path, timeout=30)
         conn.row_factory = sqlite3.Row
         return conn
 
+    @contextmanager
+    def _connection(self) -> Iterator[sqlite3.Connection]:
+        """Commit/rollback and always close; sqlite's own context manager does not close."""
+        conn = self._connect()
+        try:
+            yield conn
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
     def _init_schema(self) -> None:
-        with self._connect() as conn:
+        with self._connection() as conn:
             conn.executescript(APP_SCHEMA_SQL)
+            # Preserve historical Groq measurements while moving new writes to
+            # provider-neutral tables. INSERT OR IGNORE makes this idempotent.
+            conn.execute("""
+                INSERT OR IGNORE INTO llm_usage_steps
+                (id, provider, conversation_id, stage, prompt_tokens, completion_tokens, total_tokens, created_at)
+                SELECT id, 'groq', conversation_id, stage, prompt_tokens, completion_tokens, total_tokens, created_at
+                FROM groq_usage_steps
+            """)
+            conn.execute("""
+                INSERT OR IGNORE INTO llm_usage
+                (id, provider, stage, conversation_id, prompt_tokens, completion_tokens, total_tokens, latency_ms, created_at)
+                SELECT id, 'groq', 'agent_total', conversation_id, prompt_tokens, completion_tokens,
+                       total_tokens, latency_ms, created_at
+                FROM groq_usage
+            """)
 
     def create_conversation(self, vehicle_id: str, session_id: str, engine_model: str, context_hash: str) -> str:
         conversation_id = str(uuid.uuid4())
-        with self._connect() as conn:
+        with self._connection() as conn:
             conn.execute(
                 """
                 INSERT INTO chat_conversations (id, vehicle_id, session_id, engine_model, context_hash, created_at)
@@ -42,47 +72,44 @@ class AppRepository:
         return conversation_id
 
     def get_conversation(self, conversation_id: str) -> sqlite3.Row | None:
-        with self._connect() as conn:
+        with self._connection() as conn:
             return conn.execute(
                 "SELECT * FROM chat_conversations WHERE id = ?",
                 (conversation_id,),
             ).fetchone()
 
-    def add_message(
+    def add_chat_turn(
         self,
         conversation_id: str,
-        role: str,
-        content: str,
+        question: str,
+        answer: str,
         *,
         tool_trace: list | None = None,
         sources: list | None = None,
         draft_id: str | None = None,
-    ) -> str:
-        message_id = str(uuid.uuid4())
-        with self._connect() as conn:
-            conn.execute(
+    ) -> None:
+        timestamp = _now()
+        with self._connection() as conn:
+            conn.executemany(
                 """
                 INSERT INTO chat_messages (id, conversation_id, role, content, tool_trace, sources, draft_id, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (
-                    message_id,
-                    conversation_id,
-                    role,
-                    content,
-                    json.dumps(tool_trace or [], ensure_ascii=False),
-                    json.dumps(sources or [], ensure_ascii=False),
-                    draft_id,
-                    _now(),
-                ),
+                [
+                    (str(uuid.uuid4()), conversation_id, "user", question, "[]", "[]", None, timestamp),
+                    (
+                        str(uuid.uuid4()), conversation_id, "assistant", answer,
+                        json.dumps(tool_trace or [], ensure_ascii=False),
+                        json.dumps(sources or [], ensure_ascii=False),
+                        draft_id, timestamp,
+                    ),
+                ],
             )
-            conn.commit()
-        return message_id
 
     def list_messages(self, conversation_id: str) -> list[sqlite3.Row]:
-        with self._connect() as conn:
+        with self._connection() as conn:
             return conn.execute(
-                "SELECT * FROM chat_messages WHERE conversation_id = ? ORDER BY created_at",
+                "SELECT * FROM chat_messages WHERE conversation_id = ? ORDER BY created_at, rowid",
                 (conversation_id,),
             ).fetchall()
 
@@ -97,7 +124,7 @@ class AppRepository:
         draft_id = str(uuid.uuid4())
         nonce = str(uuid.uuid4())
         now = _now()
-        with self._connect() as conn:
+        with self._connection() as conn:
             conn.execute(
                 """
                 INSERT INTO ticket_drafts
@@ -121,11 +148,11 @@ class AppRepository:
         return {"draft_id": draft_id, "confirm_nonce": nonce, "version": 1, "status": "draft", "payload": payload}
 
     def get_draft(self, draft_id: str) -> sqlite3.Row | None:
-        with self._connect() as conn:
+        with self._connection() as conn:
             return conn.execute("SELECT * FROM ticket_drafts WHERE draft_id = ?", (draft_id,)).fetchone()
 
     def invalidate_drafts_for_context(self, vehicle_id: str, session_id: str) -> None:
-        with self._connect() as conn:
+        with self._connection() as conn:
             conn.execute(
                 """
                 UPDATE ticket_drafts
@@ -137,7 +164,7 @@ class AppRepository:
             conn.commit()
 
     def mark_draft_submitted(self, draft_id: str) -> None:
-        with self._connect() as conn:
+        with self._connection() as conn:
             conn.execute(
                 "UPDATE ticket_drafts SET status = 'submitted', updated_at = ? WHERE draft_id = ?",
                 (_now(), draft_id),
@@ -146,7 +173,7 @@ class AppRepository:
 
     def claim_draft_sending(self, draft_id: str, confirm_nonce: str) -> bool:
         """Атомарно переводит черновик draft → sending до вызова ТОиР."""
-        with self._connect() as conn:
+        with self._connection() as conn:
             cur = conn.execute(
                 """
                 UPDATE ticket_drafts
@@ -159,7 +186,7 @@ class AppRepository:
             return cur.rowcount == 1
 
     def set_draft_status(self, draft_id: str, status: str) -> None:
-        with self._connect() as conn:
+        with self._connection() as conn:
             conn.execute(
                 "UPDATE ticket_drafts SET status = ?, updated_at = ? WHERE draft_id = ?",
                 (status, _now(), draft_id),
@@ -172,11 +199,21 @@ class AppRepository:
         vehicle_id: str,
         session_id: str,
         payload_snapshot: dict,
+        *,
+        confirm_nonce: str | None = None,
     ) -> str | None:
         """Одна активная отправка на пару ТС/сессия до ответа ТОиР."""
         local_id = str(uuid.uuid4())
         try:
-            with self._connect() as conn:
+            with self._connection() as conn:
+                if confirm_nonce is not None:
+                    claimed = conn.execute(
+                        """UPDATE ticket_drafts SET status = 'sending', updated_at = ?
+                           WHERE draft_id = ? AND confirm_nonce = ? AND status = 'draft'""",
+                        (_now(), draft_id, confirm_nonce),
+                    )
+                    if claimed.rowcount != 1:
+                        return None
                 conn.execute(
                     """
                     INSERT INTO ticket_submissions
@@ -205,8 +242,9 @@ class AppRepository:
         submit_status: str,
         ticket_id: str | None = None,
         error_detail: str | None = None,
+        draft_status: str | None = None,
     ) -> None:
-        with self._connect() as conn:
+        with self._connection() as conn:
             conn.execute(
                 """
                 UPDATE ticket_submissions
@@ -215,10 +253,15 @@ class AppRepository:
                 """,
                 (submit_status, ticket_id, error_detail, local_id),
             )
-            conn.commit()
+            if draft_status:
+                conn.execute(
+                    """UPDATE ticket_drafts SET status = ?, updated_at = ?
+                       WHERE draft_id = (SELECT draft_id FROM ticket_submissions WHERE local_id = ?)""",
+                    (draft_status, _now(), local_id),
+                )
 
     def has_blocking_submission(self, vehicle_id: str, session_id: str) -> sqlite3.Row | None:
-        with self._connect() as conn:
+        with self._connection() as conn:
             return conn.execute(
                 """
                 SELECT * FROM ticket_submissions
@@ -231,7 +274,7 @@ class AppRepository:
             ).fetchone()
 
     def has_submitted_ticket(self, vehicle_id: str, session_id: str) -> bool:
-        with self._connect() as conn:
+        with self._connection() as conn:
             row = conn.execute(
                 """
                 SELECT 1 FROM ticket_submissions
@@ -254,7 +297,7 @@ class AppRepository:
     ) -> str:
         local_id = str(uuid.uuid4())
         try:
-            with self._connect() as conn:
+            with self._connection() as conn:
                 conn.execute(
                     """
                     INSERT INTO ticket_submissions
@@ -279,6 +322,23 @@ class AppRepository:
             raise
         return local_id
 
+    def log_usage_step(
+        self,
+        conversation_id: str,
+        stage: str,
+        usage: dict,
+        *,
+        provider: str = "gigachat",
+    ) -> None:
+        with self._connection() as conn:
+            conn.execute(
+                """INSERT INTO llm_usage_steps
+                   (provider, conversation_id, stage, prompt_tokens, completion_tokens, total_tokens, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (provider, conversation_id, stage, usage.get("prompt_tokens", 0), usage.get("completion_tokens", 0),
+                 usage.get("total_tokens", 0), _now()),
+            )
+
     def log_usage(
         self,
         conversation_id: str | None,
@@ -286,19 +346,23 @@ class AppRepository:
         completion_tokens: int,
         total_tokens: int,
         latency_ms: int,
+        *,
+        provider: str = "gigachat",
+        stage: str = "agent_total",
     ) -> None:
-        with self._connect() as conn:
+        with self._connection() as conn:
             conn.execute(
                 """
-                INSERT INTO groq_usage (conversation_id, prompt_tokens, completion_tokens, total_tokens, latency_ms, created_at)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO llm_usage
+                (provider, stage, conversation_id, prompt_tokens, completion_tokens, total_tokens, latency_ms, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (conversation_id, prompt_tokens, completion_tokens, total_tokens, latency_ms, _now()),
+                (provider, stage, conversation_id, prompt_tokens, completion_tokens, total_tokens, latency_ms, _now()),
             )
             conn.commit()
 
     def list_tickets(self, vehicle_id: str | None = None) -> list[dict]:
-        with self._connect() as conn:
+        with self._connection() as conn:
             if vehicle_id:
                 rows = conn.execute(
                     """
@@ -312,3 +376,36 @@ class AppRepository:
                     "SELECT * FROM ticket_submissions ORDER BY created_at DESC LIMIT 50",
                 ).fetchall()
         return [dict(row) for row in rows]
+
+    def quarantine_recommendation(self, vehicle_id: str, session_id: str) -> dict | None:
+        with self._connection() as conn:
+            row = conn.execute(
+                "SELECT * FROM chief_quarantine_events WHERE vehicle_id=? AND session_id=? ORDER BY id DESC LIMIT 1",
+                (vehicle_id, session_id),
+            ).fetchone()
+        return dict(row) if row and row["active"] else None
+
+    def record_quarantine_recommendation(self, vehicle_id: str, session_id: str,
+                                         active: bool, reason: str, chief_username: str) -> None:
+        with self._connection() as conn:
+            conn.execute(
+                "INSERT INTO chief_quarantine_events(vehicle_id, session_id, active, reason, chief_username, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                (vehicle_id, session_id, int(active), reason, chief_username, _now()),
+            )
+
+
+    def recover_interrupted_submissions(self) -> None:
+        """Single-worker startup recovery: never resend an interrupted external POST."""
+        with self._connection() as conn:
+            conn.execute("""
+                UPDATE ticket_drafts
+                SET status='unknown', updated_at=?
+                WHERE draft_id IN (SELECT draft_id FROM ticket_submissions WHERE submit_status='sending')
+                  AND status IN ('sending','submitted')
+            """, (_now(),))
+            conn.execute("UPDATE ticket_submissions SET submit_status='unknown', error_detail='interrupted_process' WHERE submit_status='sending'")
+            conn.execute("""
+                UPDATE ticket_drafts SET status='draft', updated_at=?
+                WHERE status='sending' AND draft_id NOT IN
+                    (SELECT draft_id FROM ticket_submissions WHERE submit_status IN ('sending','created','unknown'))
+            """, (_now(),))

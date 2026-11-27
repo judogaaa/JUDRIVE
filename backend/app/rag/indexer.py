@@ -4,10 +4,13 @@ import hashlib
 import json
 import logging
 import sqlite3
+from contextlib import contextmanager
+from functools import lru_cache
 from pathlib import Path
+from typing import Iterator
 
-from app.rag.catalog import MANUAL_SPECS, ManualSpec
-from app.rag.extract import extract_pdf_pages
+from app.rag.catalog import MANUAL_SPECS, SPECS_BY_ID
+from app.rag.extract import extract_pdf_pages, extraction_profile
 from app.rag.normalize import normalize_for_fts
 
 logger = logging.getLogger(__name__)
@@ -52,15 +55,19 @@ CREATE VIRTUAL TABLE IF NOT EXISTS pages_fts USING fts5(
 
 
 def _file_sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as f:
-        for block in iter(lambda: f.read(1024 * 1024), b""):
-            digest.update(block)
-    return digest.hexdigest()
+    metadata = path.stat()
+    identity = (metadata.st_dev, metadata.st_ino, metadata.st_size, metadata.st_mtime_ns, metadata.st_ctime_ns)
+    return _fingerprinted_file(path, identity)
+
+
+@lru_cache(maxsize=32)
+def _fingerprinted_file(path: Path, _identity: tuple[int, ...]) -> str:
+    with path.open("rb") as handle:
+        return hashlib.file_digest(handle, "sha256").hexdigest()
 
 
 def _corpus_fingerprint(pdf_dir: Path) -> str:
-    parts: list[str] = []
+    parts: list[str] = [extraction_profile()]
     for spec in MANUAL_SPECS:
         path = pdf_dir / spec.filename
         if path.is_file():
@@ -78,13 +85,38 @@ class ManualIndexer:
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
 
     def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self._db_path)
+        conn = sqlite3.connect(self._db_path, timeout=30)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys=ON")
         return conn
 
+    @contextmanager
+    def _connection(self) -> Iterator[sqlite3.Connection]:
+        conn = self._connect()
+        try:
+            yield conn
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
     def missing_files(self) -> list[str]:
         return [spec.filename for spec in MANUAL_SPECS if not (self._pdf_dir / spec.filename).is_file()]
+
+    def document_matches_index(self, doc_id: str, expected_hash: str) -> bool:
+        spec = SPECS_BY_ID.get(doc_id)
+        if not spec:
+            return False
+        try:
+            return _file_sha256(self._pdf_dir / spec.filename) == expected_hash
+        except FileNotFoundError:
+            return False
+
+    @staticmethod
+    def has_index(conn: sqlite3.Connection) -> bool:
+        return conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='index_meta'").fetchone() is not None
 
     def is_index_current(self) -> bool:
         if self.missing_files():
@@ -92,8 +124,9 @@ class ManualIndexer:
         fingerprint = _corpus_fingerprint(self._pdf_dir)
         if not self._db_path.is_file():
             return False
-        with self._connect() as conn:
-            conn.executescript(SCHEMA_SQL)
+        with self._connection() as conn:
+            if not self.has_index(conn):
+                return False
             row = conn.execute(
                 "SELECT value FROM index_meta WHERE key = 'corpus_sha256'",
             ).fetchone()
@@ -116,7 +149,7 @@ class ManualIndexer:
         fingerprint = _corpus_fingerprint(self._pdf_dir)
         stats = {"documents": 0, "pages": 0, "ocr_pages": 0, "sparse_pages": 0}
 
-        with self._connect() as conn:
+        with self._connection() as conn:
             conn.executescript(SCHEMA_SQL)
             conn.execute("DELETE FROM pages")
             conn.execute("DELETE FROM documents")
@@ -193,8 +226,9 @@ class ManualIndexer:
             status["pages"] = 0
             return status
 
-        with self._connect() as conn:
-            conn.executescript(SCHEMA_SQL)
+        with self._connection() as conn:
+            if not self.has_index(conn):
+                return status | {"documents": 0, "pages": 0}
             status["documents"] = conn.execute("SELECT COUNT(*) AS c FROM documents").fetchone()["c"]
             status["pages"] = conn.execute("SELECT COUNT(*) AS c FROM pages").fetchone()["c"]
         return status

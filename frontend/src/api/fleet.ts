@@ -26,6 +26,7 @@ export interface VehicleFleetRow {
   category_reason: string
   needs_rerecord: boolean
   quarantine_basis: string | null
+  quarantine_recommended: boolean
   quarantine_confirmed: boolean
   early_warnings: EarlyWarning[]
   ticket_id: string | null
@@ -99,6 +100,19 @@ export async function fetchFleetDashboard(filters: FleetDashboardFilters = {}): 
 export async function fetchVehicleInsight(vehicleId: string): Promise<VehicleInsight> {
   const response = await fetch(`/api/fleet/vehicles/${encodeURIComponent(vehicleId)}/insight`, {
     credentials: 'include',
+  })
+  if (!response.ok) throw i18nError('error.insight', response.status)
+  return (await response.json()) as VehicleInsight
+}
+
+export async function setQuarantineRecommendation(
+  vehicleId: string, sessionId: string, active: boolean, reason: string,
+): Promise<VehicleInsight> {
+  const response = await fetch(`/api/fleet/vehicles/${encodeURIComponent(vehicleId)}/quarantine-recommendation`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ session_id: sessionId, active, reason, acknowledge: true }),
   })
   if (!response.ok) throw i18nError('error.insight', response.status)
   return (await response.json()) as VehicleInsight

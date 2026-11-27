@@ -5,6 +5,7 @@ import type { Page } from '@playwright/test'
 const REPO_ROOT = join(__dirname, '..', '..')
 
 export function loadDotEnv(): void {
+  if (process.env.JUDRIVE_E2E_MANAGED) return
   const path = join(REPO_ROOT, '.env')
   if (!existsSync(path)) return
   for (const line of readFileSync(path, 'utf8').split(/\r?\n/)) {
@@ -31,9 +32,10 @@ export function chiefCredentials(): { user: string; password: string } | null {
 }
 
 export async function selectVehicleSession(page: Page, vehicleId: string, sessionId: string) {
+  await page.locator('.vehicle-picker__trigger').click()
   const combo = page.getByRole('combobox', { name: 'Поиск' })
   await combo.fill(vehicleId)
-  await page.getByRole('listbox').getByRole('button', { name: new RegExp(vehicleId) }).first().click()
+  await page.getByRole('listbox').getByRole('option', { name: new RegExp(vehicleId) }).first().click()
   await page.getByLabel('Проверка').selectOption(sessionId)
 }
 
@@ -42,5 +44,5 @@ export async function runDiagnosis(page: Page) {
 }
 
 export async function openNav(page: Page, label: RegExp | string) {
-  await page.getByRole('button', { name: label }).click()
+  await page.getByRole('button', { name: label, exact: typeof label === 'string' }).click()
 }

@@ -15,6 +15,9 @@ export interface VehicleSummary {
   engine_model: string
   fuel: string
   sessions: SessionSummary[]
+  latest_session_id?: string | null
+  latest_status?: string | null
+  latest_signal_quality?: string | null
 }
 
 export interface DiagnoseResponse {
@@ -28,6 +31,8 @@ export interface DiagnoseResponse {
   signal_quality: SignalQuality
   description: string
   model_version: string
+  diagnostic_issue?: 'engine_mismatch' | null
+  review_priority?: 'low' | 'medium' | 'high' | null
   engine_model?: string | null
 }
 

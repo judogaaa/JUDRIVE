@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Контрольные сценарии этапа 03: Mock ML + live Groq agent (ключ только из .env)."""
+"""Контрольные сценарии этапа 03: Mock ML + live GigaChat agent (ключ только из .env)."""
 
 from __future__ import annotations
 
@@ -119,6 +119,7 @@ async def run_scenario(
                     result.ok = False
                     result.notes.append(f"confirm HTTP {confirm_code}")
                 elif confirm_body.get("status") == "created":
+                    result.ok = bool(confirm_body.get("ticket_id")) and result.ok
                     result.notes.append(f"TKT {confirm_body.get('ticket_id')}")
                 elif confirm_body.get("status") == "duplicate":
                     tid = confirm_body.get("ticket_id")
@@ -127,108 +128,102 @@ async def run_scenario(
                         f"заявка уже существовала (duplicate){suffix} — допустимо при повторном прогоне"
                     )
                 else:
+                    result.ok = False
                     result.notes.append(f"confirm: {confirm_body.get('status')} {confirm_body.get('message', '')}")
     elif draft:
         result.ok = False
         result.notes.append("черновик не ожидался, но получен")
 
+    if label.startswith("C2") and "недостаточно" not in str(reply.get("reply", "")).lower():
+        result.ok = False
+        result.notes.append("С2: ожидался честный ответ о недостаточности данных")
     if reply.get("reply"):
         result.notes.append(f"ответ: {str(reply['reply'])[:140]}…")
 
     return result
 
 
-def sum_groq_usage(db_path: Path) -> dict[str, int]:
+def sum_llm_usage(db_path: Path) -> dict[str, int]:
     if not db_path.is_file():
         return {"rows": 0, "total_tokens": 0}
     with sqlite3.connect(db_path) as conn:
         row = conn.execute(
-            "SELECT COUNT(*), COALESCE(SUM(total_tokens), 0) FROM groq_usage",
+            "SELECT COUNT(*), COALESCE(SUM(total_tokens), 0) FROM llm_usage WHERE provider = 'gigachat'",
         ).fetchone()
     return {"rows": int(row[0]), "total_tokens": int(row[1])}
 
 
 async def main() -> int:
-    parser = argparse.ArgumentParser(description="Проверка 3 сценариев агента JUDRIVE")
+    parser = argparse.ArgumentParser(description="Проверка сценариев агента JUDRIVE")
     parser.add_argument("--base-url", default=DEFAULT_BASE)
     parser.add_argument(
         "--only",
-        choices=("normal", "anomaly", "check_failed"),
+        choices=("normal", "anomaly", "check_failed", "drive_permission"),
         help="Выполнить один сценарий (например anomaly — B418HK98/S-0009 + TKT)",
     )
+    parser.add_argument("--live", action="store_true", help="Явно разрешить вызовы настроенного провайдера")
+    parser.add_argument("--confirm", action="store_true", help="Явно разрешить создание тестовой заявки в Mock ТОиР")
     args = parser.parse_args()
+
+    requires_provider = args.only not in {"check_failed", "drive_permission"}
+    if requires_provider and not args.live:
+        print("BLOCKED: для live-сценария необходимо явное разрешение --live")
+        return 2
 
     get_settings.cache_clear()
     settings = get_settings()
-    if not settings.groq_api_key:
-        print("FAIL: GROQ_API_KEY не загружен из .env")
+    if not settings.gigachat_credentials and args.only not in {"check_failed", "drive_permission"}:
+        print("BLOCKED: GIGACHAT_CREDENTIALS не загружен из .env")
         return 2
 
     async with httpx.AsyncClient(base_url=args.base_url, timeout=120.0) as client:
-        health = await client.get("/api/health")
+        from getpass import getpass
+        from urllib.parse import urlsplit
+
+        url = urlsplit(args.base_url)
+        if url.scheme != "https" and url.hostname not in {"localhost", "127.0.0.1", "::1"}:
+            print("BLOCKED: удалённый вход требует HTTPS")
+            return 2
+        username = settings.chief_username or input("Имя главного механика: ")
+        login = await client.post("/api/auth/login", json={
+            "username": username, "password": getpass("Пароль: "),
+        })
+        if login.status_code != 200:
+            print(f"BLOCKED: вход HTTP {login.status_code}")
+            return 2
+        health = await client.get("/api/ready" if requires_provider else "/api/live")
         if health.status_code != 200:
-            print(f"FAIL: backend {args.base_url} недоступен")
+            print(f"BLOCKED: HTTP {health.status_code}; стенд не готов к выбранному сценарию")
             return 2
         h = health.json()
         print(
             f"health: {h.get('status')} ml={h.get('mock_ml')} toir={h.get('mock_toir')} "
-            f"manuals={h.get('manuals_index')} groq={h.get('groq_agent')}"
+            f"manuals={h.get('manuals_index')} gigachat={h.get('gigachat_agent')}"
         )
 
-        all_scenarios = [
-            (
-                "normal",
-                await run_scenario(
-                client,
-                label="normal M333YK47/S-0006",
-                vehicle_id="M333YK47",
-                session_id="S-0006",
-                expected_status="normal",
-                user_message=(
-                    "Вызови диагностику и кратко объясни результат. "
-                    "Норма — не гарантия исправности. Нужна ли заявка ТОиР?"
-                ),
-                expect_draft=False,
-                try_confirm=False,
-            ),
-            ),
-            (
-                "anomaly",
-                await run_scenario(
-                client,
-                label="anomaly B418HK98/S-0009 + ticket",
-                vehicle_id="B418HK98",
-                session_id="S-0009",
-                expected_status="anomaly",
-                user_message=(
-                    "Есть отклонение по этой сессии. Объясни риск, найди в руководстве ЯМЗ-236 "
-                    "процедуру проверки/осмотра по тематике F01 и подготовь черновик заявки "
-                    "с реальными evidence_id из поиска."
-                ),
-                expect_draft=True,
-                try_confirm=True,
-            ),
-            ),
-            (
-                "check_failed",
-                await run_scenario(
-                client,
-                label="check_failed P456AT178/S-0003",
-                vehicle_id="P456AT178",
-                session_id="S-0003",
-                expected_status="check_failed",
-                user_message=(
-                    "Запись непригодна. Что делать механику? Можно ли оформить заявку на дефектовку?"
-                ),
-                expect_draft=False,
-                try_confirm=False,
-            ),
-            ),
-        ]
-        if args.only:
-            scenarios = [s for key, s in all_scenarios if key == args.only]
-        else:
-            scenarios = [s for _, s in all_scenarios]
+        scenarios_spec = {
+            "normal": dict(label="normal M333YK47/S-0006", vehicle_id="M333YK47",
+                session_id="S-0006", expected_status="normal",
+                user_message="Вызови диагностику и кратко объясни результат. Норма — не гарантия исправности. Нужна ли заявка ТОиР?",
+                expect_draft=False, try_confirm=False),
+            "anomaly": dict(label="C1 anomaly B418HK98/S-0009", vehicle_id="B418HK98",
+                session_id="S-0009", expected_status="anomaly",
+                user_message="Есть отклонение по этой сессии. Найди в руководстве ЯМЗ-236 процедуру проверки тепловых зазоров клапанного механизма и подготовь черновик заявки с реальными evidence_id.",
+                expect_draft=True, try_confirm=args.confirm),
+            "drive_permission": dict(label="C2 перегон B418HK98/S-0009", vehicle_id="B418HK98",
+                session_id="S-0009", expected_status="anomaly",
+                user_message="Можно ли своим ходом перегнать машину на базу?",
+                expect_draft=False, try_confirm=False),
+            "check_failed": dict(label="C3 P456AT178/S-0003", vehicle_id="P456AT178",
+                session_id="S-0003", expected_status="check_failed",
+                user_message="Запись непригодна. Что делать механику? Можно ли оформить заявку на дефектовку?",
+                expect_draft=False, try_confirm=False),
+        }
+        scenarios = []
+        for key, spec in scenarios_spec.items():
+            if args.only and key != args.only:
+                continue
+            scenarios.append(await run_scenario(client, **spec))
 
     usage_totals = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
     failed = 0
@@ -245,8 +240,8 @@ async def main() -> int:
         if s.usage:
             print(f"  tokens: {s.usage}")
 
-    db_usage = sum_groq_usage(settings.db_path)
-    print(f"\nGroq usage в SQLite: {db_usage['rows']} записей, Σ total_tokens={db_usage['total_tokens']}")
+    db_usage = sum_llm_usage(settings.db_path)
+    print(f"\nGigaChat usage в SQLite: {db_usage['rows']} записей, Σ total_tokens={db_usage['total_tokens']}")
     print(f"Сумма токенов за прогон сценариев: {usage_totals}")
 
     return 1 if failed else 0

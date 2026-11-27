@@ -6,9 +6,31 @@ export default defineConfig(({ mode }) => {
   const backendPort = env.JUDRIVE_BACKEND_PORT || process.env.JUDRIVE_BACKEND_PORT || '8090'
   return {
     plugins: [react()],
+    build: {
+      rolldownOptions: {
+        output: {
+          manualChunks(id: string) {
+            if (id.includes('pdfjs-dist')) return undefined
+            if (id.includes('node_modules')) return 'vendor'
+            if (id.includes('/i18n/locales/')) return 'locales'
+            return undefined
+          },
+        },
+      },
+    },
     server: {
       host: '127.0.0.1',
       port: 5173,
+      proxy: {
+        '/api': {
+          target: `http://127.0.0.1:${backendPort}`,
+          changeOrigin: true,
+        },
+      },
+    },
+    preview: {
+      host: '127.0.0.1',
+      port: 4173,
       proxy: {
         '/api': {
           target: `http://127.0.0.1:${backendPort}`,

@@ -55,6 +55,7 @@ def test_can_create_ticket_matrix():
         status="anomaly",
         anomaly_type="F01",
         anomaly_title="Клапанный механизм",
+        engine_model="ЯМЗ-236М2",
         anomaly_score=0.7,
         confidence=0.8,
         signal_quality="good",
@@ -84,25 +85,20 @@ def test_ml_facts_filters_instruction_tone():
     assert "IGNORE" not in facts["ml_observation"].upper()
 
 
-def test_live_pipeline_b418_requires_mocks():
+def test_live_pipeline_b418_requires_mocks(synthetic_rag):
     import asyncio
 
-    asyncio.run(_pipeline_b418())
+    asyncio.run(_pipeline_b418(synthetic_rag))
 
 
-async def _pipeline_b418():
-    httpx = pytest.importorskip("httpx")
+async def _pipeline_b418(rag):
+    import httpx
+
     settings = get_settings()
-    try:
-        with httpx.Client(timeout=3.0) as client:
-            if client.get(f"{settings.mock_ml_url.rstrip('/')}/health").status_code != 200:
-                pytest.skip("Mock ML off")
-            if client.get(f"{settings.mock_toir_url.rstrip('/')}/health").status_code != 200:
-                pytest.skip("Mock TOIR off")
-    except httpx.HTTPError:
-        pytest.skip("Mocks unavailable")
+    with httpx.Client(timeout=3.0) as client:
+        assert client.get(f"{settings.mock_ml_url.rstrip('/')}/health").status_code == 200
+        assert client.get(f"{settings.mock_toir_url.rstrip('/')}/health").status_code == 200
 
-    from app.rag.service import ManualRagService
     from app.services.fleet import FleetService
     from app.services.mock_clients import MockMlClient, MockToirClient
     from app.services.tickets import TicketService
@@ -112,9 +108,6 @@ async def _pipeline_b418():
     import tempfile
 
     fleet = FleetService(settings.fleet_data_path)
-    rag = ManualRagService(settings.db_path, settings.pdf_dir)
-    if rag.status().get("missing_files"):
-        pytest.skip("PDF missing")
     repo = AppRepository(Path(tempfile.mkdtemp()) / "guardrails.sqlite")
 
     conv_id = repo.create_conversation("B418HK98", "S-0009", "ЯМЗ-236М2", "test")
@@ -133,7 +126,9 @@ async def _pipeline_b418():
     assert diag["anomaly_type"] == "F01"
 
     search = await runtime.execute("search_manuals", {"query": "тепловые зазоры клапанного механизма"})
-    assert search["status"] == "ok"
+    assert search["status"] in {"ok", "conflict"}
+    if search["status"] == "conflict":
+        assert len({row["doc_id"] for row in search["conflicting_sources"]}) >= 2
     evidence_ids = [h["evidence_id"] for h in search["results"][:2]]
     assert evidence_ids
 
@@ -151,7 +146,7 @@ async def _pipeline_b418():
     draft_id = prep["draft_id"]
     nonce = prep["confirm_nonce"]
 
-    tickets = TicketService(repo, fleet, MockMlClient(settings.mock_ml_url), MockToirClient(settings.mock_toir_url))
+    tickets = TicketService(repo, fleet, MockMlClient(settings.mock_ml_url), MockToirClient(settings.mock_toir_url), rag)
     result = await tickets.confirm(draft_id, nonce)
     assert result["status"] == "created"
     assert str(result.get("ticket_id", "")).startswith("TKT-")

@@ -25,6 +25,16 @@ test.describe('Context, locale and theme', () => {
     expect(stored).toBe('uz')
   })
 
+  test('switches locale to Hindi without Uzbek fallback', async ({ page }) => {
+    await page.goto('/')
+    await page.getByRole('button', { name: 'Русский' }).click()
+    await page.getByRole('option', { name: 'हिन्दी' }).click()
+    await expect(page.getByRole('button', { name: 'निदान', exact: true })).toBeVisible()
+    await expect(page.getByText('डिजिटल मैकेनिक', { exact: true }).first()).toBeVisible()
+    await expect(page.getByText('Tekshiruvni boshlang')).toHaveCount(0)
+    await expect(page.getByText('Raqamli mexanik bilan chat')).toHaveCount(0)
+  })
+
   test('switches theme to dark', async ({ page }) => {
     await page.goto('/')
     await page.locator('html').evaluate((el) => el.setAttribute('data-theme', 'light'))
@@ -32,6 +42,27 @@ test.describe('Context, locale and theme', () => {
     await themeBtn.click()
     await page.getByRole('menuitemradio', { name: 'Тёмная тема' }).click()
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+  })
+
+  test('switches theme to light and system', async ({ page }) => {
+    await page.emulateMedia({ colorScheme: 'dark' })
+    await page.goto('/')
+    const themeBtn = page.getByRole('button', { name: /Светлая тема|Тёмная тема|Системная тема/ })
+    await themeBtn.click()
+    await page.getByRole('menuitemradio', { name: 'Светлая тема' }).click()
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
+
+    await themeBtn.click()
+    await page.getByRole('menuitemradio', { name: 'Системная тема' }).click()
+    expect(await page.locator('html').getAttribute('data-theme')).toBeNull()
+    await expect
+      .poll(async () => page.evaluate(() => getComputedStyle(document.body).backgroundColor))
+      .toBe('rgb(14, 14, 14)')
+
+    await page.emulateMedia({ colorScheme: 'light' })
+    await expect
+      .poll(async () => page.evaluate(() => getComputedStyle(document.body).backgroundColor))
+      .toBe('rgb(244, 244, 242)')
   })
 })
 

@@ -14,7 +14,7 @@ from mock_toir.app import app as toir_app  # noqa: E402
 FIELDS = ["vehicle_id", "session_id", "status", "anomaly_type", "anomaly_title", "anomaly_score",
           "confidence", "signal_quality", "description", "model_version"]
 
-with open(os.path.join(ROOT, "data", "vehicles.json"), encoding="utf-8") as f:
+with open(os.environ.get("MOCK_DATA_PATH", os.path.join(ROOT, "data", "vehicles.json")), encoding="utf-8") as f:
     DATA = json.load(f)
 ALL = [(v["vehicle_id"], s) for v in DATA["vehicles"] for s in v["sessions"]]
 

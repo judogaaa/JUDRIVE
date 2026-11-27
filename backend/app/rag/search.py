@@ -45,7 +45,7 @@ class SearchHit:
     extraction: str
 
 
-def _snippet(raw_text: str, query: str, radius: int = 220) -> str:
+def _snippet(raw_text: str, query: str, radius: int = 420) -> str:
     lowered_text = raw_text.lower().replace("ё", "е")
     normalized_query = normalize_for_fts(query)
     terms = [t for t in normalized_query.split() if len(t) >= 3]
@@ -65,6 +65,11 @@ def _snippet(raw_text: str, query: str, radius: int = 220) -> str:
 
     start = max(0, best_pos - radius // 2)
     end = min(len(raw_text), best_pos + radius)
+    # Preserve columns/rows when a table is present; do not collapse its values.
+    start = raw_text.rfind("\n", 0, start) + 1 if start else 0
+    next_line = raw_text.find("\n", end)
+    if next_line != -1:
+        end = next_line
     snippet = raw_text[start:end].strip()
     if start > 0:
         snippet = "…" + snippet
@@ -139,7 +144,7 @@ class ManualSearch:
     def get_page(self, page_id: str) -> sqlite3.Row | None:
         return self._conn.execute(
             """
-            SELECT p.page_id, p.doc_id, p.pdf_page, p.raw_text, p.extraction, d.manual_title, d.filename
+            SELECT p.page_id, p.doc_id, p.pdf_page, p.raw_text, p.extraction, d.manual_title, d.filename, d.file_sha256
             FROM pages p
             JOIN documents d ON d.doc_id = p.doc_id
             WHERE p.page_id = ?

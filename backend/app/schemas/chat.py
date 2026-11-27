@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -7,7 +9,12 @@ class ConversationCreate(BaseModel):
     locale: str = Field(default="ru", max_length=8)
 
 
+DiagnosisAction = Literal["explain", "next_checks", "prepare_ticket"]
+
+
 class ChatMessageRequest(BaseModel):
     message: str = Field(min_length=1, max_length=8000)
     locale: str = Field(default="ru", max_length=8)
     analysis_only: bool = False
+    action: DiagnosisAction | None = None
+    evidence_id: str | None = Field(default=None, min_length=1, max_length=100)

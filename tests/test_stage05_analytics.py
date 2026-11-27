@@ -54,8 +54,8 @@ def test_dashboard_counts_sum_to_fifty():
     assert data.session_stats.total_sessions == 195
     assert data.session_stats.latest_by_status == {
         "normal": 25,
-        "anomaly": 23,
-        "check_failed": 2,
+        "anomaly": 21,
+        "check_failed": 4,
     }
     quarantine = data.summary["quarantine"]
     assert quarantine <= 23
@@ -67,7 +67,10 @@ def test_quarantine_not_from_single_normal(client: TestClient):
     assert resp.status_code == 200
     payload = resp.json()
     for row in payload["vehicles"]:
+        # A recommendation is never exposed as an operational quarantine.
+        assert row["quarantine_confirmed"] is False
         if row["category"] == "quarantine":
+            assert row["quarantine_recommended"] is True
             assert row["quarantine_basis"] or row["ticket_id"]
         if row["latest_status"] == "normal" and row["signal_quality"] == "good":
             assert row["category"] != "quarantine"
@@ -82,3 +85,22 @@ def test_vehicle_insight_trend_b418():
     scores = [p.anomaly_score for p in insight.trend_points if p.anomaly_score is not None]
     assert len(scores) >= 3
     assert scores[-1] >= scores[0]
+
+def test_chief_login_accepts_unicode_and_rejects_unicode_bad_credentials(monkeypatch):
+    test_cfg = settings.model_copy(update={
+        "chief_username": "Механик",
+        "chief_password_hash": hash_password("правильный-пароль", "test-salt"),
+        "session_secret": "test-session-secret",
+        "cookie_secure": False,
+    })
+    monkeypatch.setattr("app.main.get_settings", lambda: test_cfg)
+    http = TestClient(app)
+    try:
+        wrong = http.post("/api/auth/login", json={"username": "机械师", "password": "bad"})
+        assert wrong.status_code == 401
+        valid = http.post("/api/auth/login", json={"username": "Механик", "password": "правильный-пароль"})
+        assert valid.status_code == 200
+        assert http.get("/api/fleet/dashboard").status_code == 200
+
+    finally:
+        http.close()

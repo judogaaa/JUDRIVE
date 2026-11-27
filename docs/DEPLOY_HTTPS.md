@@ -1,58 +1,41 @@
-# HTTPS-развёртывание JUDRIVE (этап 07)
+# Развёртывание JUDRIVE на Ubuntu VPS
 
-## Состав стенда
+## Подготовка
 
-1. **Mock ML** — `vendor/neurodvs_mock`, порт 8001.
-2. **Mock ТОиР** — порт 8002.
-3. **Backend** — `uvicorn app.main:app` из `backend/`, `PYTHONPATH=backend`, порт 8090 (или через reverse proxy).
-4. **Frontend** — `npm run build` → статика из `frontend/dist` за nginx/caddy **или** `vite preview` только для демо.
+- Установите Docker Engine с Compose v2.24.4+ и откройте TCP 80/443. DNS A/AAAA должен вести на VPS. SSH оставьте доступным только операторам.
+- Разместите разрешённый автопарк и PDF в приватных каталогах. В каталоге автопарка ожидается `vehicles.json`. Разрешите сервису чтение, ограничьте доступ других пользователей. [Материалы](SOURCES.md)
+- Создайте отдельный каталог состояния с правами 0700 для пользователя runtime-контейнера. Для обычного rootful Docker используйте `sudo install -d -m 0700 -o root -g root /srv/judrive/state`. При user namespace или rootless Docker используйте UID, в который отображается UID 0 контейнера. Через `JUDRIVE_STATE_DIR` он подключается для записи. PDF и автопарк монтируются только для чтения. Caddy хранит сертификаты и конфигурацию в собственных именованных томах.
+- Создайте `.env` с правами 0600. Задайте `JUDRIVE_DOMAIN` без схемы, `JUDRIVE_STATE_DIR`, пути к данным, ключ и scope GigaChat, `CHIEF_USERNAME`, PBKDF2-хеш пароля через `scripts/hash_chief_password.py` и случайный `SESSION_SECRET`. Хеш с `$` запишите в одинарных кавычках. Оператор Docker имеет доступ к значениям окружения контейнера. [Настройка GigaChat](GIGACHAT.md)
+- Для дополнительного доверенного CA укажите внешний каталог `JUDRIVE_CA_DIR` и путь внутри контейнера `GIGACHAT_CA_BUNDLE=/run/judrive-ca/bundle.pem`. Для отдельного CA сборки используйте `JUDRIVE_PACKAGE_CA=/private/ca.pem docker compose -f compose.yaml -f deploy/compose.build-ca.yaml build backend web`. BuildKit передаёт доверенные сертификаты сборке без записи в слои.
 
-## Переменные окружения (`.env` в корне, не в Git)
+## Запуск и мониторинг
 
-- `MOCK_ML_URL`, `MOCK_TOIR_URL`
-- `FLEET_DATA_PATH`, `PDF_DIR`, `MANUAL_DB_PATH`
-- `GROQ_API_KEY` (опционально для агента/голоса)
-- `CHIEF_PASSWORD_HASH` (bcrypt для кабинета главного механика)
-
-## Reverse proxy (пример Caddy)
-
-```
-your-host.example {
-  encode gzip
-  handle /api/* {
-    reverse_proxy 127.0.0.1:8090
-  }
-  handle {
-    root * /var/www/judrive/dist
-    try_files {path} /index.html
-    file_server
-  }
-}
+```bash
+docker compose config --quiet
+docker compose build backend web
+docker compose up -d --no-build
+docker compose ps
+docker compose logs --tail=100 backend web
 ```
 
-## Проверка после деплоя
+Backend строит индекс при первом запуске. Caddy запускается после readiness backend и получает сертификат через ACME. `/api/live` проверяет процесс, `/api/ready` проверяет Mock ML, Mock ТОиР, индекс и доступность настроенной модели. Задайте внешние проверки HTTPS и readiness. Оповещайте при нескольких последовательных сбоях, следите за свободным диском, возрастом резервной копии и ошибками GigaChat. Compose настроен на перезапуск завершившихся процессов, проверка health сама по себе процесс не завершает. Журналы каждого сервиса ротируются по трём файлам до 10 МБ. Доступ к журналам и резервным копиям предоставляется операторам.
 
-1. `GET /api/health` — `ok`, mocks up.
-2. Диагностика трёх статусов (см. `docs/ACCEPTANCE.md`).
-3. Логин chief → `/api/fleet/dashboard` 200 с cookie.
-4. PDF `/api/sources/pdf/{doc_id}` — `Content-Disposition: inline`.
+Для обновления сохраните исходный SHA и сделайте резервную копию. После сборки и перезапуска повторите проверку HTTPS и сценарий с чтением источника. Если новая версия мигрировала схему, для отката используйте совместимый снимок БД и исходный SHA.
 
-## Сборка статики
+## Резервная копия и восстановление
 
-```powershell
-.\scripts\deploy_https.ps1
-# Каталог по умолчанию: deploy\dist
+Во время работы используйте API резервного копирования SQLite. Скрипт включает подтверждённые данные WAL, проверяет целостность и отказывается перезаписывать существующий файл.
+
+```bash
+stamp=$(date -u +%Y%m%dT%H%M%SZ)
+docker compose exec -T backend python /app/scripts/sqlite_snapshot.py \
+  /app/local-data/judrive.sqlite "/app/local-data/judrive-$stamp.sqlite"
 ```
 
-На сервере: `COOKIE_SECURE=true`, `SESSION_SECRET`, ключи Groq/chief только в `.env`.
+Регулярно отправляйте снимки в зашифрованное хранилище с отдельным доступом. SQLite содержит закрытый индекс и историю. Секреты окружения и материалы храните в отдельных резервных копиях. Регулярность и срок хранения задаёт оператор.
 
-## Локальный паритет
+Для восстановления остановите backend и web, создайте **новый каталог состояния** и восстановите снимок под именем `judrive.sqlite` через `python scripts/sqlite_snapshot.py /private/verified.sqlite /srv/judrive/recovered/judrive.sqlite`. Укажите новый `JUDRIVE_STATE_DIR` и запустите сервисы. Старый каталог сохраните до сверки количества записей, заявок, RAG и readiness. Запись поверх живой БД и перенос её отдельных WAL-файлов не нужны.
 
-`scripts/start_local.ps1` — backend 8090, frontend dev с прокси.
+## Серверная приёмка
 
-## Чек-лист после выкладки
-
-```powershell
-Invoke-WebRequest https://YOUR_HOST/api/health
-$env:E2E_BASE_URL='https://YOUR_HOST'; $env:E2E_API_BASE='https://YOUR_HOST'; $env:E2E_SKIP_SERVERS='1'; npm run e2e
-```
+После получения публичного HTTPS-адреса проверьте сертификат, закрытые маршруты без сессии, вход с Secure/HttpOnly-cookie, оригинальные PDF и диапазоны страниц. Проверьте реальные GigaChat Ultra и голос с разрешённой записью. Проведите заявку в согласованном тестовом контуре ТОиР, затем сравните журнал после рестарта, повторите проверку нагрузки и восстановите копию в отдельное состояние. [Live-проверки](GIGACHAT.md) · [Проверка документов](SOURCES.md)

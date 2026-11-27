@@ -29,7 +29,7 @@ const SCENARIOS: Scenario[] = [
     vehicleId: 'P456AT178',
     sessionId: 'S-0003',
     statusClass: 'verdict-card--check_failed',
-    actionName: /Другая проверка/,
+    actionName: /другую проверку/i,
   },
 ]
 
@@ -37,11 +37,19 @@ test.describe('Diagnosis acceptance scenarios', () => {
   for (const scenario of SCENARIOS) {
     test(scenario.name, async ({ page }) => {
       await page.goto('/')
-      await expect(page.getByRole('button', { name: 'Диагностика' })).toBeVisible()
+      await expect(page.getByRole('button', { name: 'Диагностика', exact: true })).toBeVisible()
       await selectVehicleSession(page, scenario.vehicleId, scenario.sessionId)
       await runDiagnosis(page)
       const card = page.locator(`.${scenario.statusClass}`)
       await expect(card).toBeVisible({ timeout: 30_000 })
+      const summary = page.locator('.chat-diagnosis-result')
+      await expect(summary).toHaveCount(1)
+      await expect(summary).toContainText(scenario.sessionId)
+      await expect(summary).toContainText(
+        scenario.name === 'normal' ? 'В пределах нормы' :
+          scenario.name === 'anomaly' ? 'Возможное отклонение' : 'Запись непригодна',
+      )
+      if (scenario.name === 'check_failed') await expect(summary).toContainText('повторная запись')
       if (scenario.actionName) {
         await expect(page.getByRole('button', { name: scenario.actionName }).first()).toBeVisible()
       }
@@ -54,8 +62,8 @@ test.describe('Diagnosis acceptance scenarios', () => {
     await page.getByRole('button', { name: /Получить результат диагностики/ }).click()
     await expect(page.locator('.verdict-card--normal')).toBeVisible({ timeout: 30_000 })
     await page.getByRole('button', { name: 'Найти в руководстве' }).click()
-    await expect(page.getByRole('button', { name: 'Диагностика' })).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Руководства' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Диагностика', exact: true })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Руководства', exact: true })).toBeVisible()
     const searchInput = page.locator('.manual-query-field input')
     await expect(searchInput).not.toHaveValue('')
   })

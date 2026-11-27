@@ -1,7 +1,16 @@
 import json
 from pathlib import Path
 
+from app.agent.guardrails import FAULT_ENGINES
 from app.schemas.fleet import SessionSummary, VehicleSummary
+
+
+def safe_history_session(item: dict, engine: str) -> dict:
+    mismatch = item.get("status") == "anomaly" and engine not in FAULT_ENGINES.get(item.get("anomaly_type"), ())
+    if mismatch or item.get("signal_quality") == "bad" or item.get("status") == "check_failed":
+        return {**item, "status": "check_failed", "anomaly_type": None, "anomaly_title": None,
+                "anomaly_score": None, "confidence": None}
+    return item
 
 
 class FleetService:
@@ -25,6 +34,8 @@ class FleetService:
                 )
                 for s in item["sessions"]
             ]
+            safe_sessions = [safe_history_session(s, item["engine_model"]) for s in item["sessions"]]
+            ordered_sessions = sorted(safe_sessions, key=lambda s: s["checked_at"])
             vehicles.append(
                 VehicleSummary(
                     vehicle_id=item["vehicle_id"],
@@ -35,13 +46,16 @@ class FleetService:
                     engine_model=item["engine_model"],
                     fuel=item["fuel"],
                     sessions=sessions,
+                    latest_session_id=(ordered_sessions[-1]["session_id"] if ordered_sessions else None),
+                    latest_status=(ordered_sessions[-1].get("status") if ordered_sessions else None),
+                    latest_signal_quality=(ordered_sessions[-1].get("signal_quality") if ordered_sessions else None),
                 )
             )
             for session in item["sessions"]:
                 index[(item["vehicle_id"], session["session_id"])] = item["engine_model"]
         session_by_vehicle: dict[str, list[dict]] = {}
         for item in payload["vehicles"]:
-            session_by_vehicle[item["vehicle_id"]] = list(item["sessions"])
+            session_by_vehicle[item["vehicle_id"]] = [safe_history_session(s, item["engine_model"]) for s in item["sessions"]]
 
         self._vehicles = vehicles
         self._session_index = index
@@ -64,14 +78,14 @@ class FleetService:
         ordered = sorted(sessions, key=lambda s: s["checked_at"])
         trend: list[dict] = []
         for item in ordered[-12:]:
-            failed = item.get("status") == "check_failed"
+            failed = item.get("status") == "check_failed" or item.get("signal_quality") == "bad"
             trend.append(
                 {
                     "session_id": item["session_id"],
                     "checked_at": item["checked_at"],
-                    "status": item["status"],
-                    "anomaly_score": item.get("anomaly_score"),
-                    "anomaly_type": item.get("anomaly_type"),
+                    "status": "check_failed" if failed else item["status"],
+                    "anomaly_score": None if failed else item.get("anomaly_score"),
+                    "anomaly_type": None if failed else item.get("anomaly_type"),
                     "skipped": failed,
                 }
             )

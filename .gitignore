@@ -23,19 +23,22 @@ coverage/
 # Local state, file indexes and source materials
 *.sqlite
 *.sqlite3
-*.sqlite-wal
-*.sqlite-shm
+*.sqlite3-*
+*.hocr
+*.alto.xml
+*.sqlite-*
 *.db
-*.db-wal
-*.db-shm
+*.db-*
 *.log
 /materials/
 /local-data/
+/vendor/neurodvs_mock/data/
+/e2e/storage-state.json
 /local-pdfs/
 /data/index/
 /output/
 /tmp/
-*.pdf
+*.[Pp][Dd][Ff]
 *.zip
 *.mp4
 *.wav

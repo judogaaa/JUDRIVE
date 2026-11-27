@@ -2,11 +2,17 @@ from __future__ import annotations
 
 import sqlite3
 import threading
+from contextlib import contextmanager
 from pathlib import Path
+from typing import Iterator
 
+from app.rag.conflicts import VALVE_CONFLICT_GUIDANCE, valve_temperature_conflict
 from app.rag.catalog import SPECS_BY_ID, allowed_doc_ids, known_engine_models
 from app.rag.indexer import ManualIndexer
 from app.rag.search import ManualSearch
+
+
+AGENT_SEARCH_LIMIT = 8
 
 
 class ManualRagService:
@@ -22,9 +28,17 @@ class ManualRagService:
             return self._indexer.ensure_index(force=force)
 
     def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self._indexer._db_path)
+        conn = sqlite3.connect(self._indexer._db_path, timeout=30)
         conn.row_factory = sqlite3.Row
         return conn
+
+    @contextmanager
+    def _connection(self) -> Iterator[sqlite3.Connection]:
+        conn = self._connect()
+        try:
+            yield conn
+        finally:
+            conn.close()
 
     def search(self, engine_model: str, query: str, *, limit: int = 5) -> dict:
         query = query.strip()
@@ -68,10 +82,11 @@ class ManualRagService:
                 **build_info,
             }
 
-        with self._connect() as conn:
+        with self._connection() as conn:
             hits = ManualSearch(conn).search(engine_model, query, limit=limit)
 
-        if not hits:
+        conflict = valve_temperature_conflict(engine_model, query, self.get_evidence)
+        if not hits and not conflict:
             manuals = [SPECS_BY_ID[d].manual_title for d in allowed_doc_ids(engine_model)]
             return {
                 "status": "not_found",
@@ -87,7 +102,9 @@ class ManualRagService:
             }
 
         return {
-            "status": "ok",
+            "status": "conflict" if conflict else "ok",
+            "message": VALVE_CONFLICT_GUIDANCE if conflict else None,
+            "conflicting_sources": conflict,
             "engine_model": engine_model,
             "query": query,
             "results": [
@@ -104,17 +121,21 @@ class ManualRagService:
             ],
         }
 
-    def get_evidence(self, page_id: str) -> dict | None:
-        with self._connect() as conn:
+    def get_evidence(self, page_id: str, *, full_text: bool = False) -> dict | None:
+        if not self._indexer._db_path.is_file():
+            return None
+        with self._connection() as conn:
+            if not self._indexer.has_index(conn):
+                return None
             row = ManualSearch(conn).get_page(page_id)
-        if not row:
+        if not row or not self._indexer.document_matches_index(row["doc_id"], row["file_sha256"]):
             return None
         return {
             "evidence_id": row["page_id"],
             "doc_id": row["doc_id"],
             "manual_title": row["manual_title"],
             "pdf_page": row["pdf_page"],
-            "quote": row["raw_text"][:4000],
+            "quote": row["raw_text"] if full_text else row["raw_text"][:4000],
             "filename": row["filename"],
             "extraction": row["extraction"],
         }

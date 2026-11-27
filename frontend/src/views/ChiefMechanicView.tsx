@@ -1,5 +1,5 @@
-import { useEffect, useState, type ReactNode } from 'react'
-import { AlertOctagon, AlertTriangle, CheckCircle2, Filter, Search } from 'lucide-react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { AlertOctagon, AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Filter, Search } from 'lucide-react'
 import {
   fetchFleetDashboard,
   type FleetDashboard,
@@ -8,6 +8,7 @@ import {
 } from '../api/fleet'
 import { VehicleInsightPanel } from '../components/VehicleInsightPanel'
 import { useI18n } from '../i18n/I18nContext'
+import { resolveErrorMessage } from '../lib/i18nError'
 
 interface ChiefMechanicViewProps {
   onOpenDiagnosis: (vehicleId: string, sessionId?: string) => void
@@ -16,21 +17,35 @@ interface ChiefMechanicViewProps {
 
 export function ChiefMechanicView({ onOpenDiagnosis, onOpenTickets }: ChiefMechanicViewProps) {
   const { t } = useI18n()
+  const logoutInFlight = useRef(false)
   const [authed, setAuthed] = useState<boolean | null>(null)
   const [tab, setTab] = useState<'overview' | 'queue' | 'analytics' | 'warnings' | 'fleet'>('overview')
 
   const categoryLabel = (row: VehicleFleetRow) => {
     if (row.category === 'quarantine') {
-      return row.quarantine_confirmed ? t('chief.cat.quarantineConfirmed') : t('chief.cat.quarantineRec')
+      // A recommendation is never presented as an operational quarantine.
+      return t('chief.cat.quarantineRec')
     }
     if (row.category === 'attention') return t('chief.cat.attention')
     return t('chief.cat.normal')
   }
+  const [revision, setRevision] = useState(0)
   const [data, setData] = useState<FleetDashboard | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [filters, setFilters] = useState<FleetDashboardFilters>({})
+  const [appliedFilters, setAppliedFilters] = useState<FleetDashboardFilters>({})
+  const [page, setPage] = useState(0)
   const [selectedVehicle, setSelectedVehicle] = useState<string | null>(null)
+  const PAGE_SIZE = 20
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setAppliedFilters(filters)
+      setPage(0)
+    }, 250)
+    return () => window.clearTimeout(timer)
+  }, [filters])
 
   useEffect(() => {
     let cancelled = false
@@ -50,14 +65,20 @@ export function ChiefMechanicView({ onOpenDiagnosis, onOpenTickets }: ChiefMecha
   useEffect(() => {
     if (!authed) return
     let cancelled = false
+    // oxlint-disable-next-line react/set-state-in-effect -- Synchronize the loading and error indicators with the dashboard request.
     setLoading(true)
     setError(null)
-    fetchFleetDashboard(filters)
+    fetchFleetDashboard(appliedFilters)
       .then((payload) => {
         if (!cancelled) setData(payload)
       })
       .catch((err: unknown) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : t('error.dashboard'))
+        if (cancelled) return
+        if (err instanceof Error && err.message.endsWith(':401')) {
+          setAuthed(false)
+          return
+        }
+        setError(resolveErrorMessage(t, err, 'error.dashboard'))
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -65,7 +86,31 @@ export function ChiefMechanicView({ onOpenDiagnosis, onOpenTickets }: ChiefMecha
     return () => {
       cancelled = true
     }
-  }, [filters, authed])
+  }, [appliedFilters, authed, t, revision])
+
+  const openCategory = (category: string) => {
+    const next = { category }
+    setFilters(next)
+    setAppliedFilters(next)
+    setPage(0)
+    setTab('fleet')
+  }
+
+  const logout = async () => {
+    if (logoutInFlight.current) return
+    logoutInFlight.current = true
+    try {
+      const response = await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
+      if (!response.ok) throw new Error()
+      setData(null)
+      setAuthed(false)
+      window.dispatchEvent(new Event('judrive-auth-change'))
+    } catch {
+      setError(t('error.network'))
+    } finally {
+      logoutInFlight.current = false
+    }
+  }
 
   if (authed === null) {
     return <p className="panel__subtitle">{t('chief.loading')}</p>
@@ -75,6 +120,10 @@ export function ChiefMechanicView({ onOpenDiagnosis, onOpenTickets }: ChiefMecha
     return <ChiefLogin onSuccess={() => setAuthed(true)} />
   }
 
+  const pageCount = data ? Math.max(1, Math.ceil(data.vehicles.length / PAGE_SIZE)) : 1
+  const safePage = Math.min(page, pageCount - 1)
+  const pageRows = data ? data.vehicles.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE) : []
+
   return (
     <>
       <header className="page-header">
@@ -82,7 +131,14 @@ export function ChiefMechanicView({ onOpenDiagnosis, onOpenTickets }: ChiefMecha
         <p>{t('chief.subtitle')}</p>
       </header>
 
-      {error ? <p className="panel__error">{error}</p> : null}
+      {error ? (
+        <div className="panel__error" role="alert">
+          <span>{error}</span>
+          <button type="button" className="btn btn--secondary" onClick={() => setRevision((value) => value + 1)}>
+            {t('history.retry')}
+          </button>
+        </div>
+      ) : null}
       {loading && !data ? <p className="panel__subtitle">{t('chief.loading')}</p> : null}
 
       {data ? (
@@ -101,6 +157,7 @@ export function ChiefMechanicView({ onOpenDiagnosis, onOpenTickets }: ChiefMecha
                 key={id}
                 type="button"
                 className={tab === id ? 'chip-button chip-button--on' : 'chip-button'}
+                aria-pressed={tab === id}
                 onClick={() => setTab(id)}
               >
                 {label}
@@ -109,9 +166,7 @@ export function ChiefMechanicView({ onOpenDiagnosis, onOpenTickets }: ChiefMecha
             <button
               type="button"
               className="chip-button"
-              onClick={() => {
-                void fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).then(() => setAuthed(false))
-              }}
+              onClick={() => void logout()}
             >
               {t('auth.logout')}
             </button>
@@ -124,10 +179,7 @@ export function ChiefMechanicView({ onOpenDiagnosis, onOpenTickets }: ChiefMecha
               label={t('chief.cat.normal')}
               value={data.summary.normal}
               hint={t('chief.hint.normal', { count: data.session_stats.latest_by_status.normal ?? 0 })}
-              onOpen={() => {
-                setFilters((prev) => ({ ...prev, category: 'normal' }))
-                setTab('fleet')
-              }}
+              onOpen={() => openCategory('normal')}
             />
             <SummaryCard
               tone="warn"
@@ -138,10 +190,7 @@ export function ChiefMechanicView({ onOpenDiagnosis, onOpenTickets }: ChiefMecha
                 anomaly: data.session_stats.latest_by_status.anomaly ?? 0,
                 failed: data.session_stats.latest_by_status.check_failed ?? 0,
               })}
-              onOpen={() => {
-                setFilters((prev) => ({ ...prev, category: 'attention' }))
-                setTab('fleet')
-              }}
+              onOpen={() => openCategory('attention')}
             />
             <SummaryCard
               tone="danger"
@@ -149,11 +198,28 @@ export function ChiefMechanicView({ onOpenDiagnosis, onOpenTickets }: ChiefMecha
               label={t('chief.cat.quarantineRec')}
               value={data.summary.quarantine}
               hint={t('chief.quarantineCardHint')}
-              onOpen={() => {
-                setFilters((prev) => ({ ...prev, category: 'quarantine' }))
-                setTab('fleet')
-              }}
+              onOpen={() => openCategory('quarantine')}
             />
+          </section>
+
+          <section className="panel chief-overview-queue" hidden={tab !== 'overview'}>
+            <div className="panel-head-row">
+              <div>
+                <h2 className="panel__title">{t('chief.queueTitle')}</h2>
+                <p className="panel__subtitle">{t('chief.queueHint')}</p>
+              </div>
+              <button type="button" className="chip-button" onClick={() => setTab('queue')}>
+                {t('chief.tab.queue')}
+              </button>
+            </div>
+            <ul className="priority-queue">
+              {data.priority_queue.slice(0, 6).map((row) => (
+                <li key={row.vehicle_id}>
+                  <QueueRow row={row} label={categoryLabel(row)} onClick={() => setSelectedVehicle(row.vehicle_id)} />
+                </li>
+              ))}
+            </ul>
+            {data.priority_queue.length === 0 ? <p className="empty-state__text">{t('chief.empty')}</p> : null}
           </section>
 
           <section className="panel" hidden={tab !== 'queue'}>
@@ -166,6 +232,7 @@ export function ChiefMechanicView({ onOpenDiagnosis, onOpenTickets }: ChiefMecha
                 </li>
               ))}
             </ul>
+            {data.priority_queue.length === 0 ? <p className="empty-state__text">{t('chief.empty')}</p> : null}
           </section>
 
           <section className="panel chief-stats" hidden={tab !== 'analytics'}>
@@ -206,7 +273,12 @@ export function ChiefMechanicView({ onOpenDiagnosis, onOpenTickets }: ChiefMecha
                 ))}
               </ul>
             </section>
-          ) : null}
+          ) : (
+            <section className="panel" hidden={tab !== 'warnings'}>
+              <h2 className="panel__title">{t('chief.warningsTitle')}</h2>
+              <p className="empty-state__text">{t('chief.noWarnings')}</p>
+            </section>
+          )}
 
           <section className="panel" hidden={tab !== 'fleet'}>
             <h2 className="panel__title">
@@ -235,7 +307,7 @@ export function ChiefMechanicView({ onOpenDiagnosis, onOpenTickets }: ChiefMecha
                   <option value="">{t('chief.filter.all')}</option>
                   <option value="normal">{t('chief.cat.normal')}</option>
                   <option value="attention">{t('chief.cat.attention')}</option>
-                  <option value="quarantine">{t('chief.cat.quarantine')}</option>
+                  <option value="quarantine">{t('chief.cat.quarantineRec')}</option>
                 </select>
               </label>
               <label className="field">
@@ -280,7 +352,7 @@ export function ChiefMechanicView({ onOpenDiagnosis, onOpenTickets }: ChiefMecha
                   </tr>
                 </thead>
                 <tbody>
-                  {data.vehicles.map((row) => (
+                  {pageRows.map((row) => (
                     <ChiefTableRow
                       key={row.vehicle_id}
                       row={row}
@@ -292,12 +364,37 @@ export function ChiefMechanicView({ onOpenDiagnosis, onOpenTickets }: ChiefMecha
                 </tbody>
               </table>
             </div>
+            {data.vehicles.length === 0 ? <p className="empty-state__text">{t('chief.empty')}</p> : null}
+            {pageCount > 1 ? (
+              <div className="pagination">
+                <button
+                  type="button"
+                  className="btn btn--secondary"
+                  disabled={safePage === 0}
+                  onClick={() => setPage(Math.max(0, safePage - 1))}
+                >
+                  <ChevronLeft size={16} aria-hidden />
+                  {t('chief.prev')}
+                </button>
+                <span>{t('chief.page', { page: safePage + 1, pages: pageCount })}</span>
+                <button
+                  type="button"
+                  className="btn btn--secondary"
+                  disabled={safePage >= pageCount - 1}
+                  onClick={() => setPage(Math.min(pageCount - 1, safePage + 1))}
+                >
+                  {t('chief.next')}
+                  <ChevronRight size={16} aria-hidden />
+                </button>
+              </div>
+            ) : null}
           </section>
         </>
       ) : null}
 
       <VehicleInsightPanel
         vehicleId={selectedVehicle}
+        onChanged={() => setRevision((n) => n + 1)}
         onClose={() => setSelectedVehicle(null)}
         onOpenDiagnosis={(id, sessionId) => {
           setSelectedVehicle(null)
@@ -343,7 +440,7 @@ function SummaryCard({
   )
 }
 
-function ChiefLogin({ onSuccess }: { onSuccess: () => void }) {
+export function ChiefLogin({ onSuccess }: { onSuccess: () => void }) {
   const { t } = useI18n()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -361,10 +458,15 @@ function ChiefLogin({ onSuccess }: { onSuccess: () => void }) {
         body: JSON.stringify({ username, password }),
       })
       if (!response.ok) {
-        setError(response.status === 503 ? t('auth.unavailable') : t('auth.error'))
+        if (response.status === 503) setError(t('auth.unavailable'))
+        else if (response.status === 429) setError(t('auth.locked'))
+        else setError(t('auth.error'))
         return
       }
       onSuccess()
+      window.dispatchEvent(new Event('judrive-auth-change'))
+    } catch {
+      setError(t('auth.error'))
     } finally {
       setBusy(false)
     }
@@ -373,26 +475,38 @@ function ChiefLogin({ onSuccess }: { onSuccess: () => void }) {
   return (
     <div className="auth-screen">
       <section className="panel auth-card">
-      <h1>{t('auth.title')}</h1>
-      <p className="panel__subtitle">{t('chief.subtitle')}</p>
-      <label className="field">
-        <span>{t('auth.user')}</span>
-        <input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" />
-      </label>
-      <label className="field">
-        <span>{t('auth.password')}</span>
-        <input
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          autoComplete="current-password"
-        />
-      </label>
-      {error ? <p className="panel__error">{error}</p> : null}
-      <button type="button" className="btn btn--primary" disabled={busy || !username || !password} onClick={() => void submit()}>
-        {t('auth.submit')}
-      </button>
-    </section>
+        <form
+          className="auth-card__form"
+          onSubmit={(event) => {
+            event.preventDefault()
+            if (!busy && username && password) void submit()
+          }}
+        >
+          <h1>{t('auth.title')}</h1>
+          <p className="panel__subtitle">{t('chief.subtitle')}</p>
+          <label className="field">
+            <span>{t('auth.user')}</span>
+            <input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" />
+          </label>
+          <label className="field">
+            <span>{t('auth.password')}</span>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
+            />
+          </label>
+          {error ? <p className="panel__error">{error}</p> : null}
+          <button
+            type="submit"
+            className="btn btn--primary"
+            disabled={busy || !username || !password}
+          >
+            {t('auth.submit')}
+          </button>
+        </form>
+      </section>
     </div>
   )
 }
@@ -415,13 +529,24 @@ function StatBlock({ title, items }: { title: string; items: Record<string, numb
 }
 
 function QueueRow({ row, label, onClick }: { row: VehicleFleetRow; label: string; onClick: () => void }) {
+  const { t } = useI18n()
+  const statusDetail = row.needs_rerecord
+    ? t('chief.badge.rerecord')
+    : row.anomaly_type ??
+      (row.latest_status === 'normal'
+        ? t('verdict.normal.title')
+        : row.latest_status === 'anomaly'
+          ? t('verdict.anomaly.title')
+          : t('verdict.failed.title'))
   return (
     <button type="button" className="queue-row" onClick={onClick}>
       <span className={`badge badge--${row.category}`}>{label}</span>
       <span className="queue-row__id">
-        {row.vehicle_id} · {row.anomaly_type ?? row.latest_status}
+        {row.vehicle_id} · {statusDetail}
       </span>
-      <span className="queue-row__meta">prio {row.priority_score}</span>
+      <span className="queue-row__meta">
+        {t('chief.priority')} {row.priority_score}
+      </span>
     </button>
   )
 }
@@ -463,7 +588,10 @@ function ChiefTableRow({
         <span className="ticket-row__meta">{row.latest_status}</span>
       </td>
       <td>{row.anomaly_score != null ? row.anomaly_score.toFixed(2) : '—'}</td>
-      <td>{row.category_reason}</td>
+      <td>
+        {row.category_reason}
+        {row.ticket_id ? <span className="badge">{row.ticket_id}</span> : null}
+      </td>
     </tr>
   )
 }

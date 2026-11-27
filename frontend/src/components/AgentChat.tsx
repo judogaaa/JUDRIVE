@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { BookOpen, MessageSquare, Send } from 'lucide-react'
+import { BookOpen, Loader2, MessageSquare, RotateCcw, Send, X } from 'lucide-react'
 import {
   createConversation,
   sendChatMessage,
@@ -11,30 +11,44 @@ import type { DiagnoseResponse } from '../api/types'
 import { fetchEvidence, type ManualSearchHit } from '../api/manuals'
 import { useI18n } from '../i18n/I18nContext'
 import type { TranslationKey } from '../i18n/translations'
+import { resolveErrorMessage } from '../lib/i18nError'
 import { SourceDrawer } from './SourceDrawer'
 import { TicketDraftCard } from './TicketDraftCard'
 import { VoiceCapture } from './VoiceCapture'
 import { CopyButton } from './CopyButton'
-import { manualTopic, usableStatus, type ChatIntent } from '../lib/workflow'
+import { MessageText } from './MessageText'
+import { readableAnswer } from '../lib/messageText'
+import { manualTopic, usableStatus, type DiagnosisAction, type ChatIntent } from '../lib/workflow'
 
 interface AgentChatProps {
+  engineModel: string
   vehicleId: string
   sessionId: string
   diagnoseResult?: DiagnoseResponse | null
   onDiagnoseCommand?: () => void
   chatIntent?: ChatIntent | null
   onChatIntentConsumed?: () => void
+  onOpenTicket?: (ticketId: string) => void
+  onOpenHistory?: () => void
+  onChooseSession?: () => void
   onOpenManuals?: (query: string) => void
 }
 
-const SUGGESTION_KEYS: TranslationKey[] = ['chat.suggest1', 'chat.suggest2', 'chat.suggest3']
+const SUGGESTIONS: { label: TranslationKey; action: DiagnosisAction }[] = [
+  { label: 'chat.suggest1', action: 'explain' },
+  { label: 'chat.suggest2', action: 'next_checks' },
+  { label: 'chat.suggest3', action: 'prepare_ticket' },
+]
 
-function isDiagnoseVoiceCommand(text: string): boolean {
-  const q = text.toLowerCase()
-  return /диагност|diagnost|tekshir|талда|निदान|নির্ণয়/.test(q)
+function isDiagnoseVoiceCommand(text: string, localizedPhrase: string, localizedButton: string): boolean {
+  const normalize = (value: string) => value.normalize('NFC').trim().toLowerCase().replace(/[.!?।！？]+$/, '').trim().replace(/\s+/g, ' ')
+  const command = normalize(text)
+  return [localizedPhrase, localizedButton, 'запусти диагностику', 'получить результат диагностики', 'run diagnosis']
+    .some((phrase) => normalize(phrase) === command)
 }
 
 export function AgentChat({
+  engineModel,
   vehicleId,
   sessionId,
   diagnoseResult,
@@ -42,16 +56,24 @@ export function AgentChat({
   chatIntent,
   onChatIntentConsumed,
   onOpenManuals,
+  onOpenHistory,
+  onOpenTicket,
+  onChooseSession,
 }: AgentChatProps) {
   const { locale, t } = useI18n()
   const contextKey = `${vehicleId}:${sessionId}`
   const contextRef = useRef(contextKey)
   const logRef = useRef<HTMLDivElement | null>(null)
   const sendGen = useRef(0)
+  const sendingRef = useRef(false)
+  const sendAbortRef = useRef<AbortController | null>(null)
+  const pendingIntent = useRef<{ text: string; action?: DiagnosisAction } | null>(null)
+  const sourceRequest = useRef(0)
+  const [composerEvidence, setComposerEvidence] = useState<{ id: string; label: string } | null>(null)
   const chatIntentRef = useRef<number | null>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const tRef = useRef(t)
-  tRef.current = t
+  useEffect(() => { tRef.current = t }, [t])
 
   const [conversationRetry, setConversationRetry] = useState(0)
   const [conversationId, setConversationId] = useState<string | null>(null)
@@ -59,12 +81,23 @@ export function AgentChat({
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [retryMessage, setRetryMessage] = useState<{ text: string; action?: DiagnosisAction; evidenceId?: string } | null>(null)
   const [draft, setDraft] = useState<DraftPayload | null>(null)
   const [ticketId, setTicketId] = useState<string | null>(null)
   const [evidenceHit, setEvidenceHit] = useState<ManualSearchHit | null>(null)
-  const [evidenceLoading, setEvidenceLoading] = useState(false)
+  const [sourceLoadingId, setSourceLoadingId] = useState<string | null>(null)
+  const [sourceError, setSourceError] = useState<string | null>(null)
 
-  const status = diagnoseResult ? usableStatus(diagnoseResult) : null
+  // Never show a verdict from another vehicle/session, even for one render.
+  const activeResult =
+    diagnoseResult &&
+    diagnoseResult.vehicle_id === vehicleId &&
+    diagnoseResult.session_id === sessionId
+      ? diagnoseResult
+      : null
+
+  const status = activeResult ? usableStatus(activeResult) : null
+  const ticketEligible = status === 'anomaly' && (activeResult?.confidence ?? 0) >= 0.50
 
   const prefill = (text: string) => {
     setInput((prev) => (prev.includes(text) ? prev : prev.trim() ? `${prev}\n\n${text}` : text))
@@ -72,11 +105,11 @@ export function AgentChat({
   }
 
   const statusLine = useMemo(() => {
-    if (!diagnoseResult) return t('chat.contextEmpty')
+    if (!activeResult) return t('chat.contextEmpty')
     if (status === 'normal') return t('chat.status.normal')
     if (status === 'anomaly') return t('chat.status.anomaly')
     return t('chat.status.check_failed')
-  }, [diagnoseResult, status, t])
+  }, [activeResult, status, t])
 
   useEffect(() => {
     const log = logRef.current
@@ -85,71 +118,74 @@ export function AgentChat({
   }, [messages, loading])
 
   useEffect(() => {
-    if (!diagnoseResult) return
-    const id = `ml:${diagnoseResult.vehicle_id}:${diagnoseResult.session_id}:${diagnoseResult.status}`
-    const statusKey =
-      status === 'normal'
-        ? 'chat.status.normal'
-        : status === 'anomaly'
-          ? 'chat.status.anomaly'
-          : 'chat.status.check_failed'
-    const lines = [
-      t(statusKey),
-      diagnoseResult.engine_model ? `${t('verdict.engine')}: ${diagnoseResult.engine_model}` : '',
-      status === 'check_failed' ? t('verdict.failed.action') : '',
-      status === 'anomaly' && diagnoseResult.anomaly_title
-        ? `${t('verdict.type')}: ${diagnoseResult.anomaly_type} — ${diagnoseResult.anomaly_title}`
-        : '',
-      status !== 'check_failed' && diagnoseResult.confidence != null
-        ? `${t('verdict.confidence')}: ${diagnoseResult.confidence}`
-        : '',
-    ].filter(Boolean)
-    setMessages((prev) => {
-      const rest = prev.filter((msg) => !msg.id.startsWith('ml:'))
-      return [...rest, { id, role: 'assistant', content: lines.join('\n') }]
-    })
-  }, [diagnoseResult, status, t])
-
-  useEffect(() => {
     contextRef.current = contextKey
     const epoch = ++sendGen.current
+    sendAbortRef.current?.abort()
+    sendAbortRef.current = null
+    sendingRef.current = false
+    // oxlint-disable-next-line react/set-state-in-effect -- Discard the prior conversation at an externally selected context change.
     setConversationId(null)
     setMessages([])
+    setLoading(false)
+    setError(null)
+    setRetryMessage(null)
     setDraft(null)
     setTicketId(null)
-    setError(null)
     setEvidenceHit(null)
-    setLoading(false)
+    setSourceLoadingId(null)
+    setSourceError(null)
 
     if (!vehicleId || !sessionId) return
-
-    createConversation(vehicleId, sessionId)
-      .then((conv) => {
+    const controller = new AbortController()
+    createConversation(vehicleId, sessionId, controller.signal)
+      .then((conversation) => {
         if (epoch !== sendGen.current || contextRef.current !== contextKey) return
-        setConversationId(conv.conversation_id)
+        setConversationId(conversation.conversation_id)
       })
       .catch((err: unknown) => {
+        if (controller.signal.aborted) return
         if (epoch !== sendGen.current || contextRef.current !== contextKey) return
-        setError(err instanceof Error ? err.message : tRef.current('error.chatOpen'))
+        setError(resolveErrorMessage(tRef.current, err, 'error.chatOpen'))
       })
+    return () => {
+      controller.abort()
+      sendAbortRef.current?.abort()
+      sendGen.current += 1
+      sourceRequest.current += 1
+    }
   }, [contextKey, vehicleId, sessionId, conversationRetry])
 
   const send = useCallback(
-    async (text: string) => {
+    async (text: string, action?: DiagnosisAction, evidenceId?: string) => {
       const trimmed = text.trim()
-      if (!conversationId || !trimmed) return
+      if (!trimmed) return
+      if (!conversationId) {
+        setInput((prev) => (prev.trim() ? prev : trimmed))
+        setError(tRef.current('error.chatOpen'))
+        return
+      }
+      if (sendingRef.current) {
+        setInput((prev) => (prev.trim() ? prev : trimmed))
+        return
+      }
+
       const epoch = ++sendGen.current
       const key = contextKey
       const convId = conversationId
+      const controller = new AbortController()
+      sendAbortRef.current = controller
+      sendingRef.current = true
       setLoading(true)
       setError(null)
+      setRetryMessage(null)
       const userMsg: ChatMessage = { id: crypto.randomUUID(), role: 'user', content: trimmed }
       setMessages((prev) => [...prev, userMsg])
-      setInput('')
+      setInput((current) => current.trim() === trimmed ? '' : current)
 
       try {
-        const reply = await sendChatMessage(convId, trimmed, locale)
+        const reply = await sendChatMessage(convId, trimmed, locale, false, controller.signal, action, evidenceId)
         if (epoch !== sendGen.current || contextRef.current !== key) return
+        setComposerEvidence((current) => current?.id === evidenceId ? null : current)
         const assistantMsg: ChatMessage = {
           id: crypto.randomUUID(),
           role: 'assistant',
@@ -161,10 +197,17 @@ export function AgentChat({
           setDraft(reply.draft)
         }
       } catch (err: unknown) {
+        if (controller.signal.aborted) return
         if (epoch !== sendGen.current || contextRef.current !== key) return
-        setError(err instanceof Error ? err.message : tRef.current('error.agent'))
+        setMessages((prev) => prev.filter((message) => message.id !== userMsg.id))
+        setError(resolveErrorMessage(tRef.current, err, 'error.agent'))
+        setRetryMessage({ text: trimmed, action, evidenceId })
+        setInput((prev) => (prev.trim() ? prev : trimmed))
       } finally {
-        if (epoch === sendGen.current && contextRef.current === key) setLoading(false)
+        if (epoch === sendGen.current && contextRef.current === key) {
+          sendingRef.current = false
+          setLoading(false)
+        }
       }
     },
     [contextKey, conversationId, locale],
@@ -172,17 +215,30 @@ export function AgentChat({
 
   useEffect(() => {
     if (!chatIntent || chatIntent.vehicleId !== vehicleId || chatIntent.sessionId !== sessionId) return
-    if (!conversationId) return
     if (chatIntentRef.current === chatIntent.id) return
     chatIntentRef.current = chatIntent.id
-    if (chatIntent.autoSend) void send(chatIntent.message)
-    else prefill(chatIntent.message)
+    if (chatIntent.autoSend) {
+      pendingIntent.current = { text: chatIntent.message, action: chatIntent.action }
+    } else {
+      // oxlint-disable-next-line react/set-state-in-effect -- Apply the source carried by an external navigation intent.
+      setComposerEvidence(chatIntent.evidenceId ? { id: chatIntent.evidenceId, label: chatIntent.evidenceLabel ?? chatIntent.message } : null)
+      prefill(chatIntent.message)
+    }
     onChatIntentConsumed?.()
-  }, [chatIntent, conversationId, onChatIntentConsumed, send, sessionId, vehicleId])
+  }, [chatIntent, onChatIntentConsumed, sessionId, vehicleId])
 
+  useEffect(() => {
+    if (!conversationId || loading || !pendingIntent.current || sendingRef.current) return
+    const { text, action } = pendingIntent.current
+    pendingIntent.current = null
+    void send(text, action)
+  }, [chatIntent, conversationId, loading, send])
+
+  const documentScope = { engineModel, vehicleId, sessionId }
   const openEvidence = async (hit: SourceHit) => {
-    const key = contextKey
-    const epoch = sendGen.current
+    const request = ++sourceRequest.current
+    setSourceError(null)
+    setSourceLoadingId(null)
     if (hit.doc_id) {
       setEvidenceHit({
         evidence_id: hit.evidence_id,
@@ -195,79 +251,101 @@ export function AgentChat({
       })
       return
     }
-    setEvidenceLoading(true)
+    setSourceLoadingId(hit.evidence_id)
     try {
-      const row = await fetchEvidence(hit.evidence_id)
-      if (epoch !== sendGen.current || contextRef.current !== key) return
+      const row = await fetchEvidence(hit.evidence_id, documentScope)
+      if (request !== sourceRequest.current) return
       setEvidenceHit({ ...row, score: 'score' in row ? Number(row.score) || 0 : 0 })
-    } catch (err: unknown) {
-      if (epoch !== sendGen.current || contextRef.current !== key) return
-      setError(err instanceof Error ? err.message : tRef.current('error.source'))
+    } catch {
+      if (request !== sourceRequest.current) return
+      setSourceError(tRef.current('error.source'))
     } finally {
-      if (epoch === sendGen.current && contextRef.current === key) setEvidenceLoading(false)
+      if (request === sourceRequest.current) setSourceLoadingId(null)
     }
   }
 
   const onVoiceText = (text: string) => {
-    setInput(text)
-    if (isDiagnoseVoiceCommand(text)) onDiagnoseCommand?.()
+    if (onDiagnoseCommand && isDiagnoseVoiceCommand(text, t('voice.diagnosePhrase'), t('diag.run'))) {
+      onDiagnoseCommand()
+      return
+    }
+    setInput((prev) => (prev.trim() ? `${prev}\n${text}` : text))
   }
+
+  const lastAssistantId = messages.filter((message) => message.role === 'assistant').at(-1)?.id
 
   return (
     <section className="chat-panel">
       <div className="chat-panel__head">
-        <MessageSquare size={18} aria-hidden />
+        <span className="chat-panel__icon" aria-hidden>
+          <MessageSquare size={18} />
+        </span>
         <div>
           <h2 className="chat-panel__title">{t('chat.title')}</h2>
           <p className="chat-panel__status">{statusLine}</p>
         </div>
       </div>
 
-      <div className="chip-row">
-        {SUGGESTION_KEYS.filter((key) => key !== 'chat.suggest3' || status === 'anomaly').map((key) => (
+      <div className="chip-row chat-suggestions">
+        {SUGGESTIONS.filter(({ action }) => action !== 'prepare_ticket' || ticketEligible).map(({ label, action }) => (
           <button
-            key={key}
+            key={action}
             type="button"
             className="chip-button"
             disabled={loading || !conversationId}
-            onClick={() => void send(t(key))}
+            onClick={() => void send(t(label), action)}
           >
-            {t(key)}
+            {t(label)}
           </button>
         ))}
       </div>
 
       <div className="chat-log" ref={logRef} aria-live="polite">
-        {messages.length === 0 ? <p className="panel__subtitle chat-empty">{t('chat.empty')}</p> : null}
-        {messages.map((msg) => (
-          <article key={msg.id} className={`chat-bubble chat-bubble--${msg.role}`}>
-            <p className="chat-bubble__role">{msg.role === 'user' ? t('chat.roleUser') : t('chat.roleAgent')}</p>
-            <p className="chat-bubble__text">{msg.content}</p>
-            {msg.sources?.length ? (
+        {activeResult && status ? (
+          <article className="chat-bubble chat-bubble--assistant chat-diagnosis-result">
+            <p className="chat-bubble__role">{t('diag.title')} · {activeResult.session_id}</p>
+            <p className="chat-bubble__text">
+              <strong>{t(status === 'normal' ? 'verdict.normal.title' : status === 'anomaly' ? 'verdict.anomaly.title' : 'verdict.failed.title')}</strong>
+            </p>
+            {status === 'anomaly' && activeResult.anomaly_type ? (
+              <p className="chat-bubble__text">{t('verdict.type')}: {activeResult.anomaly_type}{activeResult.anomaly_title ? ` — ${activeResult.anomaly_title}` : ''}</p>
+            ) : null}
+            <p className="chat-bubble__text">
+              {t(status === 'normal' ? 'verdict.normal.footnote' : status === 'anomaly' ? 'verdict.anomaly.lead' : 'verdict.failed.lead')}
+            </p>
+          </article>
+        ) : null}
+        {messages.length === 0 && !activeResult ? <p className="panel__subtitle chat-empty">{t('chat.empty')}</p> : null}
+        {messages.map((message) => (
+          <article key={message.id} className={`chat-bubble chat-bubble--${message.role}`}>
+            <p className="chat-bubble__role">{message.role === 'user' ? t('chat.roleUser') : t('chat.roleAgent')}</p>
+            <MessageText text={message.content} sources={message.sources} onOpenSource={(source) => void openEvidence(source)} loadingSourceId={sourceLoadingId} />
+            {message.sources?.length ? (
               <details className="evidence-panel" open>
-                <summary>{t('source.eyebrow')}</summary>
-              <ul className="chat-sources">
-                {msg.sources.map((s) => (
-                  <li key={s.evidence_id}>
-                    <button
-                      type="button"
-                      className="chat-source-link"
-                      disabled={evidenceLoading}
-                      onClick={() => void openEvidence(s)}
-                    >
-                      {s.manual_title}, {t('ticket.pdfPage')} {s.pdf_page}
-                    </button>
-                  </li>
-                ))}
-              </ul>
+                <summary>{t('chat.sourcesTitle')} ({message.sources.length})</summary>
+                <ul className="chat-sources">
+                  {message.sources.map((source) => (
+                    <li key={source.evidence_id}>
+                      <button
+                        type="button"
+                        className="chat-source-link"
+                        disabled={sourceLoadingId === source.evidence_id}
+                        onClick={() => void openEvidence(source)}
+                      >
+                        {sourceLoadingId === source.evidence_id ? <Loader2 size={14} className="spin-slow" aria-hidden /> : null}
+                        {source.manual_title}, {t('ticket.pdfPage')} {source.pdf_page}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
               </details>
             ) : null}
-            {msg.role === 'assistant' && !msg.id.startsWith('ml:') && msg.id === messages.filter((m) => m.role === 'assistant' && !m.id.startsWith('ml:')).at(-1)?.id ? (
+            {message.role === 'assistant' && message.id === lastAssistantId ? (
               <div className="message-actions">
                 <CopyButton
                   text={[
-                    msg.content,
-                    ...(msg.sources ?? []).map(
+                    readableAnswer(message.content, message.sources ?? [], t('ticket.pdfPage')),
+                    ...(message.sources ?? []).map(
                       (source) => `${source.manual_title}, ${t('ticket.pdfPage')} ${source.pdf_page}`,
                     ),
                   ].join('\n')}
@@ -275,14 +353,33 @@ export function AgentChat({
                 <button
                   type="button"
                   className="btn btn--secondary"
-                  disabled={loading}
                   onClick={() => prefill(t(status === 'check_failed' ? 'action.askFailed' : 'action.askPlan'))}
                 >
                   <MessageSquare size={16} aria-hidden />
                   {t('action.followUp')}
                 </button>
+                {onOpenHistory && status !== 'check_failed' && (
+                  <button type="button" className="btn btn--secondary" onClick={onOpenHistory}>
+                    {t('history.title')}
+                  </button>
+                )}
+                {onChooseSession && status === 'check_failed' && (
+                  <button type="button" className="btn btn--secondary" onClick={onChooseSession}>
+                    {t('verdict.action.chooseOther')}
+                  </button>
+                )}
+                {ticketEligible && !draft && !ticketId && (
+                  <button type="button" className="btn btn--secondary" disabled={loading || !conversationId}
+                    onClick={() => void send(t('chat.suggest3'), 'prepare_ticket')}>
+                    {t('chat.suggest3')}
+                  </button>
+                )}
                 {onOpenManuals && status !== 'check_failed' ? (
-                  <button type="button" className="btn btn--secondary" onClick={() => onOpenManuals(manualTopic(diagnoseResult))}>
+                  <button
+                    type="button"
+                    className="btn btn--secondary"
+                    onClick={() => onOpenManuals(manualTopic(activeResult))}
+                  >
                     <BookOpen size={16} aria-hidden />
                     {t('nav.manuals')}
                   </button>
@@ -291,51 +388,108 @@ export function AgentChat({
             ) : null}
           </article>
         ))}
-        <TicketDraftCard draft={status === 'check_failed' ? null : draft} onConfirmed={(id) => setTicketId(id)} />
+        <TicketDraftCard scope={documentScope}
+          onReplace={ticketEligible && !loading && conversationId
+            ? () => void send(t('chat.suggest3'), 'prepare_ticket') : undefined}
+          draft={status === 'check_failed' ? null : draft} onConfirmed={(id) => setTicketId(id)} />
         {ticketId ? (
           <p className="ticket-draft__ok">
             {t('ticket.confirmedId')}: {ticketId}
+            {onOpenTicket && (
+              <button type="button" className="chat-source-link" onClick={() => onOpenTicket(ticketId)}>
+                {t('nav.tickets')}
+              </button>
+            )}
           </p>
         ) : null}
-        {loading ? <p className="panel__subtitle">{t('chat.processing')}</p> : null}
+        {loading ? (
+          <p className="chat-processing" role="status">
+            <Loader2 size={16} className="spin-slow" aria-hidden />
+            {t('chat.processing')}
+          </p>
+        ) : null}
       </div>
 
       {error ? (
-        <div className="panel__error" role="alert">
-          {error}
-          {!conversationId ? (
-            <button type="button" className="btn btn--secondary" onClick={() => setConversationRetry((n) => n + 1)}>
-              {t('history.retry')}
+        <div className="panel__error chat-error" role="alert">
+          <span>{error}</span>
+          <div className="chat-error__actions">
+            {!conversationId ? (
+              <button type="button" className="btn btn--secondary" onClick={() => setConversationRetry((n) => n + 1)}>
+                <RotateCcw size={15} aria-hidden />
+                {t('history.retry')}
+              </button>
+            ) : null}
+            {retryMessage ? (
+              <button type="button" className="btn btn--secondary" onClick={() => void send(retryMessage.text, retryMessage.action, retryMessage.evidenceId)}>
+                <RotateCcw size={15} aria-hidden />
+                {t('chat.retrySend')}
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="icon-btn"
+              aria-label={t('common.close')}
+              onClick={() => {
+                setError(null)
+                setRetryMessage(null)
+              }}
+            >
+              <X size={15} aria-hidden />
             </button>
-          ) : null}
+          </div>
         </div>
+      ) : null}
+      {sourceError ? (
+        <p className="panel__error" role="alert">
+          {sourceError}
+        </p>
       ) : null}
 
       <form
         className="chat-compose"
-        onSubmit={(e) => {
-          e.preventDefault()
-          void send(input)
+        onSubmit={(event) => {
+          event.preventDefault()
+          void send(input, undefined, composerEvidence?.id)
         }}
       >
+        {composerEvidence && (
+          <div className="chip-row chat-attached-source">
+            <span className="panel__subtitle">{composerEvidence.label}</span>
+            <button type="button" className="icon-btn" aria-label={t('common.close')} onClick={() => { setComposerEvidence(null); setRetryMessage((current) => current?.evidenceId ? null : current) }}>
+              <X size={15} aria-hidden />
+            </button>
+          </div>
+        )}
         <div className="chat-compose__bar">
           <textarea
             ref={inputRef}
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(event) => setInput(event.target.value)}
+            aria-label={t('chat.placeholder')}
             placeholder={t('chat.placeholder')}
             rows={2}
-            disabled={loading || !conversationId}
+            disabled={!conversationId}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+                event.preventDefault()
+                if (!loading && input.trim()) void send(input, undefined, composerEvidence?.id)
+              }
+            }}
           />
-          <VoiceCapture disabled={loading || !conversationId} onText={onVoiceText} compact />
-          <button type="submit" className="btn btn--primary" disabled={loading || !conversationId || !input.trim()}>
-            <Send size={16} aria-hidden />
+          <VoiceCapture key={contextKey} disabled={loading || !conversationId} onText={onVoiceText} compact />
+          <button
+            type="submit"
+            className="btn btn--primary"
+            disabled={loading || !conversationId || !input.trim()}
+          >
+            {loading ? <Loader2 size={16} className="spin-slow" aria-hidden /> : <Send size={16} aria-hidden />}
             {t('chat.send')}
           </button>
         </div>
       </form>
 
-      <SourceDrawer hit={evidenceHit} onClose={() => setEvidenceHit(null)} />
+      <SourceDrawer scope={documentScope} hit={evidenceHit} onClose={() => setEvidenceHit(null)} />
     </section>
   )
 }

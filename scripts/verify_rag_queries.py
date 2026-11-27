@@ -8,15 +8,16 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend"))
 
 from app.config import get_settings  # noqa: E402
-from app.rag.service import ManualRagService  # noqa: E402
+from app.rag.service import AGENT_SEARCH_LIMIT, ManualRagService  # noqa: E402
 
 CASES = [
     {
         "name": "клапанные зазоры ЯМЗ-236М2",
         "engine": "ЯМЗ-236М2",
         "query": "тепловые зазоры клапанного механизма",
-        "expect_status": "ok",
+        "expect_status": "conflict",
         "expect_pages": {33, 34},
+        "expect_conflict_sources": {"y236-re:p0031", "y236-rk:p0269", "y236-rk:p0276"},
         "expect_manual_contains": "236-3902150",
         "forbidden_doc_prefix": "z",
     },
@@ -77,19 +78,22 @@ def main() -> int:
     service = ManualRagService(settings.db_path, settings.pdf_dir)
     build = service.ensure_index()
     if build.get("missing_files"):
-        print("Missing PDF:", build["missing_files"])
+        print("BLOCKED: Missing PDF:", build["missing_files"])
         return 2
     if build.get("built"):
         print("Index built:", build)
 
     failed = 0
     for case in CASES:
-        result = service.search(case["engine"], case["query"], limit=8)
+        result = service.search(case["engine"], case["query"], limit=AGENT_SEARCH_LIMIT)
         ok = result["status"] == case["expect_status"]
         pages = {item["pdf_page"] for item in result.get("results", [])}
         docs = {item["doc_id"] for item in result.get("results", [])}
         titles = " | ".join(item["manual_title"] for item in result.get("results", []))
 
+        if case.get("expect_conflict_sources"):
+            evidence = {item["evidence_id"] for item in result.get("conflicting_sources", [])}
+            ok = ok and evidence == case["expect_conflict_sources"]
         if case.get("expect_pages") and not case["expect_pages"].intersection(pages):
             ok = False
         if case.get("expect_manual_contains"):

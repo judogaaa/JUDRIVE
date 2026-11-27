@@ -210,4 +210,13 @@ PACK_UZ: dict[str, str] = {
     "ticket.status.unknown": "Yuborish natijasi noma’lum. Takrorlash taqiqlangan.",
 }
 
+# Keep the source pack in sync with the checked-in runtime Uzbek dictionary.
+_UZ_RUNTIME = json.loads(
+    (Path(__file__).resolve().parents[1] / "frontend" / "src" / "i18n" / "locales" / "uz.json").read_text(
+        encoding="utf-8"
+    )
+)
+for _key, _value in _UZ_RUNTIME.items():
+    PACK_UZ.setdefault(_key, _value)
+
 assert set(PACK_UZ) == set(RU)

@@ -3,6 +3,10 @@ import httpx
 from app.schemas.diagnose import DiagnoseResponse
 
 
+class MockMlResponseError(ValueError):
+    """The service returned an invalid result or a result for a different check."""
+
+
 class MockMlClient:
     def __init__(self, base_url: str) -> None:
         self._base_url = base_url.rstrip("/")
@@ -19,7 +23,19 @@ class MockMlClient:
                 json={"vehicle_id": vehicle_id, "session_id": session_id},
             )
             response.raise_for_status()
-            return DiagnoseResponse.model_validate(response.json())
+            try:
+                result = DiagnoseResponse.model_validate(response.json())
+            except ValueError as exc:
+                raise MockMlResponseError("Invalid diagnosis response") from exc
+            if (result.vehicle_id, result.session_id) != (vehicle_id, session_id):
+                raise MockMlResponseError("Diagnosis context mismatch")
+            if result.status == "check_failed" or result.signal_quality == "bad":
+                result.status = "check_failed"
+                result.anomaly_type = None
+                result.anomaly_title = None
+                result.anomaly_score = None
+                result.confidence = None
+            return result
 
 
 class MockToirClient:

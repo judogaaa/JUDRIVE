@@ -41,6 +41,7 @@ class VehicleFleetRow(BaseModel):
     category_reason: str
     needs_rerecord: bool = False
     quarantine_basis: str | None = None
+    quarantine_recommended: bool = False
     quarantine_confirmed: bool = False
     early_warnings: list[EarlyWarning] = Field(default_factory=list)
     ticket_id: str | None = None
@@ -72,3 +73,9 @@ class VehicleInsightResponse(BaseModel):
     history: list[dict]
     trend_points: list[TrendPoint]
     sessions_total: int
+
+class QuarantineRecommendationRequest(BaseModel):
+    session_id: str = Field(min_length=1, max_length=100)
+    active: bool
+    reason: str = Field(min_length=10, max_length=500)
+    acknowledge: bool

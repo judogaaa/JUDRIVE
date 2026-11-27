@@ -12,7 +12,7 @@ from app.schemas.analytics import (
     VehicleFleetRow,
     VehicleInsightResponse,
 )
-from app.services.fleet import FleetService
+from app.services.fleet import FleetService, safe_history_session
 from app.storage.repository import AppRepository
 
 # Типы отклонений, для которых допустима high-рекомендация без LLM (названия из fault_types).
@@ -66,9 +66,26 @@ def _urgency_band(latest: dict, warnings: list[EarlyWarning]) -> str | None:
         return "high"
     if any(w.code == "recurring_anomaly" for w in warnings) and isinstance(score, (int, float)) and score >= 0.65:
         return "high"
-    if latest.get("signal_quality") == "warning" or (isinstance(score, (int, float)) and score >= 0.5):
+    if latest.get("signal_quality") == "warning" or (isinstance(score, (int, float)) and score >= 0.5) or (isinstance(latest.get("confidence"), (int, float)) and latest["confidence"] < 0.65):
         return "medium"
     return "low"
+
+
+def diagnosis_review_priority(fleet: FleetService, diag) -> str | None:
+    if diag.status != "anomaly" or diag.signal_quality == "bad":
+        return None
+    history = fleet.vehicle_history(diag.vehicle_id)
+    selected = next((item for item in history if item["session_id"] == diag.session_id), None)
+    if not selected:
+        return None
+    current = {**selected, **diag.model_dump()}
+    prior = [s for s in history if s["checked_at"] <= selected["checked_at"] and s["session_id"] != diag.session_id]
+    warnings = _collect_warnings(diag.vehicle_id, [*prior, current], current)
+    band = _urgency_band(current, warnings)
+    # No low-priority reassurance from a low-confidence signal.
+    if diag.confidence is not None and diag.confidence < 0.65 and band == "low":
+        return "medium"
+    return band
 
 
 def _collect_warnings(vehicle_id: str, sessions: list[dict], latest: dict) -> list[EarlyWarning]:
@@ -133,6 +150,7 @@ def _classify_vehicle(
     vehicle: dict,
     sessions: list[dict],
     high_ticket: dict | None,
+    quarantine: dict | None = None,
 ) -> VehicleFleetRow:
     latest = _latest_session(sessions)
     warnings = _collect_warnings(vehicle["vehicle_id"], sessions, latest)
@@ -141,34 +159,27 @@ def _classify_vehicle(
     category: str = "normal"
     reason = "Последняя проверка: норма"
     quarantine_basis: str | None = None
+    quarantine_recommended = False
     needs_rerecord = latest.get("status") == "check_failed" or latest.get("signal_quality") == "bad"
     ticket_id = high_ticket.get("ticket_id") if high_ticket else None
 
-    if high_ticket:
+    if needs_rerecord:
+        category, reason = "attention", "Сбой или плохое качество записи — требуется повторная диагностика"
+    elif latest.get("status") == "anomaly":
         category = "attention"
-        reason = "Заявка с urgency high не подтверждает карантин — решение принимает специалист"
-    elif band == "high" and latest.get("status") == "anomaly" and latest.get("anomaly_type") in HIGH_RISK_ANOMALY_TYPES:
-        if _recurring_type(sessions, latest.get("anomaly_type")) and isinstance(latest.get("anomaly_score"), (int, float)):
-            if float(latest["anomaly_score"]) >= 0.8:
-                category = "quarantine"
-                quarantine_basis = (
-                    "Рекомендация high: критичный тип отклонения, повтор в истории и высокий score "
-                    "(требуется согласование с источником перед выпуском)"
-                )
-                reason = quarantine_basis
-    if category != "quarantine":
-        if latest.get("status") == "anomaly":
-            category = "attention"
-            reason = f"Отклонение {latest.get('anomaly_type') or '—'} на последней проверке"
-        elif latest.get("status") == "check_failed":
-            category = "attention"
-            reason = "Сбой записи — требуется повторная диагностика"
-        elif latest.get("signal_quality") == "warning" and latest.get("status") == "normal":
-            category = "attention"
-            reason = "Норма с предупреждением о качестве сигнала"
-        elif latest.get("signal_quality") == "bad":
-            category = "attention"
-            reason = "Плохое качество записи"
+        reason = f"Отклонение {latest.get('anomaly_type') or '—'} на последней проверке"
+        if band == "high":
+            reason += "; высокий приоритет проверки, решение о карантине только специалистом"
+    elif latest.get("signal_quality") == "warning":
+        category, reason = "attention", "Норма с предупреждением о качестве сигнала"
+    if high_ticket and category == "normal":
+        category, reason = "attention", "Есть ранее созданная high-заявка — уточните выполнение ремонта"
+
+    if quarantine and latest.get("status") == "anomaly" and not needs_rerecord:
+        category = "quarantine"
+        quarantine_recommended = True
+        quarantine_basis = quarantine["reason"]
+        reason = quarantine_basis
 
     priority = 0
     if category == "quarantine":
@@ -186,7 +197,10 @@ def _classify_vehicle(
     elif band == "medium":
         priority += 40
 
-    confirmed = bool(high_ticket and high_ticket.get("ticket_id"))
+    # A chief recommendation is not an operational quarantine. The product has
+    # no confirmed quarantine workflow, so this flag stays false until a real
+    # operational action exists.
+    confirmed = False
     return VehicleFleetRow(
         vehicle_id=vehicle["vehicle_id"],
         garage_no=vehicle["garage_no"],
@@ -208,6 +222,7 @@ def _classify_vehicle(
         category_reason=reason,
         needs_rerecord=needs_rerecord,
         quarantine_basis=quarantine_basis,
+        quarantine_recommended=quarantine_recommended,
         quarantine_confirmed=confirmed,
         early_warnings=warnings,
         ticket_id=ticket_id,
@@ -251,7 +266,10 @@ class FleetAnalyticsService:
         self._repo = repo
         with raw_path.open(encoding="utf-8") as f:
             payload = json.load(f)
-        self._raw_vehicles: list[dict] = payload["vehicles"]
+        self._raw_vehicles = [
+            {**vehicle, "sessions": [safe_history_session(s, vehicle["engine_model"]) for s in vehicle["sessions"]]}
+            for vehicle in payload["vehicles"]
+        ]
         self._synthetic = bool(payload.get("synthetic", True))
 
     def build_rows(self) -> list[VehicleFleetRow]:
@@ -259,7 +277,7 @@ class FleetAnalyticsService:
         for vehicle in self._raw_vehicles:
             sessions = vehicle["sessions"]
             high_ticket = _high_ticket_for_vehicle(self._repo, vehicle["vehicle_id"])
-            rows.append(_classify_vehicle(vehicle, sessions, high_ticket))
+            rows.append(_classify_vehicle(vehicle, sessions, high_ticket, self._repo.quarantine_recommendation(vehicle["vehicle_id"], _latest_session(sessions)["session_id"])))
         return rows
 
     def dashboard(
@@ -332,7 +350,7 @@ class FleetAnalyticsService:
             return None
         sessions = vehicle["sessions"]
         high_ticket = _high_ticket_for_vehicle(self._repo, vehicle_id)
-        row = _classify_vehicle(vehicle, sessions, high_ticket)
+        row = _classify_vehicle(vehicle, sessions, high_ticket, self._repo.quarantine_recommendation(vehicle_id, _latest_session(sessions)["session_id"]))
         ordered = sorted(sessions, key=lambda s: _parse_dt(s["checked_at"]))
         trend: list[TrendPoint] = []
         for s in ordered[-8:]:

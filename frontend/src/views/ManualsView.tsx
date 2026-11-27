@@ -1,141 +1,255 @@
 import { useEffect, useMemo, useState } from 'react'
-import { FileText, Star } from 'lucide-react'
+import { FileText, Search, Star } from 'lucide-react'
 import { ManualSearchPanel } from '../components/ManualSearchPanel'
 import { SourceDrawer } from '../components/SourceDrawer'
 import type { ManualSearchHit } from '../api/manuals'
 import { useI18n } from '../i18n/I18nContext'
+import { readRecentPages } from '../lib/manuals'
 import type { ManualSearchIntent } from '../lib/workflow'
 
 interface CatalogDoc {
   doc_id: string
   title: string
   pages: number
-  engine_model?: string
 }
 
 interface ManualsViewProps {
   engineModel: string | null
+  isVisible: boolean
+  chatEngineModel: string | null
+  chatTargetLabel?: string
+  vehicleContext?: { vehicleId: string; sessionId: string; engineModel: string }
   searchIntent?: ManualSearchIntent | null
   onSearchIntentConsumed?: () => void
-  onAskInChat?: (text: string) => void
+  onAskInChat?: (text: string, engine: string, evidenceId: string, evidenceLabel: string) => void
   onBack?: () => void
+  backLabel?: string
 }
 
 const FAV_KEY = 'judrive-manual-fav'
-const RECENT_KEY = 'judrive-manual-recent'
 
-export function ManualsView({ engineModel, searchIntent, onSearchIntentConsumed, onAskInChat, onBack }: ManualsViewProps) {
+export function ManualsView({ engineModel, isVisible, chatEngineModel, chatTargetLabel, vehicleContext, searchIntent, onSearchIntentConsumed, onAskInChat, onBack, backLabel }: ManualsViewProps) {
   const { t } = useI18n()
   const [engines, setEngines] = useState<{ engine_model: string; documents: CatalogDoc[] }[]>([])
-  const [engine, setEngine] = useState(engineModel ?? '')
+  const [catalogLoading, setCatalogLoading] = useState(true)
+  const [catalogError, setCatalogError] = useState(false)
+  const [catalogRevision, setCatalogRevision] = useState(0)
+  const [engine, setEngine] = useState(searchIntent?.engineModel ?? engineModel ?? '')
+  const [catalogQuery, setCatalogQuery] = useState('')
   const [tab, setTab] = useState<'all' | 'fav' | 'recent'>('all')
   const [favorites, setFavorites] = useState<string[]>(() => readList(FAV_KEY))
-  const [recent, setRecent] = useState<string[]>(() => readList(RECENT_KEY))
+  const [recent, setRecent] = useState(readRecentPages)
   const [open, setOpen] = useState<ManualSearchHit | null>(null)
 
   useEffect(() => {
-    void fetch('/api/manuals/catalog')
-      .then((r) => r.json())
-      .then((body: { engines?: { engine_model: string; documents: CatalogDoc[] }[] }) => {
+    const controller = new AbortController()
+    // oxlint-disable-next-line react/set-state-in-effect -- Synchronize the loading indicator with the catalogue request.
+    setCatalogLoading(true)
+    fetch('/api/manuals/catalog', { signal: controller.signal })
+      .then((response) => {
+        if (!response.ok) throw new Error(String(response.status))
+        return response.json() as Promise<{ engines?: { engine_model: string; documents: CatalogDoc[] }[] }>
+      })
+      .then((body) => {
+        if (controller.signal.aborted) return
         const list = body.engines ?? []
         setEngines(list)
-        setEngine((prev) => prev || engineModel || list[0]?.engine_model || '')
+        setCatalogError(false)
       })
-      .catch(() => setEngines([]))
-  }, [engineModel])
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setEngines([])
+          setCatalogError(true)
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setCatalogLoading(false)
+      })
+    return () => {
+      controller.abort()
+    }
+  }, [catalogRevision])
 
+  // oxlint-disable-next-line react/set-state-in-effect -- Close the external PDF dialog when navigation hides the catalogue.
+  useEffect(() => { if (!isVisible) setOpen(null) }, [isVisible])
+
+  const allDocs = useMemo(() => {
+    const byId = new Map<string, CatalogDoc & { engines: string[] }>()
+    for (const group of engines) {
+      for (const doc of group.documents) {
+        const known = byId.get(doc.doc_id)
+        if (known) known.engines.push(group.engine_model)
+        else byId.set(doc.doc_id, { ...doc, engines: [group.engine_model] })
+      }
+    }
+    return [...byId.values()]
+  }, [engines])
   const docs = useMemo(() => {
-    const rows = engines.find((row) => row.engine_model === engine)?.documents ?? []
-    if (tab === 'fav') return rows.filter((d) => favorites.includes(d.doc_id))
-    if (tab === 'recent') return rows.filter((d) => recent.includes(d.doc_id))
-    return rows
-  }, [engines, engine, tab, favorites, recent])
+    const rows = engine ? allDocs.filter((doc) => doc.engines.includes(engine)) : allDocs
+    let selected: typeof allDocs
+    if (tab === 'all') {
+      selected = rows
+    } else {
+      const byId = new Map(rows.map((doc) => [doc.doc_id, doc]))
+      const ids = tab === 'fav' ? favorites : recent.map(({ docId }) => docId)
+      selected = ids.flatMap((id) => {
+        const doc = byId.get(id)
+        return doc ? [doc] : []
+      })
+    }
+    const query = catalogQuery.trim().toLowerCase()
+    if (!query) return selected
+    return selected.filter((doc) => [doc.title, doc.doc_id, ...doc.engines]
+      .some((field) => field.toLowerCase().includes(query)))
+  }, [allDocs, catalogQuery, engine, favorites, recent, tab])
 
-  const remember = (docId: string) => {
-    const next = [docId, ...recent.filter((id) => id !== docId)].slice(0, 6)
-    setRecent(next)
-    localStorage.setItem(RECENT_KEY, JSON.stringify(next))
-  }
-
-  const openDoc = (doc: CatalogDoc) => {
-    remember(doc.doc_id)
+  const [openedEngine, setOpenedEngine] = useState('')
+  const openDoc = (doc: CatalogDoc & { engines: string[] }, page: number) => {
+    setOpenedEngine(doc.engines.includes(engine) ? engine : doc.engines[0])
     setOpen({
       evidence_id: doc.doc_id,
       doc_id: doc.doc_id,
       manual_title: doc.title,
-      pdf_page: 1,
+      pdf_page: page,
       quote: '',
       score: 0,
       extraction: 'text',
     })
   }
 
+  const emptyText =
+    tab === 'fav' ? t('manuals.noFavorites') : tab === 'recent' ? t('manuals.noRecent') : t('manuals.noDocs')
+
   return (
     <div className="manual-sections">
-      <header className="page-header page-header--compact">
-        <h1>{t('nav.manuals')}</h1>
+      <header className="page-header page-header--compact manual-header">
+        <div>
+          <h1>{t('nav.manuals')}</h1>
+          <p>{t('manuals.subtitle')}</p>
+        </div>
         {onBack ? (
           <button type="button" className="btn btn--secondary" onClick={onBack}>
-            {t('action.backDiagnosis')}
+            {backLabel ? `← ${backLabel}` : t('action.backDiagnosis')}
           </button>
         ) : null}
       </header>
-      <section className="panel">
-        <div className="toolbar-bar">
+
+      <section className="panel manual-catalog-panel" aria-busy={catalogLoading}>
+        <div className="manual-toolbar">
           <label className="field">
             <span>{t('diag.engine')}</span>
-            <select value={engine} onChange={(e) => setEngine(e.target.value)}>
+            <select value={engine} onChange={(event) => setEngine(event.target.value)} disabled={catalogLoading}>
+              <option value="">{t('chief.filter.all')}</option>
+              {engine && !engines.some((row) => row.engine_model === engine) ? (
+                <option value={engine}>{engine}</option>
+              ) : null}
               {engines.map((row) => (
-                <option key={row.engine_model} value={row.engine_model}>{row.engine_model}</option>
+                <option key={row.engine_model} value={row.engine_model}>
+                  {row.engine_model}
+                </option>
               ))}
             </select>
           </label>
+          <label className="field">
+            <span>{t('manuals.searchCatalog')}</span>
+            <div className="search-field">
+              <Search size={18} aria-hidden />
+              <input
+                type="search"
+                value={catalogQuery}
+                onChange={(event) => setCatalogQuery(event.target.value)}
+                placeholder={t('manuals.searchCatalogPlaceholder')}
+              />
+            </div>
+          </label>
         </div>
-        <div className="chief-tabs">
+
+        <div className="chip-row manual-tabs">
           {(['all', 'fav', 'recent'] as const).map((id) => (
-            <button key={id} type="button" className={tab === id ? 'chip-button chip-button--on' : 'chip-button'} onClick={() => setTab(id)}>
+            <button
+              key={id}
+              type="button"
+              className={tab === id ? 'chip-button chip-button--on' : 'chip-button'}
+              aria-pressed={tab === id}
+              onClick={() => setTab(id)}
+            >
               {id === 'all' ? t('chief.filter.all') : id === 'fav' ? t('manuals.favorite') : t('manuals.recent')}
             </button>
           ))}
+          <span className="manual-tabs__count">{t('fleet.count', { shown: docs.length, total: allDocs.length })}</span>
         </div>
-        <ul className="manual-catalog">
-          {docs.map((doc) => (
-            <li key={doc.doc_id}>
-              <article className="manual-card">
-                <div className="manual-card__head">
-                  <span className="manual-card__icon" aria-hidden><FileText size={20} /></span>
-                  <div>
-                    <h3 className="manual-card__title">{doc.title}</h3>
-                    <p className="manual-card__engine">{engine} · {t('manuals.pages', { count: doc.pages })}</p>
-                  </div>
-                </div>
-                <div className="manual-card__actions">
-                  <button type="button" className="btn btn--primary" onClick={() => openDoc(doc)}>{t('manuals.open')}</button>
-                  <button
-                    type="button"
-                    className="icon-btn"
-                    aria-label={t('manuals.favorite')}
-                    onClick={() => {
-                      const next = favorites.includes(doc.doc_id) ? favorites.filter((id) => id !== doc.doc_id) : [doc.doc_id, ...favorites]
-                      setFavorites(next)
-                      localStorage.setItem(FAV_KEY, JSON.stringify(next))
-                    }}
-                  >
-                    <Star size={18} fill={favorites.includes(doc.doc_id) ? 'currentColor' : 'none'} />
-                  </button>
-                </div>
-              </article>
-            </li>
-          ))}
-        </ul>
+
+        {catalogLoading ? <p className="panel__subtitle">{t('tickets.loading')}</p> : null}
+        {catalogError ? (
+          <div className="panel__error" role="alert">
+            <span>{t('error.manualsCatalog')}</span>
+            <button type="button" className="btn btn--secondary" onClick={() => setCatalogRevision((value) => value + 1)}>
+              {t('history.retry')}
+            </button>
+          </div>
+        ) : null}
+        {!catalogLoading && !catalogError ? (
+          <ul className="manual-catalog">
+            {docs.map((doc) => {
+              const page = tab === 'recent' ? recent.find((entry) => entry.docId === doc.doc_id)?.page ?? 1 : 1
+              const guideLabel = doc.doc_id.endsWith('-re') ? t('manuals.operationGuide') : t('manuals.repairGuide')
+              const engineLabel = engine && doc.engines.includes(engine) ? engine : doc.engines.join(', ')
+              return (
+                <li key={doc.doc_id}>
+                  <article className="manual-card">
+                    <div className="manual-card__head">
+                      <span className="manual-card__icon" aria-hidden>
+                        <FileText size={20} />
+                      </span>
+                      <div>
+                        <h3 className="manual-card__title">{engineLabel} · {guideLabel}</h3>
+                        <p className="manual-card__engine">
+                          {doc.title} · {t('manuals.pages', { count: doc.pages })}
+                          {tab === 'recent' ? ` · ${t('source.pdfPage', { page })}` : ''}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="manual-card__actions">
+                      <button type="button" className="btn btn--primary" onClick={() => openDoc(doc, page)}>
+                        {t('manuals.open')}
+                      </button>
+                      <button
+                        type="button"
+                        className={favorites.includes(doc.doc_id) ? 'icon-btn icon-btn--active' : 'icon-btn'}
+                        aria-pressed={favorites.includes(doc.doc_id)}
+                        aria-label={favorites.includes(doc.doc_id) ? t('manuals.favorited') : t('manuals.favorite')}
+                        title={favorites.includes(doc.doc_id) ? t('manuals.favorited') : t('manuals.favorite')}
+                        onClick={() => {
+                          const next = favorites.includes(doc.doc_id)
+                            ? favorites.filter((id) => id !== doc.doc_id)
+                            : [doc.doc_id, ...favorites]
+                          setFavorites(next)
+                          try { localStorage.setItem(FAV_KEY, JSON.stringify(next)) } catch { /* storage unavailable */ }
+                        }}
+                      >
+                        <Star size={18} fill={favorites.includes(doc.doc_id) ? 'currentColor' : 'none'} />
+                      </button>
+                    </div>
+                  </article>
+                </li>
+              )
+            })}
+          </ul>
+        ) : null}
+        {!catalogLoading && !catalogError && docs.length === 0 ? <p className="empty-state__text">{emptyText}</p> : null}
       </section>
+
       <ManualSearchPanel
+        isVisible={isVisible}
+        vehicleContext={vehicleContext}
+        chatTargetLabel={chatTargetLabel}
         engineModel={(searchIntent?.engineModel ?? engine) || null}
         searchIntent={searchIntent}
         onSearchIntentConsumed={onSearchIntentConsumed}
-        onAskInChat={onAskInChat}
+        onAskInChat={engine === chatEngineModel ? onAskInChat : undefined}
+        onRecentChange={setRecent}
       />
-      <SourceDrawer hit={open} onClose={() => setOpen(null)} />
+      <SourceDrawer scope={{ engineModel: openedEngine }} hit={isVisible ? open : null} onClose={() => setOpen(null)} onRecentChange={setRecent} />
     </div>
   )
 }

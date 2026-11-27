@@ -1,182 +1,335 @@
-import { useMemo, useState } from 'react'
-import { ArrowRight, Search, X } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { ArrowRight, ChevronDown, ChevronUp, Search, X } from 'lucide-react'
+import { fetchVehicleDiagnosisHistory } from '../api/client'
+import type { TrendPoint } from '../api/fleet'
+import { VehicleHistoryPanel } from '../components/VehicleHistoryPanel'
 import type { VehicleSummary } from '../api/types'
 import { useI18n } from '../i18n/I18nContext'
 import { formatSessionDateTime } from '../lib/formatLocale'
-import { displayVehicleModel, matchesVehicle } from '../lib/vehicle'
+import { displayVehicleModel, latestSessionId, matchesVehicle } from '../lib/vehicle'
 
 interface FleetViewProps {
   vehicles: VehicleSummary[]
   fleetError: string | null
+  onRetryFleet?: () => void
   onOpenDiagnosis: (vehicleId: string, sessionId?: string) => void
+  onOpenManuals?: (vehicle: VehicleSummary) => void
   onOpenTickets?: (vehicleId: string) => void
 }
 
 type SortKey = 'plate' | 'sessions' | 'make'
 
-export function FleetView({ vehicles, fleetError, onOpenDiagnosis, onOpenTickets }: FleetViewProps) {
+export function FleetView({ vehicles, fleetError, onRetryFleet, onOpenDiagnosis, onOpenTickets, onOpenManuals }: FleetViewProps) {
   const { t, locale } = useI18n()
   const [query, setQuery] = useState('')
   const [engineFilter, setEngineFilter] = useState('')
   const [makeFilter, setMakeFilter] = useState('')
   const [typeFilter, setTypeFilter] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
   const [sort, setSort] = useState<SortKey>('plate')
   const [desc, setDesc] = useState(false)
   const [selected, setSelected] = useState<string | null>(null)
+
+  const fleetStatus = (vehicle: VehicleSummary): 'normal' | 'anomaly' | 'failed' | 'unknown' => {
+    if (vehicle.latest_signal_quality === 'bad' || vehicle.latest_status === 'check_failed') return 'failed'
+    if (vehicle.latest_status === 'anomaly') return 'anomaly'
+    if (vehicle.latest_status === 'normal') return 'normal'
+    return 'unknown'
+  }
+  const statusLabel = (status: ReturnType<typeof fleetStatus>) => {
+    if (status === 'normal') return t('verdict.normal.title')
+    if (status === 'anomaly') return t('verdict.anomaly.title')
+    if (status === 'failed') return t('verdict.failed.title')
+    return '—'
+  }
 
   const options = useMemo(() => {
     const engines = new Map<string, number>()
     const makes = new Map<string, number>()
     const types = new Map<string, number>()
-    for (const v of vehicles) {
-      engines.set(v.engine_model, (engines.get(v.engine_model) ?? 0) + 1)
-      makes.set(v.make, (makes.get(v.make) ?? 0) + 1)
-      types.set(v.vehicle_type, (types.get(v.vehicle_type) ?? 0) + 1)
+    const statuses = new Map<string, number>()
+    for (const vehicle of vehicles) {
+      engines.set(vehicle.engine_model, (engines.get(vehicle.engine_model) ?? 0) + 1)
+      makes.set(vehicle.make, (makes.get(vehicle.make) ?? 0) + 1)
+      types.set(vehicle.vehicle_type, (types.get(vehicle.vehicle_type) ?? 0) + 1)
+      const status = fleetStatus(vehicle)
+      statuses.set(status, (statuses.get(status) ?? 0) + 1)
     }
-    return { engines, makes, types }
+    return { engines, makes, types, statuses }
   }, [vehicles])
 
   const filtered = useMemo(() => {
     const q = query.trim()
     let rows = vehicles
-    if (engineFilter) rows = rows.filter((v) => v.engine_model === engineFilter)
-    if (makeFilter) rows = rows.filter((v) => v.make === makeFilter)
-    if (typeFilter) rows = rows.filter((v) => v.vehicle_type === typeFilter)
-    if (q) rows = rows.filter((v) => matchesVehicle(v, q))
+    if (engineFilter) rows = rows.filter((vehicle) => vehicle.engine_model === engineFilter)
+    if (makeFilter) rows = rows.filter((vehicle) => vehicle.make === makeFilter)
+    if (typeFilter) rows = rows.filter((vehicle) => vehicle.vehicle_type === typeFilter)
+    if (statusFilter) rows = rows.filter((vehicle) => fleetStatus(vehicle) === statusFilter)
+    if (q) rows = rows.filter((vehicle) => matchesVehicle(vehicle, q))
     const copy = [...rows]
     copy.sort((a, b) => {
-      const dir = desc ? -1 : 1
-      if (sort === 'sessions') return (a.sessions.length - b.sessions.length) * dir
-      if (sort === 'make') return a.make.localeCompare(b.make) * dir
-      return a.vehicle_id.localeCompare(b.vehicle_id) * dir
+      const direction = desc ? -1 : 1
+      if (sort === 'sessions') return (a.sessions.length - b.sessions.length) * direction
+      if (sort === 'make') return a.make.localeCompare(b.make, 'ru') * direction
+      return a.vehicle_id.localeCompare(b.vehicle_id) * direction
     })
     return copy
-  }, [query, engineFilter, makeFilter, typeFilter, sort, desc, vehicles])
+  }, [query, engineFilter, makeFilter, typeFilter, statusFilter, sort, desc, vehicles])
 
-  const active = vehicles.find((v) => v.vehicle_id === selected) ?? null
+  const active = vehicles.find((vehicle) => vehicle.vehicle_id === selected) ?? null
+  const [trend, setTrend] = useState<{ vehicleId: string; points: TrendPoint[]; failed?: boolean } | null>(null)
+  const activeId = active?.vehicle_id
+  useEffect(() => {
+    if (!activeId) return
+    const request = new AbortController()
+    fetchVehicleDiagnosisHistory(activeId, request.signal)
+      .then((points) => { if (!request.signal.aborted) setTrend({ vehicleId: activeId, points }) })
+      .catch(() => { if (!request.signal.aborted) setTrend({ vehicleId: activeId, points: [], failed: true }) })
+    return () => request.abort()
+  }, [activeId])
+  const activeTrend = trend?.vehicleId === activeId ? trend : null
+  const hasFilters = Boolean(query || engineFilter || makeFilter || typeFilter || statusFilter)
   const reset = () => {
     setQuery('')
     setEngineFilter('')
     setMakeFilter('')
     setTypeFilter('')
+    setStatusFilter('')
   }
 
   const toggleSort = (key: SortKey) => {
-    if (sort === key) setDesc((v) => !v)
+    if (sort === key) setDesc((value) => !value)
     else {
       setSort(key)
       setDesc(false)
     }
   }
 
+  const sortMark = (key: SortKey) => {
+    if (sort !== key) return null
+    return desc ? <ChevronDown size={13} aria-hidden /> : <ChevronUp size={13} aria-hidden />
+  }
+
   return (
     <>
       <header className="page-header page-header--compact">
-        <h1>{t('fleet.title')}</h1>
+        <div>
+          <p className="eyebrow">{t('nav.fleet')}</p>
+          <h1>{t('fleet.title')}</h1>
+          <p>{t('fleet.subtitle')}</p>
+        </div>
       </header>
+
       {fleetError ? (
-        <p className="panel__error" role="alert">{fleetError}</p>
+        <div className="panel__error" role="alert">
+          <span>{fleetError}</span>
+          {onRetryFleet ? (
+            <button type="button" className="btn btn--secondary" onClick={onRetryFleet}>
+              {t('history.retry')}
+            </button>
+          ) : null}
+        </div>
       ) : (
-        <section className="panel">
+        <section className="panel fleet-panel">
           <div className="toolbar-bar">
-            <label className="field">
+            <label className="field fleet-search">
               <span>{t('fleet.searchLabel')}</span>
               <div className="search-field">
                 <Search size={18} aria-hidden />
-                <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t('fleet.searchPlaceholder')} />
+                <input
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder={t('fleet.searchPlaceholder')}
+                  aria-label={t('fleet.searchLabel')}
+                />
               </div>
             </label>
             <label className="field">
               <span>{t('fleet.col.model')}</span>
-              <select value={makeFilter} onChange={(e) => setMakeFilter(e.target.value)}>
+              <select value={makeFilter} onChange={(event) => setMakeFilter(event.target.value)}>
                 <option value="">{t('chief.filter.all')} ({vehicles.length})</option>
                 {[...options.makes.entries()].map(([name, count]) => (
-                  <option key={name} value={name}>{name} ({count})</option>
+                  <option key={name} value={name}>
+                    {name} ({count})
+                  </option>
                 ))}
               </select>
             </label>
             <label className="field">
               <span>{t('chief.filter.engine')}</span>
-              <select value={engineFilter} onChange={(e) => setEngineFilter(e.target.value)}>
+              <select value={engineFilter} onChange={(event) => setEngineFilter(event.target.value)}>
                 <option value="">{t('chief.filter.all')} ({vehicles.length})</option>
                 {[...options.engines.entries()].map(([name, count]) => (
-                  <option key={name} value={name}>{name} ({count})</option>
+                  <option key={name} value={name}>
+                    {name} ({count})
+                  </option>
                 ))}
               </select>
             </label>
             <label className="field">
               <span>{t('chief.filter.vehicleType')}</span>
-              <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
+              <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}>
                 <option value="">{t('chief.filter.all')} ({vehicles.length})</option>
                 {[...options.types.entries()].map(([name, count]) => (
-                  <option key={name} value={name}>{name} ({count})</option>
+                  <option key={name} value={name}>
+                    {name} ({count})
+                  </option>
                 ))}
               </select>
             </label>
-            <button type="button" className="icon-btn" onClick={reset} aria-label={t('common.close')}><X size={18} /></button>
+            <label className="field">
+              <span>{t('fleet.col.status')}</span>
+              <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+                <option value="">{t('chief.filter.all')} ({vehicles.length})</option>
+                {(['normal', 'anomaly', 'failed', 'unknown'] as const).map((status) => (
+                  <option key={status} value={status}>
+                    {statusLabel(status)} ({options.statuses.get(status) ?? 0})
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              className="btn btn--secondary fleet-reset"
+              onClick={reset}
+              disabled={!hasFilters}
+              aria-label={t('fleet.resetFilters')}
+            >
+              <X size={16} aria-hidden />
+              {t('fleet.resetFilters')}
+            </button>
           </div>
+
           <p className="toolbar-meta">{t('fleet.count', { shown: filtered.length, total: vehicles.length })}</p>
+
           <div className="fleet-table-wrap">
             <table className="fleet-table">
               <thead>
                 <tr>
-                  <th><button type="button" className="sort-btn" onClick={() => toggleSort('plate')}>{t('fleet.col.plate')} {sort === 'plate' ? (desc ? '↓' : '↑') : ''}</button></th>
+                  <th>
+                    <button type="button" className="sort-btn" onClick={() => toggleSort('plate')}>
+                      {t('fleet.col.plate')} {sortMark('plate')}
+                    </button>
+                  </th>
                   <th>{t('fleet.col.garage')}</th>
-                  <th><button type="button" className="sort-btn" onClick={() => toggleSort('make')}>{t('fleet.col.model')} {sort === 'make' ? (desc ? '↓' : '↑') : ''}</button></th>
+                  <th>
+                    <button type="button" className="sort-btn" onClick={() => toggleSort('make')}>
+                      {t('fleet.col.model')} {sortMark('make')}
+                    </button>
+                  </th>
                   <th>{t('fleet.col.engine')}</th>
-                  <th><button type="button" className="sort-btn" onClick={() => toggleSort('sessions')}>{t('fleet.col.sessions')} {sort === 'sessions' ? (desc ? '↓' : '↑') : ''}</button></th>
-                  <th />
+                  <th>{t('fleet.col.status')}</th>
+                  <th>
+                    <button type="button" className="sort-btn" onClick={() => toggleSort('sessions')}>
+                      {t('fleet.col.sessions')} {sortMark('sessions')}
+                    </button>
+                  </th>
+                  <th aria-label={t('tickets.more')} />
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((v) => (
-                  <tr key={v.vehicle_id}>
-                    <td>{v.vehicle_id}</td>
-                    <td>{v.garage_no}</td>
-                    <td>{displayVehicleModel(v.make, v.model)}</td>
-                    <td>{v.engine_model}</td>
-                    <td>{v.sessions.length}</td>
+                {filtered.map((vehicle) => {
+                  const latestId = vehicle.latest_session_id ?? latestSessionId(vehicle)
+                  const latest = vehicle.sessions.find(({ session_id }) => session_id === latestId)
+                  return <tr
+                    key={vehicle.vehicle_id}
+                    onClick={() => setSelected(vehicle.vehicle_id)}
+                  >
                     <td>
-                      <button type="button" className="btn btn--secondary" onClick={() => setSelected(v.vehicle_id)}>
+                      <strong>{vehicle.vehicle_id}</strong>
+                    </td>
+                    <td>{vehicle.garage_no}</td>
+                    <td>{displayVehicleModel(vehicle.make, vehicle.model)}</td>
+                    <td>{vehicle.engine_model}</td>
+                    <td>
+                      <span className={`badge badge--${fleetStatus(vehicle) === 'normal' ? 'normal' : fleetStatus(vehicle) === 'failed' || fleetStatus(vehicle) === 'anomaly' ? 'attention' : 'rerecord'}`}>
+                        {statusLabel(fleetStatus(vehicle))}
+                      </span>
+                      {latest && <small className="fleet-last-check">{formatSessionDateTime(locale, latest.checked_at)}</small>}
+                    </td>
+                    <td>{vehicle.sessions.length}</td>
+                    <td>
+                      <button
+                        type="button"
+                        className="btn btn--secondary"
+                        aria-label={`${t('tickets.more')} · ${vehicle.vehicle_id}`}
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          setSelected(vehicle.vehicle_id)
+                        }}
+                      >
                         {t('tickets.more')}
                       </button>
                     </td>
                   </tr>
-                ))}
+                })}
               </tbody>
             </table>
           </div>
-          {filtered.length === 0 ? <p className="panel__subtitle">{t('fleet.empty', { query })}</p> : null}
+          {filtered.length === 0 ? <p className="empty-state__text">{t('fleet.empty', { query })}</p> : null}
         </section>
       )}
+
       {active ? (
         <div className="drawer-scrim" role="presentation" onClick={() => setSelected(null)}>
-          <aside className="history-drawer" role="dialog" onClick={(e) => e.stopPropagation()}>
+          <aside className="history-drawer" role="dialog" aria-modal="true" aria-labelledby="fleet-drawer-title" onClick={(event) => event.stopPropagation()}>
             <div className="history-drawer__head">
-              <h2>{active.vehicle_id}</h2>
-              <button type="button" className="icon-btn" onClick={() => setSelected(null)} aria-label={t('common.close')}><X size={18} /></button>
+              <div>
+                <p className="eyebrow">{t('diag.vehiclePassport')}</p>
+                <h2 id="fleet-drawer-title">{active.vehicle_id}</h2>
+              </div>
+              <button type="button" className="icon-btn" onClick={() => setSelected(null)} aria-label={t('common.close')}>
+                <X size={18} aria-hidden />
+              </button>
             </div>
-            <p>{displayVehicleModel(active.make, active.model)} · {active.garage_no} · {active.engine_model} · {active.vehicle_type}</p>
-            <ul className="history-list">
-              {[...active.sessions].sort((a, b) => b.checked_at.localeCompare(a.checked_at)).slice(0, 8).map((s) => (
-                <li key={s.session_id}>
-                  <button type="button" className="history-item" onClick={() => onOpenDiagnosis(active.vehicle_id, s.session_id)}>
-                    <span>{s.session_id}</span>
-                    <span>{formatSessionDateTime(locale, s.checked_at)}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
+            <div className="vehicle-summary vehicle-summary--drawer">
+              <span className="vehicle-summary__item">
+                <span>{t('fleet.col.model')}</span>
+                {displayVehicleModel(active.make, active.model)}
+              </span>
+              <span className="vehicle-summary__item">
+                <span>{t('diag.garage')}</span>
+                {active.garage_no}
+              </span>
+              <span className="vehicle-summary__item">
+                <span>{t('diag.engine')}</span>
+                {active.engine_model}
+              </span>
+              <span className="vehicle-summary__item">
+                <span>{t('chief.filter.vehicleType')}</span>
+                {active.vehicle_type}
+              </span>
+              <span className="vehicle-summary__item">
+                <span>{t('fleet.col.status')}</span>
+                {statusLabel(fleetStatus(active))}
+              </span>
+            </div>
+
             <div className="workflow-actions">
               <button type="button" className="btn btn--primary" onClick={() => onOpenDiagnosis(active.vehicle_id)}>
-                {t('fleet.actionDiagnose')} <ArrowRight size={18} />
+                {t('fleet.actionDiagnose')}
+                <ArrowRight size={18} aria-hidden />
               </button>
+              {onOpenManuals && (
+                <button type="button" className="btn btn--secondary" onClick={() => onOpenManuals(active)}>
+                  {t('nav.manuals')}
+                </button>
+              )}
               {onOpenTickets ? (
                 <button type="button" className="btn btn--secondary" onClick={() => onOpenTickets(active.vehicle_id)}>
                   {t('nav.tickets')}
                 </button>
               ) : null}
             </div>
+            <VehicleHistoryPanel
+              key={active.vehicle_id}
+              sessions={[...active.sessions].sort((a, b) => b.checked_at.localeCompare(a.checked_at))}
+              activeSessionId={active.latest_session_id ?? ''}
+              onSelectSession={(session) => onOpenDiagnosis(active.vehicle_id, session)}
+              trendPoints={activeTrend?.points ?? []}
+              trendError={activeTrend?.failed ? t('error.network') : null}
+              trendLoading={!activeTrend}
+            />
           </aside>
         </div>
       ) : null}
