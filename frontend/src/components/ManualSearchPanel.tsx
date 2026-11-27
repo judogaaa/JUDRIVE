@@ -207,6 +207,7 @@ export function ManualSearchPanel({ engineModel, isVisible = true, chatTargetLab
                 <span className="manual-result__page">PDF {hit.pdf_page}</span>
               </div>
               <blockquote className="manual-result__quote">{hit.quote}</blockquote>
+              {hit.applicability ? <p className="manual-result__note">{hit.applicability}</p> : null}
               <div className="message-actions">
                 <button type="button" className="ghost-button" onClick={() => setActive(hit)}>
                   {t('manual.openSource')}

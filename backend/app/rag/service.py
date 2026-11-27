@@ -103,7 +103,7 @@ class ManualRagService:
 
         return {
             "status": "conflict" if conflict else "ok",
-            "message": VALVE_CONFLICT_GUIDANCE if conflict else None,
+            "message": _conflict_message(conflict) if conflict else None,
             "conflicting_sources": conflict,
             "engine_model": engine_model,
             "query": query,
@@ -146,3 +146,12 @@ class ManualRagService:
             return None
         path = self._indexer._pdf_dir / spec.filename
         return path if path.is_file() else None
+
+
+def _conflict_message(conflict: list[dict]) -> str:
+    notes = []
+    for hit in conflict:
+        note = str(hit.get("applicability") or "").strip()
+        if note and note not in notes:
+            notes.append(note)
+    return " ".join([VALVE_CONFLICT_GUIDANCE, *notes]).strip()

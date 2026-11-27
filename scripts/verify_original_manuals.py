@@ -35,10 +35,13 @@ def main() -> int:
             result["status"] != "conflict"
             or {source["evidence_id"] for source in sources} != expected
             or "сама по себе не подтверждает охлаждение" not in result.get("message", "")
+            or "менее чем через 15 минут" not in result.get("message", "")
+            or "не ранее, чем через 15 минут" not in result.get("message", "")
+            or not any("ЯМЗ-238КМ2" in (source.get("applicability") or "") for source in sources)
         ):
             print("FAIL: оригиналы не подтвердили все три страницы и правило охлаждения")
             return 1
-        print("PASS: РЭ 31, РК 269 и 276; 15 минут не служат доказательством охлаждения")
+        print("PASS: РЭ 31, РК 269 и 276; 15 минут не служат доказательством охлаждения; отмечена оговорка ЯМЗ-238КМ2")
         return 0
 
 

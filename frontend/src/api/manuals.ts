@@ -8,6 +8,7 @@ export interface ManualSearchHit {
   quote: string
   score: number
   extraction: string
+  applicability?: string | null
 }
 
 export interface ManualSearchResponse {

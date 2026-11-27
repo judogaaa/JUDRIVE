@@ -2036,6 +2036,13 @@ select {
   color: var(--text-muted);
 }
 
+.manual-result__note {
+  margin: -2px 0 8px;
+  color: var(--warn);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
 .manual-error {
   margin-top: 12px;
 }

@@ -77,7 +77,11 @@ async def run(args):
         rag = response.json()
         require(response.is_success and rag["status"] == "conflict" and
                 {s["evidence_id"] for s in rag["conflicting_sources"]} == EXPECTED and
-                "сама по себе не подтверждает охлаждение" in rag["message"], "original conflict RE 31 / RK 269 / RK 276")
+                "сама по себе не подтверждает охлаждение" in rag["message"] and
+                "менее чем через 15 минут" in rag["message"] and
+                "не ранее, чем через 15 минут" in rag["message"] and
+                any("ЯМЗ-238КМ2" in (s.get("applicability") or "") for s in rag["conflicting_sources"]),
+                "original conflict RE 31 / RK 269 / RK 276")
 
         for label, pair, status, prompt in (
             ("normal", ("M333YK47", "S-0006"), "normal", "Объясни результат диагностики и скажи, нужна ли заявка."),

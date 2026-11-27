@@ -37,6 +37,11 @@ def test_valve_clearance_page_33_34(synthetic_rag: ManualRagService):
     assert result["status"] == "conflict"
     assert {hit["pdf_page"] for hit in result["conflicting_sources"]} == {31, 269, 276}
     assert "сама по себе не подтверждает охлаждение" in result["message"]
+    assert "менее чем через 15 минут" in result["message"]
+    assert "не ранее, чем через 15 минут" in result["message"]
+    by_id = {hit["evidence_id"]: hit for hit in result["conflicting_sources"]}
+    assert "ЯМЗ-238КМ2" in by_id["y236-re:p0031"]["applicability"]
+    assert "не ранее, чем через 15 мин" in by_id["y236-rk:p0269"]["quote"]
     pages = {hit["pdf_page"] for hit in result["results"]}
     assert pages.intersection({33, 34})
     assert all(hit["doc_id"].startswith("y236") for hit in result["results"])

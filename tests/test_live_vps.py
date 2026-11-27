@@ -35,10 +35,18 @@ def test_materials_require_size_digest_and_regular_file(tmp_path):
     path.write_bytes(b"abcd")
     assert runner.matches(path, entry(b"abcd"))
     assert not runner.matches(path, entry(b"ABCD"))
+    directory = tmp_path / "folder.pdf"
+    directory.mkdir()
+    assert not runner.matches(directory, entry(b""))
     link = tmp_path / "link.pdf"
-    link.symlink_to(path)
-    assert not runner.matches(link, entry(b"abcd"))
-    expected = runner.materials(json.loads((ROOT / "docs/SOURCE_MANIFEST.json").read_text()))
+    try:
+        link.symlink_to(path)
+    except OSError:
+        # Windows can deny symlink creation without Developer Mode/admin.
+        link = None
+    if link is not None:
+        assert not runner.matches(link, entry(b"abcd"))
+    expected = runner.materials(json.loads((ROOT / "docs/SOURCE_MANIFEST.json").read_text(encoding="utf-8")))
     assert len([name for name in expected if name.lower().endswith(".pdf")]) == 6
     assert {"vehicles.json", "fault_types.json"} <= expected.keys()
 
@@ -74,7 +82,7 @@ def test_isolation_refuses_public_port_production_mount_and_external_toir(tmp_pa
 def test_archive_only_required_when_verified_sources_are_incomplete(tmp_path, monkeypatch, missing_pdf):
     import subprocess
 
-    manifest = json.loads((ROOT / "docs/SOURCE_MANIFEST.json").read_text())
+    manifest = json.loads((ROOT / "docs/SOURCE_MANIFEST.json").read_text(encoding="utf-8"))
     fault = subprocess.check_output(["git", "show", f"{runner.FAULT_ORIGINAL}:{runner.FAULT_PATH}"], cwd=ROOT)
     assert entry(fault)["sha256"] == runner.FAULT_SHA
     pdfs = [item for item in manifest["source_files"] if item["filename"].endswith(".pdf")]
