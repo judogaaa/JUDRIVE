@@ -47,3 +47,23 @@ base="http://127.0.0.1:${JUDRIVE_SMOKE_PORT:-18184}"
 "${compose[@]}" up --no-recreate --no-build -d --wait --wait-timeout 120
 "$python" scripts/verify_compose_api.py "$base" "$audit_dir/result.json" --after-restart
 "${compose[@]}" exec -T backend python -c 'import sqlite3; from pathlib import Path; db=sqlite3.connect(Path("/app/local-data/restored.sqlite").as_uri()+"?mode=ro", uri=True); assert db.execute("SELECT COUNT(*) FROM chat_messages").fetchone()[0] >= 2; assert db.execute("SELECT COUNT(*) FROM ticket_submissions").fetchone()[0] >= 1'
+
+# A fresh web container must still start when full readiness is degraded.
+cat > "$audit_dir/no-provider.yaml" <<'YAML'
+services:
+  backend:
+    environment:
+      GIGACHAT_CREDENTIALS: ""
+YAML
+"${compose[@]}" -f "$audit_dir/no-provider.yaml" up --force-recreate --no-build -d --wait --wait-timeout 120 backend web
+"$python" - "$base" <<'PY'
+import sys
+import httpx
+
+with httpx.Client(base_url=sys.argv[1], trust_env=False) as client:
+    assert client.get("/").status_code == 200
+    assert client.get("/api/live").status_code == 200
+    readiness = client.get("/api/ready")
+    assert readiness.status_code == 503 and readiness.json()["gigachat_agent"] == "missing_key"
+print("PASS: web and backend start without a provider key; full readiness remains degraded")
+PY

@@ -57,7 +57,7 @@ services:
       toir:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "import json, urllib.request; assert json.load(urllib.request.urlopen('http://127.0.0.1:8090/api/ready', timeout=5))['status'] == 'ok'"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/api/live', timeout=5).close()"]
       interval: 20s
       timeout: 10s
       retries: 30
